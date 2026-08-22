@@ -8,7 +8,7 @@ import type { ReactNode } from 'react'
 import type {
   ModelRetryNode, TurnErrorNode, UserMessageNode,
 } from '@deepseek-ai/dsh-client-runtime/client'
-import { JsonBlock, MessageText, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, JsonBlock, MessageText, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
 import { ReferenceIcon } from '../reference/ReferenceIcon.tsx'
 import { CompactionItem } from './CompactionItem.tsx'
@@ -112,9 +112,10 @@ function ModelRetryItem({ node, active, t }: {
   )
 }
 
-/** Persistent, turn-positioned feedback for a terminal failure. */
-function TurnErrorItem({ node, t }: {
+/** Persistent, turn-positioned feedback for a terminal failure, with a manual re-send of the opening user text. */
+function TurnErrorItem({ node, onRetry, t }: {
   node: TurnErrorNode
+  onRetry: () => void
   t: ChatViewSlotProps['t']
 }) {
   return (
@@ -125,6 +126,9 @@ function TurnErrorItem({ node, t }: {
         <span className={css.turnErrorMessage}>{node.message}</span>
       </div>
       {node.code !== undefined && <code className={css.turnErrorCode}>{node.code}</code>}
+      <Button size="sm" variant="outline" className={css.turnErrorRetry} onClick={onRetry}>
+        {t('message.turnError.retry')}
+      </Button>
     </div>
   )
 }
@@ -327,8 +331,8 @@ export const RetryNodeView = memo(function RetryNodeView({ node, t }: ChatNodeVi
 })
 
 /** Terminal turn-error keyed Chat renderer. */
-export const TurnErrorNodeView = memo(function TurnErrorNodeView({ node, t }: ChatNodeViewProps<'turn-error'>) {
-  return <TurnErrorItem node={node.data} t={t} />
+export const TurnErrorNodeView = memo(function TurnErrorNodeView({ node, retryTurn, t }: ChatNodeViewProps<'turn-error'>) {
+  return <TurnErrorItem node={node.data} onRetry={() => { retryTurn(node.data.seq) }} t={t} />
 })
 
 /** Max-tokens turn-end notice keyed Chat renderer. */

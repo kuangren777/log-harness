@@ -162,6 +162,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     read: () => savedScroll,
   }
   const forkAt = vi.fn()
+  const retryTurn = vi.fn()
   // Selection rides the REAL chat store (same construction path as
   // production; the view reads it through the PropsStore useStore share).
   const chat = createChatStore().create()
@@ -287,6 +288,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     inspectCall,
     chatScroll,
     forkAt,
+    retryTurn,
     // Absent-service default; mention tests override with a real resolver.
     fileMentions: () => undefined,
     // Mirrors the real lookup chain (conversation namespace, then common).
@@ -295,7 +297,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
   const setSelection = (next: SelectionTarget | null): void => { chat.actions.select(next) }
   return {
     set, ChatView, props, openDetails, openFile, loadOlder, inspectCall,
-    chatScroll, forkAt, setSelection, toolOwners,
+    chatScroll, forkAt, retryTurn, setSelection, toolOwners,
   }
 }
 
@@ -585,9 +587,19 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const statuses = view.getAllByRole('status')
     expect(statuses.map(status => status.textContent)).toEqual([
-      '本轮运行失败API key is invalidAUTH',
-      '本轮运行失败plugin exploded',
+      '本轮运行失败API key is invalidAUTH重试',
+      '本轮运行失败plugin exploded重试',
     ])
+  })
+
+  it('hands the failed turn/end seq to retryTurn from the inline Retry action', () => {
+    const h = makeHarness({ nodes: [user(1, 'try'), turnError(2, 'AUTH'), turnError(3)] })
+    const view = render(<h.ChatView {...h.props} />)
+    const retries = view.getAllByRole('button', { name: '重试' })
+    expect(retries).toHaveLength(2)
+    fireEvent.click(retries[1]!)
+    expect(h.retryTurn).toHaveBeenCalledTimes(1)
+    expect(h.retryTurn).toHaveBeenCalledWith(3)
   })
 
   it('renders the max-tokens notice with localized guidance, distinct from turn errors', () => {

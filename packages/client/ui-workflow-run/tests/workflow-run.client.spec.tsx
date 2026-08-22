@@ -294,6 +294,7 @@ function panelProps(data: WorkflowRunChatData, sessions = listState(), openSessi
     openFile: () => {},
     inspectCall: () => {},
     forkAt: () => {},
+    retryTurn: () => {},
     renderMessageImages: () => null,
     fileMentions: () => undefined,
     openSession,

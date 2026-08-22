@@ -7,13 +7,14 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { makeTranslate, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
-import type { QueuedMessage, SessionFace } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ConversationSnapshot, QueuedMessage, SessionFace, UserMessageNode } from '@deepseek-ai/dsh-client-runtime/client'
 import { ComposerBlockRegistry } from '../src/client/input/blocks.ts'
 import { InputHub } from '../src/client/input/hub.ts'
 import { ConversationController, UnsupportedImageMediaTypeError } from '../src/client/service.ts'
 import { zh } from '../src/client/locales.ts'
+import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
-async function bench(readAttachment?: SessionFace['readAttachment']) {
+async function bench(readAttachment?: SessionFace['readAttachment'], snapshot?: Partial<ConversationSnapshot>) {
   const runtime = await SlotTestRuntime.create()
   const prompt = vi.fn(() => Promise.resolve({ ok: true as const, value: { accepted: true as const } }))
   const updateQueue = vi.fn(() => Promise.resolve({ ok: true as const, value: { accepted: true as const } }))
@@ -22,6 +23,7 @@ async function bench(readAttachment?: SessionFace['readAttachment']) {
   await runtime.sessions.add({
     id: 's1',
     session: { prompt, updateQueue, cancel, loadOlder, ...(readAttachment === undefined ? {} : { readAttachment }) },
+    ...(snapshot === undefined ? {} : { snapshot }),
   })
   // config.input is required (the apply shares its hub with the inject
   // factories); the bench passes its own instance explicitly.
@@ -38,6 +40,27 @@ async function bench(readAttachment?: SessionFace['readAttachment']) {
 }
 
 describe('ConversationController', () => {
+  const userNode = (seq: number, content: UserMessageNode['content']): UserMessageNode => (
+    { kind: 'user', seq, time: seq * 1_000, content, source: {} }
+  )
+
+  it('re-sends the text of the latest user message before a failed turn as a queued turn', async () => {
+    const b = await bench(undefined, {
+      chat: chatSnapshotFixture({ nodes: [
+        userNode(1, [{ type: 'text', text: 'first' }]),
+        userNode(3, [{ type: 'image' } as never, { type: 'text', text: 'again' }, { type: 'text', text: 'more' }]),
+        userNode(9, [{ type: 'text', text: 'after' }]),
+      ] }),
+    })
+    await b.scoped.retryTurn(5)
+    expect(b.prompt).toHaveBeenCalledWith([{ type: 'text', text: 'again\nmore' }], 'queue')
+    // Nothing precedes the first message; an image-only message has no text to repeat.
+    await expect(b.scoped.retryTurn(1)).rejects.toThrow('conversation.retryTurn: no user text opens the turn ending at seq 1')
+    b.prompt.mockResolvedValueOnce({ ok: false, error: { code: 'agent-busy', message: 'busy', details: {} } } as never)
+    await expect(b.scoped.retryTurn(5)).rejects.toThrow('conversation.retryTurn failed: agent-busy: busy')
+    await b.runtime.dispose()
+  })
+
   it('routes operations through the public Session binding', async () => {
     const b = await bench()
     await b.scoped.send('hello')

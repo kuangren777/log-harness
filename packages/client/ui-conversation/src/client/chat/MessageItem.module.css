@@ -217,7 +217,7 @@
 
 .turnErrorRow {
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: start;
   padding: 2px 0;
@@ -247,6 +247,10 @@
 .turnErrorCode {
   color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-markdown-code-block-small);
+}
+
+.turnErrorRetry {
+  align-self: center;
 }
 
 .maxTokensTitle {

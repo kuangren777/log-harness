@@ -12,10 +12,11 @@ import type { Context } from '@deepseek-ai/cordis'
 // Type-only imports: a plugin-to-plugin value import is a bundle purity
 // error, so scope resolution goes through the sessions service (scopeOf
 // method) instead of the standalone helper.
-import type { ISessions, SessionFace, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ConversationSnapshot, ISessions, SessionFace, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SubmitImageAttachment, SubmitOutcome } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ComposerAttachment } from './contract/slots.ts'
+import type { ChatNode } from './contract/chat-nodes.ts'
 import type { QueueAction, QueueItemId } from './contract/queue.ts'
 import type { ComposerBlocks } from './input/blocks.ts'
 import type { DraftAttachmentId, SessionInputResolver } from './input/contract.ts'
@@ -57,6 +58,15 @@ export interface IConversation {
    * @returns completion of the page pull.
    */
   loadOlder(): Promise<void>
+  /**
+   * Re-send the text of the latest user message before a failed turn as a
+   * fresh queued turn. The failed turn and the original message stay in
+   * history; durable image attachments on that message are not repeated.
+   * @param failureSeq - seq of the failed turn's `turn/end` event.
+   * @returns completion; rejects when the loaded window holds no user text
+   * before `failureSeq`, and on business failures as in send.
+   */
+  retryTurn(failureSeq: number): Promise<void>
 }
 
 /** Create one browser-only draft descriptor; only its id enters input state. */
@@ -89,6 +99,20 @@ export class UnsupportedImageMediaTypeError extends Error {
 }
 
 /** Scope-addressed conversation service (root singleton, provided as `conversation`). */
+/**
+ * Text blocks of the latest user message before `failureSeq` in the loaded
+ * window, joined by newlines; empty when no such message or no text.
+ */
+function openingUserText(snapshot: ConversationSnapshot, failureSeq: number): string {
+  let opening: ChatNode<'user'> | undefined
+  for (const view of snapshot.chat.nodes.values()) {
+    const node = view as ChatNode
+    if (node.kind !== 'user' || node.data.seq >= failureSeq) continue
+    if (opening === undefined || node.data.seq > opening.data.seq) opening = node
+  }
+  return opening?.data.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n') ?? ''
+}
+
 export class ConversationController extends Service implements IConversation {
   /** The per-session input machine registry (SessionInputResolver face). */
   readonly input: SessionInputResolver
@@ -305,6 +329,14 @@ export class ConversationController extends Service implements IConversation {
   /** Pull one older history page for the scoped Session. */
   async loadOlder(): Promise<void> {
     await this.scopedSession('loadOlder').loadOlder()
+  }
+
+  async retryTurn(failureSeq: number): Promise<void> {
+    const session = this.scopedSession('retryTurn')
+    const text = openingUserText(session.getSnapshot(), failureSeq)
+    if (text === '') throw new Error(`conversation.retryTurn: no user text opens the turn ending at seq ${failureSeq}`)
+    const result = await session.prompt([{ type: 'text', text }], 'queue')
+    if (!result.ok) throw new Error(`conversation.retryTurn failed: ${result.error.code}: ${result.error.message}`)
   }
 
   /** Resolve the caller scope's session face or throw on root contexts. */

@@ -147,6 +147,10 @@ describe('conversation slot inject API', () => {
     expect(b.runtime.sessions.calls).toContainEqual({
       method: 'fork', args: [{ sessionId: ROOT, atSeq: 17, increaseTitle: true }],
     })
+    // An empty window has no opening user text: the rejection is swallowed and no prompt is admitted.
+    chatView.injected.retryTurn(2)
+    await Promise.resolve()
+    expect(b.sessionFake.prompt).not.toHaveBeenCalled()
     await b.runtime.dispose()
   })
 

@@ -423,6 +423,12 @@ export function apply(ctx: Context): void {
               // Fork or child-rename failure keeps the source view untouched.
             })
         },
+        retryTurn: (failureSeq) => {
+          scoped.retryTurn(failureSeq).catch(() => {
+            // An admission failure already lands in the session's promptError;
+            // a window without the opening text leaves the failed turn as rendered.
+          })
+        },
       }
     },
   }, ChatView)
