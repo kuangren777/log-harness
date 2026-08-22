@@ -9,7 +9,6 @@ import { ConnectionController, type ConnectionConfig, type ConnectionSinks, type
 import { FixtureApiClient } from './fixture.ts'
 import { WebApiClient } from './web-api-client.ts'
 import { createWebConnectionRpc, type RpcFetch } from './rpc.ts'
-import { isLoopbackHostname } from '../loopback-hostname.ts'
 import type { ClientConnectionRpc } from '../rpc.ts'
 
 // ---- Contract re-exports (browser-safe apiproxy channels + core types) ----
@@ -85,7 +84,14 @@ interface ClientTransportGlobal {
 export interface ConnectionHandle {
   /** Shared api client (fixture or real, decided at boot from the page URL). */
   readonly api: IApiClient
-  /** Whether the current page authority is loopback; non-browser contexts default to true. */
+  /**
+   * Whether host-backed surfaces (settings, credentials, native dialogs) may be
+   * attempted from this page. LOCAL FORK CHANGE: upstream reports page-authority
+   * loopback here and hides those surfaces everywhere else; this checkout serves
+   * a Tailscale tailnet, where they are the point. The flag is a UX affordance,
+   * not a security boundary — the Host's `/api` fence still admits only declared
+   * `--trusted-host` authorities and answers 403 to anything else.
+   */
   readonly isLoopback: boolean
   /** Generation-scoped Host facts, including the account home and native path-open capability. */
   readonly hostDescription: HostDescriptionSource
@@ -129,7 +135,10 @@ export function apply(ctx: Context): void {
   }
   const handle: ConnectionHandle = {
     api,
-    isLoopback: pageLocation === undefined || isLoopbackHostname(pageLocation.hostname),
+    // LOCAL FORK CHANGE: was `pageLocation === undefined ||
+    // isLoopbackHostname(pageLocation.hostname)`. Attempt host-backed surfaces
+    // from any authority and let the Host's fence decide (see the field doc).
+    isLoopback: true,
     hostDescription: {
       getSnapshot: () => description,
       subscribe: (listener) => {

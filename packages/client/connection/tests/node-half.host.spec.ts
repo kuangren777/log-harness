@@ -167,13 +167,13 @@ describe('connection node half', () => {
     await dispose()
   })
 
-  it('pins privileged methods to loopback even for a declared trusted authority', async () => {
+  it('serves privileged methods to a declared trusted authority and refuses an undeclared one', async () => {
     const { routes, dispose } = await mounted({ trustedHosts: ['harness.example'] })
-    // The privileged set: native dialogs plus the whole settings/credential
-    // configuration plane, reads included, plus the one method that makes the
-    // host fetch a caller-chosen URL. The same declared authority reaches
-    // ordinary reads (carrier-level 404 from the empty proxy proves the fence
-    // passed), but each privileged method stays loopback-only and 403s.
+    // LOCAL FORK CHANGE: upstream pins this set to loopback. This checkout
+    // serves a Tailscale tailnet, so the privileged set honours the declared
+    // trust list like every other method — a DECLARED authority passes the
+    // fence (carrier-level 404 from the empty proxy proves it), while an
+    // UNDECLARED authority is still refused below.
     for (const method of [
       'host.pickDirectory', 'host.openPath',
       'settings.describe', 'settings.openDocument', 'settings.update', 'settings.replace', 'settings.mutate',
@@ -184,12 +184,19 @@ describe('connection node half', () => {
       // drive the host desktop.
       'agentPreset.read', 'agentPreset.copy', 'agentPreset.openDocument', 'agentPreset.remove',
     ]) {
-      const denied = fakeResponse()
+      const allowed = fakeResponse()
       await routes[0]!.handler(
         fakeRequest({ host: 'harness.example' }, `${API_PATH}/${method}`),
+        allowed.response,
+      )
+      expect([method, allowed.state.status]).not.toEqual([method, 403])
+      // An authority NOT on the declared list stays refused for the same method.
+      const denied = fakeResponse()
+      await routes[0]!.handler(
+        fakeRequest({ host: 'attacker.example' }, `${API_PATH}/${method}`),
         denied.response,
       )
-      expect(denied.state.status).toBe(403)
+      expect([method, denied.state.status]).toEqual([method, 403])
       expect(denied.state.body).toBe('forbidden')
     }
     const read = fakeResponse()
@@ -459,7 +466,7 @@ describe('connection node half over a real HTTP server', () => {
     })
   }
 
-  it('answers a declared LAN authority with 403 on every configuration method, over real HTTP', async () => {
+  it('serves a declared LAN authority on every configuration method, over real HTTP', async () => {
     // The fence's input is a real IncomingMessage parsed by Node from the
     // wire, not a hand-assembled object: the Host header a LAN browser sends
     // is exactly what decides loopback-only here, so the boundary is asserted
@@ -478,7 +485,10 @@ describe('connection node half over a real HTTP server', () => {
         'llm.discoverModels',
         'agentPreset.read', 'agentPreset.copy', 'agentPreset.openDocument', 'agentPreset.remove',
       ]) {
-        expect([method, await call(port, method, 'harness.example')]).toEqual([method, 403])
+        // LOCAL FORK CHANGE: a DECLARED authority now passes the fence (404 is
+        // the empty proxy's carrier answer); an UNDECLARED one is still 403.
+        expect([method, await call(port, method, 'harness.example')]).toEqual([method, 404])
+        expect([method, await call(port, method, 'attacker.example')]).toEqual([method, 403])
       }
       // The model catalog stays reachable for the same authority: a LAN
       // client's model picker needs it, and it carries no key or endpoint
