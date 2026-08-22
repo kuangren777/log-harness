@@ -79,9 +79,11 @@ describe('connection client apply', () => {
     expect(handle.isLoopback).toBe(true)
   })
 
-  it('reports non-loopback page authority through the connection handle', async () => {
+  it('reports host-backed surfaces as attemptable from a non-loopback page authority', async () => {
+    // LOCAL FORK CHANGE: upstream reports false here; this checkout serves a
+    // tailnet and lets the Host's /api fence decide (see ConnectionHandle.isLoopback).
     ;(globalThis as Win).location = { hostname: '192.0.2.20', search: '' }
-    expect((await mount()).isLoopback).toBe(false)
+    expect((await mount()).isLoopback).toBe(true)
   })
 
   it('start() hands out one loop, rejects a second consumer, and stop() aborts the streams', async () => {
