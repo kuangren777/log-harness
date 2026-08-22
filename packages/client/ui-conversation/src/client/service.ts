@@ -98,7 +98,6 @@ export class UnsupportedImageMediaTypeError extends Error {
   }
 }
 
-/** Scope-addressed conversation service (root singleton, provided as `conversation`). */
 /**
  * Text blocks of the latest user message before `failureSeq` in the loaded
  * window, joined by newlines; empty when no such message or no text.
@@ -113,6 +112,7 @@ function openingUserText(snapshot: ConversationSnapshot, failureSeq: number): st
   return opening?.data.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n') ?? ''
 }
 
+/** Scope-addressed conversation service (root singleton, provided as `conversation`). */
 export class ConversationController extends Service implements IConversation {
   /** The per-session input machine registry (SessionInputResolver face). */
   readonly input: SessionInputResolver
