@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-23-auth-request-gate.md
-2026-08-23-auth-request-gate.md: 9ca17d3711260dc411daa590c83c2c8021e6ced9
-2026-08-23-auth-request-gate.zh.md: 3050e1f9bc20006d3200e721dc54fdac750526d0
+2026-08-23-auth-request-gate.md: 6f040304e77e5158004bd13c2d5e395c042586b4
+2026-08-23-auth-request-gate.zh.md: d3881a0fd39354f931eb5b499e70d880baf69681
