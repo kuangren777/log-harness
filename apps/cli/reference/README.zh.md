@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-本参考定义 profile 启动、web 别名、插件管理和配置 dump 等命令模式。argv 由 [`src/args.ts`](../src/args.ts) 统一解析一次，[`src/bin.ts`](../src/bin.ts) 只会动态导入选中的运行器。
+本参考定义 profile 启动、web 别名、插件管理、账号 bootstrap 和配置 dump 等命令模式。argv 由 [`src/args.ts`](../src/args.ts) 统一解析一次，[`src/bin.ts`](../src/bin.ts) 只会动态导入选中的运行器。
 
 ## Profile 启动
 
@@ -61,6 +61,21 @@ dsh --profile tui
 ```
 
 随源码发布的 Git 托管插件会在安装期间通过 `prepare` 脚本构建，而 pnpm ≥10 默认会阻止该脚本，直到使用方明确允许。首次运行 `add` 会失败，并显示 pnpm 的 `allowBuilds` 提示；dsh 还会提示应修改该 profile 的 `pnpm-workspace.yaml`。将输出的键复制到该文件后，重新运行命令即可。安装已经构建好的 tarball 或本地 checkout 时，无需加入 `allowBuilds`。
+
+## 账号 bootstrap
+
+`dsh auth bootstrap --email <address>` 在 `<harness home>/auth.db` 中创建本部署的第一个管理员账号，其中 harness home 依次取 `--home <path>`、`$DSH_HOME`、`~/.dsh`。该命令直接通过 `@deepseek-ai/dsh-auth-sqlite` 打开数据库：不启动任何 profile，不挂载任何服务，也不注册在任何网络面上，因此授权它的是对 harness home 的本地写权限。在部署的整个生命周期内都不存在远程等价物。
+
+只要内置管理员组已有成员，命令就在读取其他任何内容之前以退出码 1 拒绝。其余每一种拒绝——`--email` 为空或格式错误、没有密码来源、密码短于 12 个字符、数据库由其他构建版本打上标记——同样以 1 退出，并给出指明字段或缺失来源的消息。这里没有 `--force`：新增更多管理员属于需要认证的管理操作，而非本命令。
+
+只要 `DSH_BOOTSTRAP_PASSWORD` 有定义（包括为空值），密码就从该变量读取；否则从抑制回显的终端提示读取。既无终端又无该变量时，命令拒绝执行并同时指出这两种来源。密码绝不作为命令行参数接受，绝不打印到任一输出流，也绝不被存储：`createUser` 在插入前用 scrypt 完成哈希，审计记录只包含事件、账号 id 以及该账号是被创建还是被提升。
+
+没有账号的地址会被创建、加入内置管理员组，并保持地址未验证，交由首次登录确认。已存在账号的地址会被提升进该组且密码不变，从而恢复那些有账号却没有管理员的存储。两种结果都会写入一条 `auth.bootstrap` 审计记录，并打印一行说明地址与数据库路径。
+
+```sh
+dsh auth bootstrap --email ops@example.com
+DSH_BOOTSTRAP_PASSWORD=... dsh auth bootstrap --email ops@example.com --home /srv/dsh
+```
 
 ## Web 别名
 

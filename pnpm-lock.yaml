@@ -150,6 +150,12 @@ importers:
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:^
         version: link:../../packages/boot/app-boot
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../../packages/auth/auth
+      '@deepseek-ai/dsh-auth-sqlite':
+        specifier: workspace:^
+        version: link:../../packages/auth/auth-sqlite
       '@deepseek-ai/dsh-base':
         specifier: workspace:^
         version: link:../../packages/bundle/base

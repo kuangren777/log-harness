@@ -12,6 +12,7 @@ The `dsh` command is the product launcher for profiles: ordered stacks of plugin
 | `dsh --profile headless "job"` | Run one fresh persisted session, print the final answer, and exit. |
 | `dsh web` | Alias of `--profile web`. |
 | `dsh plugin --profile <name> <pnpm args>` | Manage a profile's plugins by forwarding to pnpm in the profile directory. |
+| `dsh auth bootstrap --email <address>` | Create the deployment's first administrator account in the harness home's `auth.db`. |
 
 The invoking directory is the default workspace root. The `web` and `headless` profiles auto-initialize on first use from shipped templates; any other profile must be created through `dsh plugin`.
 
@@ -26,6 +27,23 @@ dsh --profile headless "run the tests"
 dsh --profile web --help            # the web app's flags, not the launcher's
 dsh --help                          # the launcher's own help
 ```
+
+## First administrator
+
+`dsh auth bootstrap --email <address>` makes one account the deployment's first administrator in `<harness home>/auth.db`; `--home <path>` overrides `$DSH_HOME`, which otherwise falls back to `~/.dsh`.
+
+The subcommand is deliberately local-only. It opens the database directly, boots no profile, and is exposed on no network surface, so write access to the harness home is what authorizes it — the one right an operator has and a remote caller does not. It refuses with a nonzero exit as soon as any administrator exists, which keeps it from ever being an escalation path.
+
+The password comes from `DSH_BOOTSTRAP_PASSWORD` whenever that variable is defined, and otherwise from a terminal prompt that does not echo. With neither, the command refuses and names both; a password is never accepted on the command line, and never appears in output or in the database. Passwords shorter than 12 characters are rejected.
+
+An unknown address is created with the address left unverified, so the first login owns verification. An address that already has an account is promoted into the administrator group with its password untouched, which is how a store that has accounts but no administrator is recovered.
+
+```sh
+dsh auth bootstrap --email ops@example.com
+DSH_BOOTSTRAP_PASSWORD=... dsh auth bootstrap --email ops@example.com --home /srv/dsh
+```
+
+The [local-only bootstrap Agent Note](../../.agents/notes/implemented/feature/2026-08-23-auth-bootstrap-cli.md) owns the rationale.
 
 ## Profiles
 

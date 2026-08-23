@@ -12,6 +12,7 @@
 | `dsh --profile headless "job"` | 运行一个全新的持久化会话，打印最终答案并退出。 |
 | `dsh web` | `--profile web` 的别名。 |
 | `dsh plugin --profile <name> <pnpm args>` | 通过在 profile 目录中转发给 pnpm 来管理该 profile 的插件。 |
+| `dsh auth bootstrap --email <address>` | 在 harness home 的 `auth.db` 中创建本部署的第一个管理员账号。 |
 
 运行命令时所在的目录将作为默认 workspace 根目录。`web` 和 `headless` profile 在首次使用时会从随附模板自动初始化；其他任何 profile 都必须通过 `dsh plugin` 创建。
 
@@ -26,6 +27,25 @@ dsh --profile headless "run the tests"
 dsh --profile web --help            # the web app's flags, not the launcher's
 dsh --help                          # the launcher's own help
 ```
+
+<a id="first-administrator"></a>
+
+## 第一个管理员
+
+`dsh auth bootstrap --email <address>` 在 `<harness home>/auth.db` 中把某个账号设为本部署的第一个管理员；`--home <path>` 覆盖 `$DSH_HOME`，未指定时后者回退到 `~/.dsh`。
+
+该子命令刻意只在本地可用。它直接打开数据库，不启动任何 profile，也不暴露在任何网络面上，因此授权它的是对 harness home 的写权限——这正是运维人员拥有而远程调用方没有的那项权限。只要已存在任何管理员，它就立即以非零退出码拒绝，从而使它永远不会成为提权路径。
+
+只要 `DSH_BOOTSTRAP_PASSWORD` 有定义，密码就来自该变量；否则来自不回显的终端提示。两者都没有时，命令拒绝执行并同时指出这两种方式；密码绝不从命令行接受，也绝不出现在输出或数据库中。短于 12 个字符的密码会被拒绝。
+
+未知地址会被创建，且地址保持未验证状态，由首次登录负责验证。已存在账号的地址会被提升进管理员组，其密码保持不变——有账号却没有管理员的存储正是这样恢复的。
+
+```sh
+dsh auth bootstrap --email ops@example.com
+DSH_BOOTSTRAP_PASSWORD=... dsh auth bootstrap --email ops@example.com --home /srv/dsh
+```
+
+理由以[「仅本地 bootstrap」Agent Note](../../.agents/notes/implemented/feature/2026-08-23-auth-bootstrap-cli.zh.md)为准。
 
 <a id="profiles"></a>
 

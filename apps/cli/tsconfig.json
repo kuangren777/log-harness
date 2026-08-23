@@ -18,6 +18,12 @@
       "path": "../../vendor/include"
     },
     {
+      "path": "../../packages/auth/auth"
+    },
+    {
+      "path": "../../packages/auth/auth-sqlite"
+    },
+    {
       "path": "../../packages/boot/app-boot"
     },
     {

@@ -11,7 +11,8 @@
  * and `dsh --profile web -h` prints the web app's help, not this one's.
  *
  * `web` is a hardcoded alias for `--profile web`; `plugin` manages a profile's
- * plugin dependencies by forwarding to pnpm.
+ * plugin dependencies by forwarding to pnpm; `auth bootstrap` creates the first
+ * administrator account directly in the auth database.
  * @module @deepseek-ai/dsh/args
  */
 
@@ -44,8 +45,25 @@ interface PluginInvocation {
   args: string[]
 }
 
+/**
+ * Create the first administrator account in the harness home's auth database.
+ * Deliberately a launcher subcommand rather than a booted-profile surface: it
+ * runs before any account exists, so nothing could authorize it.
+ */
+interface AuthBootstrapInvocation {
+  mode: 'auth'
+  /** The address the first administrator account is created for. */
+  email: string
+  /** Harness home override; absent resolves `$DSH_HOME`, then `~/.dsh`. */
+  home?: string
+}
+
 /** The resolved `dsh` invocation. Help, version, and errors exit inside {@link parseDshArgs}. */
-export type DshInvocation = ProfileInvocation | DumpConfigInvocation | PluginInvocation
+export type DshInvocation =
+  | ProfileInvocation
+  | DumpConfigInvocation
+  | PluginInvocation
+  | AuthBootstrapInvocation
 
 /** Launcher flags shared by the default command and the `web` alias. */
 interface BootOptions {
@@ -69,6 +87,7 @@ Examples:
   dsh --profile tui --resume <session>       arguments after the launcher flags reach the app
   dsh --profile web --help                   the web app's own flags and help
   dsh plugin --profile tui add <package>     install a plugin into the tui profile
+  dsh auth bootstrap --email you@example.com create the first administrator account
 `
 
 /**
@@ -178,6 +197,26 @@ export function parseDshArgs(argv: readonly string[], version: string): DshInvoc
       if (options.profile === '') program.error('error: --profile needs a name')
       if (args.length === 0) program.error('error: plugin needs pnpm arguments to forward (e.g. add <package>)')
       resolved = { mode: 'plugin', profile: options.profile, args }
+    })
+
+  // The root turns its help option off so a booted app owns `-h`; nothing is
+  // booted under `auth`, so these commands take their own help back.
+  const auth = program.command('auth').description('local-only account administration against the harness home\'s auth database')
+  auth.helpOption('-h, --help', 'display help for command')
+  const bootstrap = auth.command('bootstrap').description('create the first administrator account; refused once any administrator exists')
+  bootstrap
+    .helpOption('-h, --help', 'display help for command')
+    .requiredOption('--email <address>', 'the first administrator\'s e-mail address')
+    .option('--home <path>', 'harness home holding auth.db, overriding $DSH_HOME (default: $DSH_HOME, else ~/.dsh)')
+    .action((options: { email: string; home?: string }) => {
+      rejectParentOptions('auth')
+      if (options.email === '') program.error('error: --email needs an address')
+      if (options.home === '') program.error('error: --home needs a path')
+      resolved = {
+        mode: 'auth',
+        email: options.email,
+        ...options.home === undefined ? {} : { home: options.home },
+      }
     })
 
   try {

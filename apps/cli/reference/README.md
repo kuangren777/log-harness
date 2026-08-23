@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-This reference defines the profile, web-alias, plugin-management, and config-dump command modes. Argv is parsed once through [`src/args.ts`](../src/args.ts), and [`src/bin.ts`](../src/bin.ts) dynamically imports only the selected runner.
+This reference defines the profile, web-alias, plugin-management, account-bootstrap, and config-dump command modes. Argv is parsed once through [`src/args.ts`](../src/args.ts), and [`src/bin.ts`](../src/bin.ts) dynamically imports only the selected runner.
 
 ## Profile boot
 
@@ -61,6 +61,21 @@ dsh --profile tui
 ```
 
 Git-hosted plugins that ship sources build during install through their `prepare` script, which pnpm ≥10 blocks until the consumer allows it: the first `add` fails with pnpm's `allowBuilds` hint (and a dsh pointer at the profile's `pnpm-workspace.yaml`); copy the printed key there and re-run. Installing a built tarball or a local checkout needs no allowance.
+
+## Account bootstrap
+
+`dsh auth bootstrap --email <address>` creates the deployment's first administrator account in `<harness home>/auth.db`, where the harness home is `--home <path>`, else `$DSH_HOME`, else `~/.dsh`. The command opens the database through `@deepseek-ai/dsh-auth-sqlite` directly: it boots no profile, mounts no service, and is registered on no network surface, so local write access to the harness home is what authorizes it. There is no remote equivalent at any point in a deployment's life.
+
+The command refuses with exit code 1, before reading anything else, as soon as the builtin administrator group has a member. Every other refusal — an empty or malformed `--email`, no password source, a password shorter than 12 characters, a database stamped by another build — also exits 1 with a message naming the field or the missing source. There is no `--force`: adding a further administrator is an authenticated administrative operation, not this one.
+
+The password is read from `DSH_BOOTSTRAP_PASSWORD` whenever that variable is defined, including when it is empty, and otherwise from a terminal prompt whose echo is suppressed. Without a terminal and without the variable the command refuses and names both sources. A password is never accepted as a command-line argument, never printed on either stream, and never stored: `createUser` hashes it with scrypt before insertion, and the audit record carries only the event, the account id, and whether the account was created or promoted.
+
+An address with no account is created, added to the builtin administrator group, and left with its address unverified for the first login to confirm. An address that already has an account is promoted into that group with its password unchanged, which recovers a store holding accounts but no administrator. Both outcomes write one `auth.bootstrap` audit record and print one line naming the address and the database path.
+
+```sh
+dsh auth bootstrap --email ops@example.com
+DSH_BOOTSTRAP_PASSWORD=... dsh auth bootstrap --email ops@example.com --home /srv/dsh
+```
 
 ## Web alias
 

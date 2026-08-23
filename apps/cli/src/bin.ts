@@ -42,6 +42,11 @@ switch (invocation.mode) {
     process.exit(runPlugin(invocation.profile, invocation.args))
     break
   }
+  case 'auth': {
+    const { processBootstrapIo, runAuthBootstrap } = await import('./auth-cli.ts')
+    process.exit(await runAuthBootstrap(invocation, processBootstrapIo()))
+    break
+  }
   case 'dump-config': {
     const { runDumpConfig } = await import('./dump-config.ts')
     runDumpConfig(invocation.profile, invocation.defaultOnly, invocation.patches)
