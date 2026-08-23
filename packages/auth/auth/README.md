@@ -58,6 +58,6 @@ None; the package contributes no request content, so no prefix can be invalidate
 
 ## Known Limitations and Deferred Work
 
-- **Rules are flat per group** — a principal's effective rules are the union of their groups' rules with deny winning. There is no rule ordering, priority, or per-user override; a user who needs a different answer joins a different group.
+- **Rules are flat per group** — a principal's effective rules are the union of their groups' rules with deny winning. Position carries no priority and there is no per-user override; a user who needs a different answer joins a different group. A provider still stores a group's rules in the order `setRules` received them, because that is the order an administration page redisplays.
 - **Patterns are exact or prefix-glob only** — no regular expressions or character classes. The vocabulary grows when a deployment shows a rule it cannot express, not before.
 - **No password policy beyond length** — composition, rotation, reuse history, and breach-list checks belong to whichever surface creates users; the seam only refuses to store a password reversibly.

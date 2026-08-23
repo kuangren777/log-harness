@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-23-auth-capability-design.md
-2026-08-23-auth-capability-design.md: c92f6729b623af15a3d3220e38e87edccf963aff
-2026-08-23-auth-capability-design.zh.md: fac788f040b4843546b12471dbc045ea6102590a
+2026-08-23-auth-capability-design.md: bd065f7625ee5000c015ea56355259de0e0c6bac
+2026-08-23-auth-capability-design.zh.md: 936638555250031b28b5c2946dc068f7cfe1af10

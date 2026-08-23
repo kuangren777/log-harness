@@ -662,9 +662,9 @@ export class AuthStore {
   }
 
   /**
-   * Replace a group's rules wholesale.
+   * Replace a group's rules wholesale, keeping the order they arrive in.
    * @param groupId - the group to update.
-   * @param rules - the complete rule set after the call.
+   * @param rules - the complete rule set after the call, in the order {@link listRules} will return.
    * @throws AuthError `unknown-subject` when no such group exists.
    */
   async setRules(groupId: GroupId, rules: readonly PermissionRule[]): Promise<void> {
@@ -673,8 +673,8 @@ export class AuthStore {
     const now = this.options.now()
     transact(db, () => {
       db.prepare('DELETE FROM rules WHERE group_id = ?').run(groupId)
-      const insert = db.prepare('INSERT INTO rules (id, group_id, domain, pattern, effect) VALUES (?, ?, ?, ?, ?)')
-      for (const rule of rules) insert.run(randomUUID(), groupId, rule.domain, rule.pattern, rule.effect)
+      const insert = db.prepare('INSERT INTO rules (group_id, ordinal, domain, pattern, effect) VALUES (?, ?, ?, ?, ?)')
+      for (const [ordinal, rule] of rules.entries()) insert.run(groupId, ordinal, rule.domain, rule.pattern, rule.effect)
       this.writeAudit(
         db,
         { event: 'auth.rules-set', subject: groupId, detail: `${rules.length} rule(s)` },
@@ -684,18 +684,22 @@ export class AuthStore {
   }
 
   /**
-   * One group's rules.
+   * One group's rules, in the order the last {@link setRules} supplied them.
+   * That order is what an administration page redisplays, so it is durable
+   * rather than whatever the storage engine finds cheapest to return.
    * @param groupId - the group to read.
    * @returns its rules.
    */
   async listRules(groupId: GroupId): Promise<readonly PermissionRule[]> {
     const db = await this.ready
-    return db.prepare('SELECT domain, pattern, effect FROM rules WHERE group_id = ? ORDER BY id')
+    return db.prepare('SELECT domain, pattern, effect FROM rules WHERE group_id = ? ORDER BY ordinal')
       .all(groupId) as unknown as PermissionRule[]
   }
 
   /**
-   * Every rule that applies to one account.
+   * Every rule that applies to one account, each group's rules contiguous and
+   * in their authored order. `evaluate` does not need any order; reading the
+   * same rows the same way twice is what a caller diffing two answers needs.
    * @param userId - the account to collect rules for.
    * @returns the union of its groups' rules.
    */
@@ -703,7 +707,7 @@ export class AuthStore {
     const db = await this.ready
     return db.prepare(`SELECT r.domain, r.pattern, r.effect FROM rules r
       JOIN memberships m ON m.group_id = r.group_id
-      WHERE m.user_id = ? ORDER BY r.id`).all(userId) as unknown as PermissionRule[]
+      WHERE m.user_id = ? ORDER BY r.group_id, r.ordinal`).all(userId) as unknown as PermissionRule[]
   }
 
   /**

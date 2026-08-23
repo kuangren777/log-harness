@@ -15,7 +15,7 @@ import { ADMIN_GROUP_ID, ADMIN_GROUP_NAME, AuthError } from '@deepseek-ai/dsh-au
  * makes a wrong-version auth database an operator decision, not something a
  * provider should silently rewrite while it holds credentials.
  */
-export const AUTH_SCHEMA_VERSION = 1
+export const AUTH_SCHEMA_VERSION = 2
 
 /**
  * Journal modes this provider will run under. `wal` is the default; the
@@ -58,15 +58,19 @@ CREATE TABLE memberships (
   PRIMARY KEY (user_id, group_id)
 ) STRICT;
 
+-- A rule's ordinal is its position in the set the administrator saved, and it
+-- is the primary key's second column so that reading a group back yields that
+-- order. No rule is addressed on its own — setRules replaces the whole set —
+-- so the position is the only identity a rule needs, and the primary key's
+-- index also serves the group and membership-join reads.
 CREATE TABLE rules (
-  id       TEXT PRIMARY KEY,
   group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  ordinal  INTEGER NOT NULL,
   domain   TEXT NOT NULL CHECK (domain IN ('skill', 'tool', 'model', 'settings-section')),
   pattern  TEXT NOT NULL,
-  effect   TEXT NOT NULL CHECK (effect IN ('allow', 'deny'))
+  effect   TEXT NOT NULL CHECK (effect IN ('allow', 'deny')),
+  PRIMARY KEY (group_id, ordinal)
 ) STRICT;
-
-CREATE INDEX rules_by_group_domain ON rules (group_id, domain);
 
 CREATE TABLE auth_sessions (
   id           TEXT PRIMARY KEY,

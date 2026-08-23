@@ -596,6 +596,23 @@ describe('groups, members, and rules', () => {
     expect(await store.rulesFor(UserId('missing'))).toEqual([])
   })
 
+  it('reads a group’s rules back in the order they were saved', async () => {
+    const { store } = harness()
+    const groupId = await store.createGroup('reviewers')
+    const authored: PermissionRule[] = [
+      { domain: 'skill', pattern: '*', effect: 'allow' },
+      { domain: 'skill', pattern: 'secret', effect: 'deny' },
+      { domain: 'tool', pattern: 'bash', effect: 'deny' },
+    ]
+    await store.setRules(groupId, authored)
+    expect(await store.listRules(groupId)).toEqual(authored)
+    // A rule carries no identity of its own, so re-saving the same three in
+    // another order is an edit, and the read-back has to show it.
+    const reordered = [...authored].reverse()
+    await store.setRules(groupId, reordered)
+    expect(await store.listRules(groupId)).toEqual(reordered)
+  })
+
   it('takes a group’s memberships and rules down with it', async () => {
     const { store } = harness()
     const groupId = await store.createGroup('reviewers')

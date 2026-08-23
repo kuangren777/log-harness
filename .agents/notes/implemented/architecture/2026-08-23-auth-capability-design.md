@@ -20,7 +20,7 @@ Two packages form the seam. `dsh-auth` owns the vocabulary and the primitives; `
 
 `evaluate` resolves a name against a group's rules as **deny > allow > default-deny**. Default-deny is the load-bearing half: a skill, tool, model, or settings section that no rule mentions is invisible to a restricted group. A capability added later is therefore safe on arrival rather than exposed until someone remembers to forbid it. `permits` layers the principal on top, short-circuiting for `local` and for `admin`.
 
-Rules are flat and unioned across a user's groups. Ordering and priority were rejected: with deny winning, precedence between two rules is already decided, and an ordered list would let one group's rule silently weaken another's.
+Rules are flat and unioned across a user's groups. Ordering and priority were rejected: with deny winning, precedence between two rules is already decided, and an ordered list would let one group's rule silently weaken another's. Position is still durable, because it is what an administration page redisplays: `setRules` writes each rule's index into the `rules.ordinal` column and `listRules` reads by it, so a group comes back in the order it was saved instead of the order the storage engine finds cheapest. That is presentation, not precedence — `evaluate` never reads a rule's position, and a group whose rules arrive shuffled decides every name the same way.
 
 ### scrypt, not argon2id
 
@@ -44,7 +44,7 @@ Password, 2FA-send, and reset windows live in a `rate_events` table, so a lockou
 
 **Express permissions through `permission-presets`.** Rejected. Presets bundle `sandbox/mode` with `approval/policy` and are pinned per session at creation: they answer how much a running session may do, not who the caller is. Folding authorization in would tie a security decision to a session-scoped UX control.
 
-**Migrate the schema on version drift.** Rejected for version 1. `AUTH_SCHEMA_VERSION` is rejected rather than migrated, matching the repository's pre-release stance; silently reinterpreting credential rows written by another build is a worse failure than refusing to start.
+**Migrate the schema on version drift.** Rejected. `AUTH_SCHEMA_VERSION` is rejected rather than migrated, matching the repository's pre-release stance; silently reinterpreting credential rows written by another build is a worse failure than refusing to start. Version 2, which gave `rules` its `ordinal` column, is the policy's first exercise: an existing `auth.db` is recreated rather than upgraded.
 
 ## Consequences
 
