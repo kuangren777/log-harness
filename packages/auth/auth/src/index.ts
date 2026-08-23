@@ -207,6 +207,15 @@ export abstract class AuthService extends Service {
    * Redeem a link-kind secret. Redemption is single-use and atomic: two
    * concurrent presentations of one token resolve at most one of them.
    * Expired, already-consumed, and unknown tokens are indistinguishable.
+   *
+   * Redeeming a `verify-email` secret also confirms the account's address, in
+   * the same durable operation. That is the contract, not an incidental effect
+   * of consumption: the two are one fact, and moving the confirmation to a
+   * separate setter would let a crash spend the single-use link without
+   * recording what it proved — an account stuck unverified with no secret left
+   * to prove it — and would leave a second route that spends the link and
+   * records nothing. A repeat confirmation keeps the first one's timestamp, so
+   * {@link UserRecord.emailVerifiedAt} is when the address was first proven.
    * @param kind - the kind the secret must have been issued for.
    * @param token - the presented secret.
    * @returns the account the secret belonged to, or `undefined` when it does not redeem.

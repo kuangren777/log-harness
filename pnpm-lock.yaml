@@ -153,6 +153,9 @@ importers:
       '@deepseek-ai/dsh-auth':
         specifier: workspace:^
         version: link:../../packages/auth/auth
+      '@deepseek-ai/dsh-auth-gate':
+        specifier: workspace:^
+        version: link:../../packages/auth/auth-gate
       '@deepseek-ai/dsh-auth-sqlite':
         specifier: workspace:^
         version: link:../../packages/auth/auth-sqlite
@@ -204,6 +207,9 @@ importers:
       '@deepseek-ai/dsh-launch-environment':
         specifier: workspace:^
         version: link:../../packages/util/launch-environment
+      '@deepseek-ai/dsh-mail-file':
+        specifier: workspace:^
+        version: link:../../packages/mail/mail-file
       '@deepseek-ai/dsh-mcp-client':
         specifier: workspace:^
         version: link:../../packages/mcp/mcp-client
@@ -976,6 +982,12 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:^
+        version: link:../../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../../../vendor/loader
       '@deepseek-ai/dsh-auth':
         specifier: workspace:^
         version: link:../auth

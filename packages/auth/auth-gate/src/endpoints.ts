@@ -398,6 +398,11 @@ export async function passwordReset(
 
 /**
  * `email.verify` — redeem a mailed confirmation link.
+ *
+ * Redemption is what records the confirmation: the provider writes
+ * `emailVerifiedAt` in the transaction that consumes the secret, so this
+ * endpoint has no second write to make and no window in which it could fail
+ * to make it.
  * @param payload - the mailed token.
  * @param _caller - unused; the request's client facts play no part.
  * @param gate - the gate's dependencies.

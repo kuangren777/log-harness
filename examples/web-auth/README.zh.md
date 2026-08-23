@@ -1,0 +1,24 @@
+# 多用户 Web
+
+[English](README.md) | 中文
+
+这个 overlay 让单个 `dsh web` 进程选择启用[认证](../../packages/auth/README.zh.md)，而已发布的默认 Web 组合保持单租户不变：
+
+```sh
+dsh auth bootstrap --email you@example.test
+dsh web --patch examples/web-auth/cordis.yml
+```
+
+bootstrap 命令排在前面，且只运行一次。它在 `$DSH_HOME/auth.db` 中创建第一个管理员账户，而 overlay 正是把 provider 指向同一个数据库；若在空数据库上叠加 overlay，则没有人能登录，任何请求都不会被服务。
+
+它挂载三行，三行缺一不可。`dsh-auth-sqlite` 保存账户、组、规则、会话、一次性凭据与审计日志。mail provider 投递登录验证码以及确认与重置链接。[`dsh-auth-gate`](../../packages/auth/auth-gate/README.zh.md) 提供 `/auth` 通道，并回答传输层对每个请求提出的问题。挂载了 provider 却没有 gate 的组合意图认证却无法认证，因此 host 宁可完全停止服务，也不会把每个调用方都当作匿名者来服务。
+
+登录分两步：先密码，再是邮件送达的六位验证码。浏览器随后持有一个 `HttpOnly; SameSite=Strict` 的会话 cookie，每个 `/api` 请求与事件流升级都据它认证。已认证的调用方接下来能触达什么，由[网关的策略表](../../packages/host/apiproxy/README.zh.md)决定，而不是这个 overlay。
+
+## 在其他人登录之前
+
+`mail-file` 把邮箱写到 `$DSH_HOME/mailbox.jsonl`，每条消息一行 JSON。它是可用的本地试运行，同时对任何能读该文件的人都是第二因子的绕过口，因此账户多于一个的部署应换成 `@deepseek-ai/dsh-mail-smtp`。
+
+overlay 里写 `cookieSecure: false`，是因为默认 `baseUrl` 是 loopback HTTP，那里带 `Secure` 的 cookie 根本不会被发送。它只在 loopback、或在 origin 从公网不可达的加密 tailnet 内部才成立。其他任何部署都应把 `baseUrl` 设为自己的 HTTPS origin 并删掉这一行，恢复 `true` 默认值。
+
+`baseUrl` 必须与浏览器实际访问的 origin 一致，端口也要一致：邮件中每个链接都以它为基准解析。

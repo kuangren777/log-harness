@@ -20,7 +20,7 @@ The database lives at the configured `path` (`$DSH_HOME/auth.db` in the shipped 
 
 **Durable rate limits.** Password, 2FA-send, and reset attempts are counted in `rate_events` with sliding windows, so a lockout survives a Host restart rather than resetting with the process. The limits are security invariants, not deployment knobs.
 
-**Single-use secrets.** A one-time token is consumed inside one transaction that both marks `consumed_at` and returns the user, so two concurrent redemptions cannot both succeed. A 2FA code additionally dies after its attempt cap.
+**Single-use secrets.** A one-time token is consumed inside one transaction that both marks `consumed_at` and returns the user, so two concurrent redemptions cannot both succeed. Redeeming a `verify-email` token writes `users.email_verified_at` in that same transaction — spending the link and recording what it proved are one fact, and a crash between two separate writes would leave an account unverified with no secret left to prove it. A 2FA code additionally dies after its attempt cap.
 
 **Digest-only secrets.** Auth-session tokens and one-time codes are stored as digests and located by digest, then confirmed with `timingSafeEqual`. Neither the database nor the audit log ever holds a password, token, or code in plaintext.
 

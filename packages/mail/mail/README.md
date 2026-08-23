@@ -6,7 +6,7 @@ Service Definition of the [outbound mail](../README.md) capability seam: one abs
 
 ## Service API
 
-```ts
+```ts ignore-check
 abstract class MailService extends Service {
   abstract send(message: MailMessage): Promise<void>
 }

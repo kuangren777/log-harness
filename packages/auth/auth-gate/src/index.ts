@@ -82,7 +82,7 @@ export class AuthGateService extends Service implements RequestGate {
       auth: ctx.auth,
       mail: ctx.mail,
       settings: this.settings,
-      warn: message => { ctx.logger.warn(message) },
+      warn: (message) => { ctx.logger.warn(message) },
     }
     ctx.effect(
       () => ctx.connection.rpc.handle(AUTH_CHANNEL, (endpoint, payload, _signal, caller) =>

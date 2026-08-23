@@ -59,10 +59,10 @@ function resultOf(reply: RpcResult<unknown> | ConnectionRpcReply): RpcResult<unk
   return 'ok' in reply ? reply : reply.result
 }
 
-function valueOf<T>(reply: RpcResult<unknown> | ConnectionRpcReply): T {
+function valueOf(reply: RpcResult<unknown> | ConnectionRpcReply): unknown {
   const result = resultOf(reply)
   if (!result.ok) throw new Error(`expected a success value, got ${result.error.code}`)
-  return result.value as T
+  return result.value
 }
 
 function cookieOf(reply: RpcResult<unknown> | ConnectionRpcReply): string {
@@ -89,9 +89,9 @@ function deliveredToken(subject: string): string {
 /** Drive a complete sign-in and return the cookie header it installed. */
 async function signIn(headers: Record<string, string> = { 'user-agent': 'Firefox' }): Promise<string> {
   clockOffset += TWO_FACTOR_MIN_INTERVAL_MS + 1_000
-  const started = valueOf<{ status: string; pendingId: string }>(
+  const started = valueOf(
     await loginStart({ email: EMAIL, password: PASSWORD }, caller(headers), gate),
-  )
+  ) as { status: string; pendingId: string }
   expect(started.status).toBe('2fa-required')
   const verified = await loginVerify({ pendingId: started.pendingId, code: deliveredCode() }, caller(headers), gate)
   expect(valueOf(verified)).toEqual({ status: 'ok' })
@@ -133,9 +133,9 @@ afterEach(async () => {
 
 describe('login.start', () => {
   it('mails a code and answers with the challenge it can be verified against', async () => {
-    const started = valueOf<{ status: string; pendingId: string }>(
+    const started = valueOf(
       await loginStart({ email: EMAIL, password: PASSWORD }, caller(), gate),
-    )
+    ) as { status: string; pendingId: string }
     expect(started.status).toBe('2fa-required')
     expect(OneTimeTokenId(started.pendingId)).toBeTruthy()
     expect(outbox.sent.map(message => message.to)).toEqual([EMAIL])
@@ -160,9 +160,9 @@ describe('login.start', () => {
     for (let attempt = 0; attempt < PASSWORD_ATTEMPTS_PER_EMAIL; attempt++) {
       await loginStart({ email: EMAIL, password: 'wrong' }, caller(), gate)
     }
-    const locked = valueOf<{ status: string; retryAfterMs: number }>(
+    const locked = valueOf(
       await loginStart({ email: EMAIL, password: PASSWORD }, caller(), gate),
-    )
+    ) as { status: string; retryAfterMs: number }
     expect(locked.status).toBe('failed')
     expect(locked.retryAfterMs).toBeGreaterThan(0)
     expect(outbox.sent).toEqual([])
@@ -170,9 +170,9 @@ describe('login.start', () => {
 
   it('reports the provider\'s issuance limit as the same generic failure', async () => {
     await loginStart({ email: EMAIL, password: PASSWORD }, caller(), gate)
-    const throttled = valueOf<{ status: string; retryAfterMs?: number }>(
+    const throttled = valueOf(
       await loginStart({ email: EMAIL, password: PASSWORD }, caller(), gate),
-    )
+    ) as { status: string; retryAfterMs?: number }
     expect(throttled.status).toBe('failed')
     expect(outbox.sent).toHaveLength(1)
   })
@@ -208,9 +208,9 @@ describe('login.verify', () => {
   })
 
   it('refuses a wrong code, a replayed code, and an unknown challenge', async () => {
-    const started = valueOf<{ pendingId: string }>(
+    const started = valueOf(
       await loginStart({ email: EMAIL, password: PASSWORD }, caller(), gate),
-    )
+    ) as { pendingId: string }
     const code = deliveredCode()
     expect(valueOf(await loginVerify({ pendingId: started.pendingId, code: '000000' }, caller(), gate)))
       .toEqual({ status: 'failed' })
@@ -224,9 +224,9 @@ describe('login.verify', () => {
   })
 
   it('kills a challenge that has been guessed at too often, even with the right code', async () => {
-    const started = valueOf<{ pendingId: string }>(
+    const started = valueOf(
       await loginStart({ email: EMAIL, password: PASSWORD }, caller(), gate),
-    )
+    ) as { pendingId: string }
     const code = deliveredCode()
     for (let attempt = 0; attempt < CODE_ATTEMPT_CAP; attempt++) {
       await loginVerify({ pendingId: started.pendingId, code: '000000' }, caller(), gate)
@@ -237,9 +237,9 @@ describe('login.verify', () => {
 
   it('refuses an expired challenge', async () => {
     const brief: GateContext = { ...gate, settings: { ...gate.settings, codeTtlMs: 1 } }
-    const started = valueOf<{ pendingId: string }>(
+    const started = valueOf(
       await loginStart({ email: EMAIL, password: PASSWORD }, caller(), brief),
-    )
+    ) as { pendingId: string }
     const code = deliveredCode()
     await new Promise(resolve => setTimeout(resolve, 5))
     expect(valueOf(await loginVerify({ pendingId: started.pendingId, code }, caller(), brief)))
@@ -373,6 +373,21 @@ describe('email.verify', () => {
     expect(resultOf(await emailVerify({}, caller(), gate)).ok).toBe(false)
     expect((await auth.readAudit(50)).some(record => record.event === 'auth.email-verified')).toBe(true)
   })
+
+  it('records the confirmation, so no later sign-in asks for it again', async () => {
+    await signIn()
+    expect((await auth.getUserByEmail(EMAIL))?.emailVerifiedAt).toBeUndefined()
+    const token = deliveredToken('Confirm your e-mail address')
+    const before = Date.now()
+    expect(valueOf(await emailVerify({ token }, caller(), gate))).toEqual({ status: 'ok' })
+    const verifiedAt = (await auth.getUserByEmail(EMAIL))?.emailVerifiedAt
+    expect(verifiedAt).toBeGreaterThanOrEqual(before)
+    expect(verifiedAt).toBeLessThanOrEqual(Date.now())
+    const confirmations = outbox.sent.filter(message => message.subject === 'Confirm your e-mail address').length
+    await signIn()
+    expect(outbox.sent.filter(message => message.subject === 'Confirm your e-mail address'))
+      .toHaveLength(confirmations)
+  })
 })
 
 describe('the durable record after a full flow', () => {
@@ -398,5 +413,62 @@ describe('the durable record after a full flow', () => {
 
   it('brands the account id it was created under', () => {
     expect(UserId(String(userId))).toBe(userId)
+  })
+})
+
+describe('the paths only a race, an outage, or a carrier without an address reaches', () => {
+  it('signs in a caller the carrier gave no address for', async () => {
+    const anonymous: ConnectionRpcCaller = { headers: new Headers({ 'user-agent': 'Firefox' }), ip: undefined }
+    const started = valueOf(
+      await loginStart({ email: EMAIL, password: PASSWORD }, anonymous, gate),
+    ) as { status: string; pendingId: string }
+    const verified = await loginVerify({ pendingId: started.pendingId, code: deliveredCode() }, anonymous, gate)
+    expect(valueOf(verified)).toEqual({ status: 'ok' })
+    const issued = (await auth.readAudit(50)).find(record => record.event === SESSION_ISSUED_EVENT)
+    expect(issued?.ip).toBeUndefined()
+    expect(issued?.detail).toMatch(/^device:[0-9a-f]{16}$/)
+  })
+
+  it('fails the sign-in when the account disappears between the two reads', async () => {
+    vi.spyOn(auth, 'getUserByEmail').mockResolvedValue(undefined)
+    expect(valueOf(await loginStart({ email: EMAIL, password: PASSWORD }, caller(), gate)))
+      .toEqual({ status: 'failed' })
+  })
+
+  it('fails the sign-in without a deadline when the limit carries none', async () => {
+    vi.spyOn(auth, 'issueOneTimeToken').mockRejectedValue(new AuthError('rate-limited', 'no deadline'))
+    expect(valueOf(await loginStart({ email: EMAIL, password: PASSWORD }, caller(), gate)))
+      .toEqual({ status: 'failed' })
+  })
+
+  it('sends no confirmation on a first sign-in whose address is already confirmed', async () => {
+    const link = await auth.issueOneTimeToken('verify-email', userId, 60_000)
+    expect(await auth.consumeOneTimeToken('verify-email', link.secret)).toBe(userId)
+    await signIn()
+    expect(outbox.sent.map(message => message.subject)).toEqual(['Your sign-in code'])
+  })
+
+  it('fails the verification when the session it just issued no longer authenticates', async () => {
+    const started = valueOf(
+      await loginStart({ email: EMAIL, password: PASSWORD }, caller(), gate),
+    ) as { status: string; pendingId: string }
+    vi.spyOn(auth, 'authenticateToken').mockResolvedValue(undefined)
+    expect(valueOf(await loginVerify({ pendingId: started.pendingId, code: deliveredCode() }, caller(), gate)))
+      .toEqual({ status: 'failed' })
+  })
+
+  it('still signs in when the account disappears before its notices are decided', async () => {
+    const started = valueOf(
+      await loginStart({ email: EMAIL, password: PASSWORD }, caller(), gate),
+    ) as { status: string; pendingId: string }
+    vi.spyOn(auth, 'getUserByEmail').mockResolvedValue(undefined)
+    const verified = await loginVerify({ pendingId: started.pendingId, code: deliveredCode() }, caller(), gate)
+    expect(valueOf(verified)).toEqual({ status: 'ok' })
+    expect(outbox.sent.map(message => message.subject)).toEqual(['Your sign-in code'])
+  })
+
+  it('does not swallow a provider failure that is not the reset rate limit', async () => {
+    vi.spyOn(auth, 'issueOneTimeToken').mockRejectedValue(new Error('storage is gone'))
+    await expect(passwordForgot({ email: EMAIL }, caller(), gate)).rejects.toThrow('storage is gone')
   })
 })

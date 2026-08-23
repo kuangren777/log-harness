@@ -8,6 +8,7 @@
 |---|---|---|
 | [`auth/`](auth/README.zh.md) | 定义 principal、权限词汇，以及密码与令牌原语 | `ctx.auth` |
 | [`auth-sqlite/`](auth-sqlite/README.zh.md) | 在单个 SQLite 数据库中保存用户、组、规则、会话、一次性凭据、归属与审计日志 | 提供 `ctx.auth` |
+| [`auth-gate/`](auth-gate/README.zh.md) | 提供 `/auth` 登录通道，并把每个请求的 cookie 解析为 principal | 提供 `ctx.authGate` |
 
 授权始终在 Host 上判定，绝不在浏览器里：在页面上隐藏一个控件只是对使用者的体贴，真正起作用的拒绝发生在操作执行的地方。手工构造请求的客户端会得到同样的答复。
 

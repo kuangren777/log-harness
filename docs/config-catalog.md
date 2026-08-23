@@ -348,6 +348,39 @@ export interface Config {
 
 Source: [`packages/attachment/attachment-local/src/index.ts:51`](../packages/attachment/attachment-local/src/index.ts)
 
+<a id="deepseek-aidsh-auth-gate"></a>
+
+## `@deepseek-ai/dsh-auth-gate`
+
+Requires: `auth` · `connection` · `mail`
+
+```ts config-catalog
+/** Plugin configuration. */
+export interface Config {
+  /**
+   * Absolute origin this deployment is reached at, used to build the links
+   * mail carries. It has no default: a link to the wrong origin either fails
+   * to open or sends a one-time token somewhere else.
+   */
+  baseUrl: string
+  /** Name of the session cookie; defaults to `dsh_session`. */
+  cookieName?: string
+  /**
+   * Whether the session cookie carries `Secure`, which keeps a browser from
+   * ever sending it over plain HTTP. Defaults to `true`; set it to `false`
+   * only for a deployment reached over loopback HTTP, where the attribute
+   * would stop the cookie from working at all.
+   */
+  cookieSecure?: boolean
+  /** How long a second-factor code stays valid, in milliseconds. */
+  codeTtlMs?: number
+  /** How long a reset or confirmation link stays valid, in milliseconds. */
+  linkTtlMs?: number
+}
+```
+
+Source: [`packages/auth/auth-gate/src/settings.ts:16`](../packages/auth/auth-gate/src/settings.ts)
+
 <a id="deepseek-aidsh-auth-sqlite"></a>
 
 ## `@deepseek-ai/dsh-auth-sqlite`
@@ -453,7 +486,7 @@ export interface ConnectionConfig {
 }
 ```
 
-Source: [`packages/client/connection/src/index.ts:50`](../packages/client/connection/src/index.ts)
+Source: [`packages/client/connection/src/index.ts:53`](../packages/client/connection/src/index.ts)
 
 <a id="deepseek-aidsh-client-hmr"></a>
 
@@ -858,7 +891,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/host/apiproxy/src/index.ts:41`](../packages/host/apiproxy/src/index.ts)
+Source: [`packages/host/apiproxy/src/index.ts:48`](../packages/host/apiproxy/src/index.ts)
 
 <a id="deepseek-aidsh-host-directory-picker-browse"></a>
 

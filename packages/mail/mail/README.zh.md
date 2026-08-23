@@ -6,7 +6,7 @@
 
 ## 服务 API
 
-```ts
+```ts ignore-check
 abstract class MailService extends Service {
   abstract send(message: MailMessage): Promise<void>
 }

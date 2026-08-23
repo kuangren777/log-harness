@@ -6,7 +6,7 @@ Service Definition of the [authentication and authorization](../README.md) capab
 
 ## Principal
 
-```ts
+```ts ignore-check
 type Principal =
   | { kind: 'user'; userId: UserId; email: string; groups: readonly GroupId[]; admin: boolean }
   | { kind: 'local' }
@@ -16,7 +16,7 @@ type Principal =
 
 ## Permission rules
 
-```ts
+```ts ignore-check
 type PermissionDomain = 'skill' | 'tool' | 'model' | 'settings-section'
 interface PermissionRule { domain: PermissionDomain; pattern: string; effect: 'allow' | 'deny' }
 

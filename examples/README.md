@@ -24,6 +24,10 @@ A self-referential agent that can inspect and change its in-memory Cordis plugin
 
 An opt-in Web overlay for durable, Session-local reminders. It supports positive whole-second `after_seconds` delays and absolute `at` targets through `schedule_create`, `schedule_list`, and `schedule_delete`; active reminders persist in the original Session, resume when that Session becomes live again, and do not run while it is cold. Run `dsh web --patch examples/web-schedule/cordis.yml`; see [web-schedule/README.md](web-schedule/README.md) for absolute-time authority, delivery, and recovery boundaries.
 
+## web-auth
+
+An opt-in Web overlay that turns one `dsh web` process multi-user: a SQLite credential store, a file mailbox, and the request gate that authenticates every `/api` request from a session cookie. Run `dsh auth bootstrap --email you@example.test` once, then `dsh web --patch examples/web-auth/cordis.yml`; see [web-auth/README.md](web-auth/README.md) for the mailbox and cookie caveats a real deployment has to fix.
+
 ## acp-agent
 
 An Agent Client Protocol automation server for programmatic clients, with session, permission, and cancellation support. See the [ACP example reference](acp-agent/README.md).

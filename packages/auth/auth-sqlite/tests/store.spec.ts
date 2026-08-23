@@ -296,6 +296,44 @@ describe('login sessions', () => {
     })
   })
 
+  it('confirms the address in the transaction that spends the link, once', async () => {
+    const { store, advance } = harness()
+    const userId = await store.createUser('ada@example.test', 'pw')
+    expect((await store.getUserByEmail('ada@example.test'))?.emailVerifiedAt).toBeUndefined()
+    const issued = await store.issueOneTimeToken('verify-email', userId, HOUR_MS)
+    expect(await store.consumeOneTimeToken('verify-email', issued.secret)).toBe(userId)
+    expect((await store.getUserByEmail('ada@example.test'))?.emailVerifiedAt).toBe(EPOCH)
+    // A replayed link neither redeems again nor moves the confirmation.
+    advance(HOUR_MS)
+    expect(await store.consumeOneTimeToken('verify-email', issued.secret)).toBeUndefined()
+    const second = await store.issueOneTimeToken('verify-email', userId, HOUR_MS)
+    expect(await store.consumeOneTimeToken('verify-email', second.secret)).toBe(userId)
+    expect((await store.getUserByEmail('ada@example.test'))?.emailVerifiedAt).toBe(EPOCH)
+  })
+
+  it('confirms no address when the redeemed link was a password reset', async () => {
+    const { store } = harness()
+    const userId = await store.createUser('ada@example.test', 'pw')
+    const issued = await store.issueOneTimeToken('reset-password', userId, HOUR_MS)
+    expect(await store.consumeOneTimeToken('reset-password', issued.secret)).toBe(userId)
+    expect((await store.getUserByEmail('ada@example.test'))?.emailVerifiedAt).toBeUndefined()
+  })
+
+  it('spends the link and confirms the address together or not at all', async () => {
+    const { store } = harness()
+    const userId = await store.createUser('ada@example.test', 'pw')
+    const issued = await store.issueOneTimeToken('verify-email', userId, HOUR_MS)
+    const db = await store.open()
+    // Fail the transaction after both writes, where a crash would otherwise
+    // leave a spent link behind an unverified account.
+    db.exec('DROP TABLE audit_log')
+    await expect(store.consumeOneTimeToken('verify-email', issued.secret)).rejects.toThrow()
+    expect(db.prepare('SELECT consumed_at FROM one_time_tokens WHERE user_id = ?').get(userId))
+      .toMatchObject({ consumed_at: null })
+    expect(db.prepare('SELECT email_verified_at FROM users WHERE id = ?').get(userId))
+      .toMatchObject({ email_verified_at: null })
+  })
+
   it('refuses to issue for an account that does not exist', async () => {
     const { store } = harness()
     await expect(store.issueAuthSession(UserId('missing'), {})).rejects.toMatchObject({

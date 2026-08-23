@@ -380,7 +380,8 @@ function sseResponse(frames: AsyncIterable<RpcRequest<MuxFrame | HostFrame>>): R
 /**
  * Wraps an ApiProxy into a pure fetch function (isomorphic point: feed the returned fetch straight to InProcessApiClient).
  * @param api - the host-side ApiProxy implementation.
- * @param authorization - who each request acts as and how ownership resolves; omitted, every request is the `local` principal and every policy passes.
+ * @param authorization - who each request acts as and how ownership resolves; omitted, every request is the `local`
+ *   principal and every policy passes.
  * @returns an object holding `fetch(Request)`; paths outside /api/ return 404.
  */
 export function toFetchHandler(

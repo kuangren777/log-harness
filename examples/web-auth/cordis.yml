@@ -1,0 +1,37 @@
+# Opt-in multi-user patch over the shipped Web composition. No shipped profile
+# mounts authentication; layering this file is what turns one `dsh web` process
+# from single-tenant into multi-user.
+# This file is a PATCH OVERLAY over the web profile (dsh-base + dsh-web-app
+# bundle layers), not a tree: `dsh web --patch` applies it as one more sibling
+# patch list at the same include level.
+#
+# Order is not a fence here — the transport reads `ctx.authGate` per request —
+# but a provider mounted WITHOUT the gate stops the host serving at all, so
+# these three rows belong in one overlay and are never layered separately.
+
+- insert:
+    # The same database `dsh auth bootstrap` writes the first administrator to;
+    # a different path would authenticate against an empty account set.
+    - id: auth
+      name: '@deepseek-ai/dsh-auth-sqlite'
+      config:
+        path: !!js dshHomePath('auth.db')
+
+    # A local trial reads its sign-in codes and links out of this file. Swap in
+    # '@deepseek-ai/dsh-mail-smtp' before anyone but the operator signs in: a
+    # mailbox on disk is a second-factor bypass for whoever can read it.
+    - id: mail
+      name: '@deepseek-ai/dsh-mail-file'
+      config:
+        path: !!js dshHomePath('mailbox.jsonl')
+
+    - id: auth-gate
+      name: '@deepseek-ai/dsh-auth-gate'
+      config:
+        # Every mailed link resolves against this origin; a wrong one either
+        # fails to open or sends a one-time token somewhere else.
+        baseUrl: 'http://127.0.0.1:3080'
+        # Correct ONLY for loopback HTTP or an encrypted tailnet, where a
+        # `Secure` cookie would never be sent at all. Any deployment reachable
+        # over plain HTTP beyond that must leave this at its `true` default.
+        cookieSecure: false

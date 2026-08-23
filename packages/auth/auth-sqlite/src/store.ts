@@ -435,7 +435,8 @@ export class AuthStore {
   }
 
   /**
-   * Redeem a link-kind secret, once and atomically.
+   * Redeem a link-kind secret, once and atomically, recording what a
+   * `verify-email` secret proves in the same transaction.
    * @param kind - the kind the secret must have been issued for.
    * @param token - the presented secret.
    * @returns the account it belonged to, or `undefined` when it does not redeem.
@@ -451,6 +452,15 @@ export class AuthStore {
       if (row === undefined || row.consumed_at !== null || row.expires_at <= now) return undefined
       db.prepare('UPDATE one_time_tokens SET consumed_at = ? WHERE id = ?').run(now, row.id)
       const userId = UserId(row.user_id)
+      // Consumption and confirmation commit together: a crash between two
+      // separate writes would spend the single-use link without recording
+      // what it proved, and the account could never become verified. The
+      // `IS NULL` guard keeps the FIRST confirmation's timestamp, so a second
+      // token issued in a race does not move when the address was proven.
+      if (kind === 'verify-email') {
+        db.prepare('UPDATE users SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL')
+          .run(now, userId)
+      }
       this.writeAudit(
         db,
         { event: 'auth.one-time-token-consumed', actorUserId: userId, subject: row.id, detail: kind },

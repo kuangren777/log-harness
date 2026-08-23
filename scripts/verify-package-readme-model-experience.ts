@@ -120,6 +120,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/lsp/lsp-stdio': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-lsp.' },
   'packages/auth/auth': { kind: 'none', reason: 'The seam decides who may call the Host; no principal, rule, password, token, or audit record enters a model request.' },
   'packages/auth/auth-sqlite': { kind: 'none', reason: 'The credential and permission store serves Host authorization decisions; no stored record reaches a model request.' },
+  'packages/auth/auth-gate': { kind: 'none', reason: 'The request gate authenticates Host requests and mails sign-in messages; no principal, cookie, or mailed text reaches a model request.' },
   'packages/mail/mail': { kind: 'none', reason: 'The seam moves operator-facing mail; no message field, delivery result, or configuration value enters a model request.' },
   'packages/mail/mail-file': { kind: 'none', reason: 'The mailbox is a host-side file no consumer reads back into a model request.' },
   'packages/mail/mail-smtp': { kind: 'none', reason: 'Message content, credentials, and SMTP errors stay on the host; the provider registers nothing model-facing.' },
