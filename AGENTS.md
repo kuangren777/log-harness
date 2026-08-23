@@ -21,6 +21,8 @@ packages/    @deepseek-ai/dsh-<pkg> workspaces at packages/<group>/<pkg>/
   terminal/         persistent sessions
   fs/          filesystem capability + policy
   lsp/         language-server capability
+  auth/        login, permission groups, and the SQLite credential store
+  mail/        outbound mail capability + SMTP/file providers
   skill/       skill provider registry + local impl + catalog/loader tool
   web/         web capability: Service Definition + search/fetch providers + tool Consumer
   compaction/     compaction capability + basic provider

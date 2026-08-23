@@ -348,6 +348,41 @@ export interface Config {
 
 Source: [`packages/attachment/attachment-local/src/index.ts:51`](../packages/attachment/attachment-local/src/index.ts)
 
+<a id="deepseek-aidsh-auth-sqlite"></a>
+
+## `@deepseek-ai/dsh-auth-sqlite`
+
+```ts config-catalog
+/** Plugin configuration. */
+export interface Config {
+  /**
+   * SQLite database file, or `:memory:` for an in-process database. Missing
+   * directories and databases are created owner-only; existing modes are
+   * preserved. The file mode protects the contents, not the directory entry.
+   */
+  path: string
+  /**
+   * `journal_mode` pragma. `wal` (the default) suits local disks; a
+   * rollback-journal mode suits filesystems where WAL's shared-memory files do
+   * not work. Non-durable modes are not offered.
+   */
+  journalMode?: JournalMode
+  /** Login-session lifetime in milliseconds; defaults to thirty days. */
+  sessionTtlMs?: number
+}
+
+/**
+ * Journal modes this provider will run under. `wal` is the default; the
+ * rollback-journal modes exist for filesystems where WAL's shared-memory files
+ * do not work. `memory` and `off` are excluded because losing a revocation or
+ * a consumed-token write to a crash is a security failure, not a performance
+ * trade-off.
+ */
+export type JournalMode = 'wal' | 'delete' | 'truncate' | 'persist'
+```
+
+Source: [`packages/auth/auth-sqlite/src/index.ts:54`](../packages/auth/auth-sqlite/src/index.ts)
+
 <a id="deepseek-aidsh-bash-local"></a>
 
 ## `@deepseek-ai/dsh-bash-local`
@@ -1365,6 +1400,48 @@ export interface LspLocalServerConfig {
 ```
 
 Source: [`packages/lsp/lsp-stdio/src/index.ts:82`](../packages/lsp/lsp-stdio/src/index.ts)
+
+<a id="deepseek-aidsh-mail-file"></a>
+
+## `@deepseek-ai/dsh-mail-file`
+
+```ts config-catalog
+/** Plugin config: where the mailbox file lives. */
+export interface Config {
+  /** Mailbox path; a relative path resolves against the process working directory, and missing parent directories are created. */
+  path: string
+}
+```
+
+Source: [`packages/mail/mail-file/src/index.ts:25`](../packages/mail/mail-file/src/index.ts)
+
+<a id="deepseek-aidsh-mail-smtp"></a>
+
+## `@deepseek-ai/dsh-mail-smtp`
+
+```ts config-catalog
+/** Plugin config: the SMTP endpoint, the sender identity, and the credential references that authenticate it. */
+export interface Config {
+  /** SMTP server hostname. */
+  host: string
+  /** SMTP server port. */
+  port: number
+  /** Whether the connection starts in TLS (implicit TLS, normally port 465) rather than upgrading with STARTTLS. */
+  secure: boolean
+  /** `From` address every message is sent as. */
+  from: string
+  /**
+   * Name of the credential reference holding the SMTP username; omitted
+   * together with {@link passwordRef} for a relay that accepts unauthenticated
+   * mail.
+   */
+  userRef?: string
+  /** Name of the credential reference holding the SMTP password. */
+  passwordRef?: string
+}
+```
+
+Source: [`packages/mail/mail-smtp/src/index.ts:17`](../packages/mail/mail-smtp/src/index.ts)
 
 <a id="deepseek-aidsh-mcp-client"></a>
 
@@ -3305,6 +3382,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 Abstract service classes — a deployment loads a concrete implementation package instead ([capability seams](../.agents/notes/implemented/architecture/2026-06-13-capability-seams.md)).
 
 - `@deepseek-ai/dsh-attachment` — abstract `AttachmentStore` ([`packages/attachment/attachment/src/index.ts`](../packages/attachment/attachment/src/index.ts))
+- `@deepseek-ai/dsh-auth` — abstract `AuthService` ([`packages/auth/auth/src/index.ts`](../packages/auth/auth/src/index.ts))
 - `@deepseek-ai/dsh-code-runtime` — abstract `CodeRuntime` ([`packages/code-runtime/code-runtime/src/index.ts`](../packages/code-runtime/code-runtime/src/index.ts))
 - `@deepseek-ai/dsh-compaction` — abstract `CompactionEngine` ([`packages/compaction/compaction/src/index.ts`](../packages/compaction/compaction/src/index.ts))
 - `@deepseek-ai/dsh-credentials` — abstract `CredentialProvider` ([`packages/credentials/credentials/src/index.ts`](../packages/credentials/credentials/src/index.ts))
@@ -3312,6 +3390,7 @@ Abstract service classes — a deployment loads a concrete implementation packag
 - `@deepseek-ai/dsh-fs` — abstract `FileSystem` ([`packages/fs/fs/src/index.ts`](../packages/fs/fs/src/index.ts))
 - `@deepseek-ai/dsh-host-directory-picker` — abstract `DirectoryPicker` ([`packages/host/directory-picker/src/index.ts`](../packages/host/directory-picker/src/index.ts))
 - `@deepseek-ai/dsh-jobs` — abstract `JobRegistry` ([`packages/jobs/jobs/src/index.ts`](../packages/jobs/jobs/src/index.ts))
+- `@deepseek-ai/dsh-mail` — abstract `MailService` ([`packages/mail/mail/src/index.ts`](../packages/mail/mail/src/index.ts))
 - `@deepseek-ai/dsh-sandbox` — abstract `SandboxProvider` ([`packages/sandbox/sandbox/src/index.ts`](../packages/sandbox/sandbox/src/index.ts))
 - `@deepseek-ai/dsh-session-persistence` — abstract `SessionPersistence` ([`packages/session/session-persistence/src/index.ts`](../packages/session/session-persistence/src/index.ts))
 - `@deepseek-ai/dsh-session-query` — abstract `SessionQueryEngine` ([`packages/session-query/session-query/src/index.ts`](../packages/session-query/session-query/src/index.ts))
