@@ -6,6 +6,7 @@ import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import type { ApiProxy, MuxFrame, RpcRequest } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '../src/api-proxy.ts'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 async function harness(): Promise<{ ctx: Context; api: ApiProxy }> {
   const ctx = new Context()
@@ -35,7 +36,7 @@ function openMux(api: ApiProxy, abort: AbortController): {
     resolveQuestion = resolve
   })
   void (async () => {
-    for await (const envelope of api.events.mux({ rpcId: RpcId('question-mux'), payload: {} }, abort.signal)) {
+    for await (const envelope of api.events.mux({ rpcId: RpcId('question-mux'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)) {
       envelopes.push(envelope)
       if (envelope.payload.type === 'question/requested') {
         resolveQuestion(envelope as RpcRequest<Extract<MuxFrame, { type: 'question/requested' }>>)

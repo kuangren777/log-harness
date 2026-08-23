@@ -154,6 +154,7 @@
     { "path": "./packages/settings/settings" },
     { "path": "./packages/settings/settings-file" },
     { "path": "./packages/auth/auth" },
+    { "path": "./packages/auth/auth-gate" },
     { "path": "./packages/auth/auth-sqlite" },
     { "path": "./packages/credentials/credentials" },
     { "path": "./packages/credentials/credentials-local" },

@@ -19,9 +19,10 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
-import type { MuxFrame, RpcRequest } from '@deepseek-ai/dsh-host-apiproxy/api'
+import type { AuthorizedRequest, MuxFrame, RpcRequest } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
@@ -34,8 +35,8 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
 }
 
 let nextRpc = 1
-function request<P>(payload: P): RpcRequest<P> {
-  return { rpcId: RpcId(`proj-${String(nextRpc++)}`), payload }
+function request<P>(payload: P): AuthorizedRequest<P> {
+  return { rpcId: RpcId(`proj-${String(nextRpc++)}`), payload, principal: LOCAL_PRINCIPAL }
 }
 
 /** Whole-value unit folding the latest user/message text; null before the first. */
@@ -126,7 +127,7 @@ describe('session.history projections block', () => {
     // Constant unit: appending events must never broadcast an imageLimits frame.
     await new Promise(resolve => setTimeout(resolve, 0))
     const abort = new AbortController()
-    const stream = gateway.events.mux({ rpcId: RpcId('t-limits-mux'), payload: {} }, abort.signal)
+    const stream = gateway.events.mux({ rpcId: RpcId('t-limits-mux'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
     const frames: MuxFrame[] = []
     const drained = (async () => {
       for await (const envelope of stream) {
@@ -175,7 +176,7 @@ describe('session.history projections block', () => {
     const abort = new AbortController()
     const frames: MuxFrame[] = []
     const drained = (async () => {
-      for await (const envelope of proxy.events.mux({ rpcId: RpcId('t-host-only-mux'), payload: {} }, abort.signal)) {
+      for await (const envelope of proxy.events.mux({ rpcId: RpcId('t-host-only-mux'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)) {
         frames.push(envelope.payload)
         if (envelope.payload.type === 'session/event') abort.abort()
       }
@@ -337,7 +338,7 @@ describe('session/projection push frame', () => {
     // fiber activates asynchronously; yield until it lands before appending.
     await new Promise(resolve => setTimeout(resolve, 0))
     const abort = new AbortController()
-    const stream = proxy.events.mux({ rpcId: RpcId('t-proj-mux'), payload: {} }, abort.signal)
+    const stream = proxy.events.mux({ rpcId: RpcId('t-proj-mux'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
     const collected = collect(stream, 5, abort)
 
     const now = vi.spyOn(Date, 'now').mockReturnValue(100)
@@ -375,7 +376,7 @@ describe('session/projection push frame', () => {
     const { ctx, session } = await harness(false)
     const proxy = api(ctx)
     const abort = new AbortController()
-    const stream = proxy.events.mux({ rpcId: RpcId('t-noproj-mux'), payload: {} }, abort.signal)
+    const stream = proxy.events.mux({ rpcId: RpcId('t-noproj-mux'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
     const frames: MuxFrame[] = []
     const drained = (async () => {
       for await (const envelope of stream) {

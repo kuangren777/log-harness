@@ -3,15 +3,16 @@ import { Context } from '@deepseek-ai/cordis'
 import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import { RpcId } from '../src/api/rpc.ts'
-import type { RpcRequest } from '../src/api/rpc.ts'
+import type { AuthorizedRequest } from '../src/api/rpc.ts'
 import { createApiProxy } from '../src/api-proxy.ts'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 const sid = (value: string): SessionId => value as SessionId
 const PARENT = sid('parent')
 const CHILD = sid('child')
 
-function request<P>(payload: P): RpcRequest<P> {
-  return { rpcId: RpcId('subagent-rpc'), payload }
+function request<P>(payload: P): AuthorizedRequest<P> {
+  return { rpcId: RpcId('subagent-rpc'), payload, principal: LOCAL_PRINCIPAL }
 }
 
 function bench(options: {

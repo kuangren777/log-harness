@@ -9,6 +9,7 @@ import type {
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { HOST_EVENTS_PATH, MUX_EVENTS_PATH } from '../src/api-path.ts'
 import { WebSocketDownlinks } from '../src/websocket-downlink.ts'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 type MuxSource = (signal: AbortSignal) => AsyncIterable<RpcRequest<MuxFrame>>
 type HostSource = (signal: AbortSignal) => AsyncIterable<RpcRequest<HostFrame>>
@@ -46,8 +47,8 @@ async function serve(downlinks: WebSocketDownlinks): Promise<{
   const server = createServer()
   server.on('upgrade', (request, socket, head) => {
     const pathname = new URL(request.url ?? '/', 'http://dsh.internal').pathname
-    if (pathname === MUX_EVENTS_PATH) downlinks.handleMux(request, socket, head)
-    else if (pathname === HOST_EVENTS_PATH) downlinks.handleHost(request, socket, head)
+    if (pathname === MUX_EVENTS_PATH) downlinks.handleMux(request, socket, head, LOCAL_PRINCIPAL)
+    else if (pathname === HOST_EVENTS_PATH) downlinks.handleHost(request, socket, head, LOCAL_PRINCIPAL)
     else socket.destroy()
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))

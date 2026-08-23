@@ -32,7 +32,7 @@ import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
 import type { CommandDescriptor, CommandExecution, CommandResult } from '@deepseek-ai/dsh-commands/types'
 import { deriveEventMessage, foldSurface } from '@deepseek-ai/dsh-session/surface'
 import type {
-  ApiProxy, ClientRequest, ClientResponse, HistoryEntry, HostFrame, MuxFrame, RpcReceipt,
+  ApiProxy, AuthorizedRequest, ClientRequest, ClientResponse, HistoryEntry, HostFrame, MuxFrame, RpcReceipt,
   ModelProviderGroup, ModelSelection, RpcRequest, RpcResponse, RpcResult, ServerRequest, ServerResponse, SessionSummary,
   ToolCallView, ToolEventView, ToolResultView, WorkspaceId, WorkspaceView,
 } from './api.ts'
@@ -41,9 +41,16 @@ import { AbstractApiClient, RpcId, SESSION_SEARCH_RESULT_LIMIT } from './api.ts'
 import { randomUuid } from './random-uuid.ts'
 import type { ClientConnectionRpc } from '../rpc.ts'
 
+/**
+ * The principal every fixture request acts as. The fixture stands in for a
+ * whole host, not for one account of it, so it answers as the same
+ * single-tenant principal a deployment without authentication resolves to.
+ */
+const FIXTURE_PRINCIPAL: AuthorizedRequest<unknown>['principal'] = { kind: 'local' }
+
 /** The fake carrier mints like a real one (business code never mints). */
-function rpcRequest<P>(payload: P): RpcRequest<P> {
-  return { rpcId: RpcId(randomUuid()), payload }
+function rpcRequest<P>(payload: P): AuthorizedRequest<P> {
+  return { rpcId: RpcId(randomUuid()), payload, principal: FIXTURE_PRINCIPAL }
 }
 
 function text(t: string): ContentBlock[] {
@@ -3213,7 +3220,7 @@ export class FixtureApiClient extends AbstractApiClient {
     this.onEnvelope(full)
     const response = await this.dispatch(
       method,
-      request as RpcRequest<never>,
+      request as AuthorizedRequest<never>,
       signal ?? new AbortController().signal,
     ) as RpcResponse<ResponseValue<K>>
     const fullResponse: ServerResponse = { type: 'server-response', rpcId: response.rpcId, result: response.result }
@@ -3224,7 +3231,7 @@ export class FixtureApiClient extends AbstractApiClient {
   /** Method-key dispatch into the in-memory contract impl (a real carrier routes by URL path instead). */
   private dispatch(
     method: keyof RpcMethodMap,
-    request: RpcRequest<never>,
+    request: AuthorizedRequest<never>,
     signal: AbortSignal,
   ): Promise<RpcResponse<unknown>> {
     switch (method) {

@@ -70,7 +70,7 @@ export type { ApprovalResponsePayload } from './approvals.ts'
 export type { QuestionResponsePayload } from './questions.ts'
 
 // ---- Message layer: narrow forms (domain-signature view) ----
-export type { RpcRequest, RpcResponse } from './rpc.ts'
+export type { AuthorizedRequest, RpcRequest, RpcResponse } from './rpc.ts'
 
 // ---- Message layer: the four wire full forms + carrier receipt ----
 export type {

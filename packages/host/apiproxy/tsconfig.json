@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../auth/auth"
+    },
+    {
       "path": "../../goal/goal"
     },
     {

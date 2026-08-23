@@ -19,13 +19,14 @@ import { CommandId } from '@deepseek-ai/dsh-commands/brand'
 import type {} from '@deepseek-ai/dsh-permission-presets'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-user-approval'
-import type { ApiProxy, RpcRequest } from '@deepseek-ai/dsh-host-apiproxy/api'
+import type { ApiProxy, AuthorizedRequest } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 let nextRpc = 1
-function request<P>(payload: P): RpcRequest<P> {
-  return { rpcId: RpcId(`blank-${String(nextRpc++)}`), payload }
+function request<P>(payload: P): AuthorizedRequest<P> {
+  return { rpcId: RpcId(`blank-${String(nextRpc++)}`), payload, principal: LOCAL_PRINCIPAL }
 }
 
 async function harness(): Promise<{ ctx: Context; api: ApiProxy; attach: (session: Session) => void }> {

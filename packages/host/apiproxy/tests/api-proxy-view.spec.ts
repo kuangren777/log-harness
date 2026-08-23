@@ -22,6 +22,7 @@ import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import type { MuxFrame, RpcRequest } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 const reply = (text: string): Promise<ContentBlock[]> => Promise.resolve([{ type: 'text', text }])
 
@@ -107,7 +108,7 @@ describe('mux live view computation', () => {
     const { ctx } = await harness()
     const api = createApiProxy(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     const abort = new AbortController()
-    const stream = api.events.mux({ rpcId: RpcId('t-mux'), payload: {} }, abort.signal)
+    const stream = api.events.mux({ rpcId: RpcId('t-mux'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
     const collected = collect(stream, 9, abort)
     const rawResult = `RAW_RESULT:${'x'.repeat(64 * 1024)}`
 
@@ -328,7 +329,7 @@ describe('mux live view computation', () => {
     const { ctx } = await harness()
     const api = createApiProxy(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     const abort = new AbortController()
-    const stream = api.events.mux({ rpcId: RpcId('t-mux3'), payload: {} }, abort.signal)
+    const stream = api.events.mux({ rpcId: RpcId('t-mux3'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
 
     let session: Session | undefined
     const fiber = await ctx.plugin(Object.assign((inner: Context) => {
@@ -349,7 +350,7 @@ describe('mux live view computation', () => {
     const { ctx } = await harness()
     const api = createApiProxy(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     const abort = new AbortController()
-    const stream = api.events.mux({ rpcId: RpcId('t-mux2'), payload: {} }, abort.signal)
+    const stream = api.events.mux({ rpcId: RpcId('t-mux2'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
     const collected = collect(stream, 4, abort)
 
     const session = ctx.sessions.create()

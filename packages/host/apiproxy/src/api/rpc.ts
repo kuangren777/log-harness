@@ -9,6 +9,7 @@ import type { z as zCore } from 'zod'
 type ZodIssue = zCore.core.$ZodIssue
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { Principal } from '@deepseek-ai/dsh-auth/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 /**
@@ -92,6 +93,13 @@ export interface RpcErrorDetailsMap {
   'subagent-not-resumable': { childSessionId: SessionId }
   'subagent-unauthorized': { childSessionId: SessionId }
   'subagent-delivery-unavailable': { childSessionId: SessionId }
+  /**
+   * The request's principal is not allowed to reach this method. Carries no
+   * details: naming the policy, the owner, or the resource would tell an
+   * unauthorized caller something it could not otherwise observe, and the one
+   * fact it may have — that this method exists — is already in its own request.
+   */
+  'forbidden': {}
   'internal': {}
 }
 
@@ -131,6 +139,24 @@ export function transportError<T>(error: unknown): RpcResult<T> {
 export interface RpcRequest<P> {
   rpcId: RpcId
   payload: P
+}
+
+/**
+ * A request whose caller has already been resolved to a {@link Principal}.
+ *
+ * Authorization is decided by the carrier before dispatch, so a domain method
+ * taking this form is one whose RESULT depends on who is asking — it filters
+ * its answer or records ownership. A method that merely has to be reachable by
+ * an authenticated caller keeps the plain {@link RpcRequest}: the policy table
+ * beside the carrier's dispatch decided that before it was invoked.
+ *
+ * The principal reaches the implementation on the request rather than through
+ * ambient storage so that every caller — the fetch carrier, the WebSocket
+ * downlink, an in-process client — has to state whose request it is.
+ */
+export type AuthorizedRequest<P> = RpcRequest<P> & {
+  /** Who the carrier resolved this request to; `local` for every single-tenant entry point. */
+  principal: Principal
 }
 
 /** Signature-layer narrow form, response side: rpcId always echoes the matching request. */

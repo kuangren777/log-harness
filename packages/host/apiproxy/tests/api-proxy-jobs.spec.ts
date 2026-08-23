@@ -19,6 +19,7 @@ import type { JobOutcome } from '@deepseek-ai/dsh-jobs'
 import type { MuxFrame, RpcRequest } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 type JobFrame = Extract<MuxFrame, { type: 'session/jobs' }>
 
@@ -85,7 +86,7 @@ describe('session/jobs subscription baseline', () => {
   it('is omitted for a session with no tasks — absence is the empty set', async () => {
     const { ctx, session } = await harness(true)
     const abort = new AbortController()
-    const stream = api(ctx).events.mux({ rpcId: RpcId('t-tasks-empty'), payload: {} }, abort.signal)
+    const stream = api(ctx).events.mux({ rpcId: RpcId('t-tasks-empty'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
     const frames: MuxFrame[] = []
     const drained = (async () => {
       for await (const envelope of stream) {
@@ -103,7 +104,7 @@ describe('session/jobs subscription baseline', () => {
     const { ctx, session, agent } = await harness(true)
     ctx.jobs.start({ ...producer('pnpm run build').spec, owner: agent })
     const abort = new AbortController()
-    const stream = api(ctx).events.mux({ rpcId: RpcId('t-tasks-baseline'), payload: {} }, abort.signal)
+    const stream = api(ctx).events.mux({ rpcId: RpcId('t-tasks-baseline'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
     const [baseline] = await collect(stream, 1, abort)
     expect(baseline?.sessionId).toBe(session.id)
     expect(baseline?.jobs).toHaveLength(1)
@@ -124,7 +125,7 @@ describe('session/jobs change pushes', () => {
     const { ctx, session, agent } = await harness(true)
     const proxy = api(ctx)
     const abort = new AbortController()
-    const stream = proxy.events.mux({ rpcId: RpcId('t-tasks-changes'), payload: {} }, abort.signal)
+    const stream = proxy.events.mux({ rpcId: RpcId('t-tasks-changes'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
     const collected = collect(stream, 3, abort)
 
     const p = producer()
@@ -144,7 +145,7 @@ describe('session/jobs change pushes', () => {
     const { ctx, agent } = await harness(true)
     const proxy = api(ctx)
     const abort = new AbortController()
-    const stream = proxy.events.mux({ rpcId: RpcId('t-tasks-fields'), payload: {} }, abort.signal)
+    const stream = proxy.events.mux({ rpcId: RpcId('t-tasks-fields'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
     const collected = collect(stream, 1, abort)
     ctx.jobs.start({ ...producer().spec, owner: agent, outputLimitBytes: 1_024 })
 
@@ -158,7 +159,7 @@ describe('session/jobs change pushes', () => {
     const second = ctx.sessions.create()
     const proxy = api(ctx)
     const abort = new AbortController()
-    const stream = proxy.events.mux({ rpcId: RpcId('t-tasks-unowned'), payload: {} }, abort.signal)
+    const stream = proxy.events.mux({ rpcId: RpcId('t-tasks-unowned'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
     const collected = collect(stream, 2, abort)
 
     ctx.jobs.start(producer('open to every caller').spec)
@@ -180,7 +181,7 @@ describe('session/jobs change pushes', () => {
     } as never)
     const proxy = api(ctx)
     const abort = new AbortController()
-    const stream = proxy.events.mux({ rpcId: RpcId('t-tasks-cold'), payload: {} }, abort.signal)
+    const stream = proxy.events.mux({ rpcId: RpcId('t-tasks-cold'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
     const collected = collect(stream, 1, abort)
 
     ctx.jobs.start(producer().spec)
@@ -195,7 +196,7 @@ describe('session/jobs without the registry', () => {
     const { ctx, session } = await harness(false)
     const proxy = api(ctx)
     const abort = new AbortController()
-    const stream = proxy.events.mux({ rpcId: RpcId('t-tasks-absent'), payload: {} }, abort.signal)
+    const stream = proxy.events.mux({ rpcId: RpcId('t-tasks-absent'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
     const frames: MuxFrame[] = []
     const drained = (async () => {
       for await (const envelope of stream) {
@@ -218,7 +219,7 @@ describe('session/jobs never consumes model output', () => {
     const { ctx, agent } = await harness(true)
     const proxy = api(ctx)
     const abort = new AbortController()
-    const stream = proxy.events.mux({ rpcId: RpcId('t-tasks-no-read'), payload: {} }, abort.signal)
+    const stream = proxy.events.mux({ rpcId: RpcId('t-tasks-no-read'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
     const collected = collect(stream, 3, abort)
 
     const p = producer()
@@ -236,7 +237,7 @@ describe('session/jobs never consumes model output', () => {
     ctx.jobs.start({ ...p.spec, owner: agent })
 
     const abort = new AbortController()
-    const stream = api(ctx).events.mux({ rpcId: RpcId('t-tasks-no-read-baseline'), payload: {} }, abort.signal)
+    const stream = api(ctx).events.mux({ rpcId: RpcId('t-tasks-no-read-baseline'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
     const [baseline] = await collect(stream, 1, abort)
 
     expect(baseline?.jobs).toHaveLength(1)
@@ -249,7 +250,7 @@ describe('session/jobs baseline for a session born after the stream opened', () 
     const { ctx } = await harness(true)
     const proxy = api(ctx)
     const abort = new AbortController()
-    const stream = proxy.events.mux({ rpcId: RpcId('t-tasks-late-session'), payload: {} }, abort.signal)
+    const stream = proxy.events.mux({ rpcId: RpcId('t-tasks-late-session'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)
 
     // One unowned task exists before the new session is created; the subscribe
     // frame clears the client mirror, so the baseline has to follow it.

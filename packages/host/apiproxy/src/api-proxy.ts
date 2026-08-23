@@ -14,6 +14,7 @@ import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatu
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
 import { AttachmentError, admitEncodedImages } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { Principal, UserId } from '@deepseek-ai/dsh-auth'
 import { createUserMessage, freezeMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
@@ -93,8 +94,10 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 import { approvalResponsePayloadSchema } from './api/approvals.schema.ts'
 import { imageLimitsProjectionSchema, sessionListMetadataProjectionSchema } from './api/sessions.schema.ts'
 import { questionResponsePayloadSchema } from './api/questions.schema.ts'
-import type { ClientResponse, RpcError, RpcReceipt, RpcRequest, RpcResponse } from './api/rpc.ts'
+import type { AuthorizedRequest, ClientResponse, RpcError, RpcReceipt, RpcRequest, RpcResponse } from './api/rpc.ts'
 import { RpcId } from './api/rpc.ts'
+import { forbiddenError, permitsPolicy, UNAVAILABLE_OWNERSHIP, type OwnershipLookup } from './authorization.ts'
+import { filterFrames } from './frame-visibility.ts'
 import type {
   AskUserQuestionAnswer, AskUserQuestionItem, AskUserQuestionRequest,
 } from '@deepseek-ai/dsh-user-questions'
@@ -1663,8 +1666,12 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
    * Attached sessions come from memory; servable cold sessions merge from
    * persistence, and the final order is newest-first.
    */
-  async function listVisibleSessionSummaries(signal?: AbortSignal): Promise<SessionSummary[]> {
+  async function listVisibleSessionSummaries(
+    principal: Principal,
+    signal?: AbortSignal,
+  ): Promise<SessionSummary[]> {
     signal?.throwIfAborted()
+    const scope = await ownedSessionScope(principal)
     const summarizeAttached = (session: Session): SessionSummary => {
       const agent = ctx.agents.get(session.id)
       const projections = listProjectionsFor(ctx, session.header, session)
@@ -1722,7 +1729,10 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       }
     }
     items.sort((a, b) => b.updatedAt - a.updatedAt)
-    return items
+    // Visibility narrows the answer instead of refusing the call: a listing
+    // spans accounts by definition, and an account with no sessions is a
+    // legitimate empty list, not a refusal.
+    return scope === undefined ? items : items.filter(item => scope(item.sessionId))
   }
 
   /**
@@ -1977,6 +1987,92 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     return ok(request, namespaceView(descriptor))
   }
 
+  /**
+   * Ownership resolution for this deployment. A composition without an auth
+   * provider never reaches it: every request there is the `local` principal,
+   * which each caller below short-circuits first.
+   */
+  function ownership(): OwnershipLookup {
+    return ctx.get('auth') ?? UNAVAILABLE_OWNERSHIP
+  }
+
+  /**
+   * The account whose resources a request may see, or `undefined` when the
+   * request sees everything — the `local` principal of a single-tenant entry
+   * point and an administrator both do.
+   */
+  function accountScope(principal: Principal): UserId | undefined {
+    return principal.kind === 'user' && !principal.admin ? principal.userId : undefined
+  }
+
+  /**
+   * Membership test for the sessions one request may list.
+   * @param principal - the request's principal.
+   * @returns a predicate, or `undefined` when every session is visible.
+   */
+  async function ownedSessionScope(principal: Principal): Promise<((sessionId: SessionId) => boolean) | undefined> {
+    const userId = accountScope(principal)
+    if (userId === undefined) return undefined
+    const auth = ctx.get('auth')
+    // A user principal cannot exist without the provider that minted it; the
+    // guard keeps the absence from reading as "everything is visible".
+    if (auth === undefined) return () => false
+    const owned = new Set(await auth.listOwnedSessions(userId))
+    return sessionId => owned.has(sessionId)
+  }
+
+  /**
+   * Claim one session id for the requesting account before the session exists.
+   *
+   * Recording ownership up front is what keeps the two event streams correct:
+   * `session/created` fires inside the create below, and a frame whose session
+   * has no owner yet would be filtered away from the very account that asked
+   * for it.
+   * @param request - the create request, for its principal and error echo.
+   * @param sessionId - the id the session will be created under.
+   * @returns the refusal to answer with, or `undefined` when the claim holds.
+   */
+  async function claimSession(
+    request: AuthorizedRequest<{ workspaceId?: WorkspaceId }>,
+    sessionId: SessionId,
+  ): Promise<RpcResponse<never> | undefined> {
+    const { principal } = request
+    if (principal.kind === 'local') return undefined
+    const auth = ctx.get('auth')
+    if (auth === undefined) return err(request, forbiddenError())
+    if (!await permitsPolicy('owner', request.payload, principal, auth)) return err(request, forbiddenError())
+    const owner = await auth.ownerOfSession(sessionId)
+    if (owner !== undefined) {
+      return owner === principal.userId || principal.admin ? undefined : err(request, forbiddenError())
+    }
+    await auth.recordSessionOwner(sessionId, principal.userId)
+    return undefined
+  }
+
+  /**
+   * Claim one workspace for the requesting account. `workspace.create`
+   * resolves an existing registration by path, so a second account naming the
+   * same path is refused rather than handed the first account's workspace.
+   * @param request - the create request, for its principal and error echo.
+   * @param workspace - the resolved or freshly created workspace.
+   * @returns the refusal to answer with, or `undefined` when the claim holds.
+   */
+  async function claimWorkspace(
+    request: AuthorizedRequest<{ path: string }>,
+    workspace: Workspace,
+  ): Promise<RpcResponse<never> | undefined> {
+    const { principal } = request
+    if (principal.kind === 'local') return undefined
+    const auth = ctx.get('auth')
+    if (auth === undefined) return err(request, forbiddenError())
+    const owner = await auth.ownerOfWorkspace(workspace.id)
+    if (owner !== undefined) {
+      return owner === principal.userId || principal.admin ? undefined : err(request, forbiddenError())
+    }
+    await auth.recordWorkspaceOwner(workspace.id, principal.userId)
+    return undefined
+  }
+
   return {
     sessions: {
       // Attached sessions summarize from memory; persisted-but-unattached (cold)
@@ -1984,7 +2080,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       // Logs without a cwd are not served; every session records its project
       // at create time.
       async list(request) {
-        return ok(request, { items: await listVisibleSessionSummaries() })
+        return ok(request, { items: await listVisibleSessionSummaries(request.principal) })
       },
 
       async search(request, signal) {
@@ -2003,7 +2099,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         }
         try {
-          const visible = await listVisibleSessionSummaries(signal)
+          const visible = await listVisibleSessionSummaries(request.principal, signal)
           if (isAborted(signal)) return cancelled()
           if (visible.length === 0) return ok(request, { items: [], hasMore: false })
           const visibleIds = new Set(visible.map(item => item.sessionId))
@@ -2120,6 +2216,8 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
 
       async create(request) {
         const sessionId = request.payload.sessionId ?? `session-${randomUUID()}` as SessionId
+        const unclaimable = await claimSession(request, sessionId)
+        if (unclaimable !== undefined) return unclaimable
         let workspace: Workspace | undefined
         if (request.payload.workspaceId !== undefined) {
           workspace = ctx.workspaceRegistry.get(brandWorkspaceId(request.payload.workspaceId))
@@ -2742,18 +2840,28 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     },
 
     workspace: {
-      list(request) {
-        return Promise.resolve(ok(request, {
-          items: ctx.workspaceRegistry.list().map(workspaceView),
-          archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds],
-        }))
+      async list(request) {
+        const userId = accountScope(request.principal)
+        const sessionScope = await ownedSessionScope(request.principal)
+        const auth = ctx.get('auth')
+        // A user principal cannot exist without the provider that minted it;
+        // an absent one owns nothing rather than everything.
+        const owned = userId === undefined
+          ? undefined
+          : new Set(auth === undefined ? [] : await auth.listOwnedWorkspaces(userId))
+        const items = ctx.workspaceRegistry.list().map(workspaceView)
+        const archived = [...ctx.workspaceRegistry.archivedSessionIds]
+        return ok(request, {
+          items: owned === undefined ? items : items.filter(item => owned.has(item.workspaceId)),
+          archivedSessionIds: sessionScope === undefined ? archived : archived.filter(sessionScope),
+        })
       },
 
       async create(request) {
         const { path } = request.payload
+        let resolved: { workspace: Workspace; created: boolean }
         try {
-          const { workspace, created } = await ensureWorkspace(path)
-          return ok(request, { workspace: workspaceView(workspace), created })
+          resolved = await ensureWorkspace(path)
         } catch (error: unknown) {
           // The registry rejects a path that does not resolve to an existing
           // directory (realpath ENOENT / not-a-directory) — the business
@@ -2764,6 +2872,9 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             details: { path },
           })
         }
+        const refused = await claimWorkspace(request, resolved.workspace)
+        if (refused !== undefined) return refused
+        return ok(request, { workspace: workspaceView(resolved.workspace), created: resolved.created })
       },
 
       async rename(request) {
@@ -3366,7 +3477,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     },
 
     events: {
-      mux(_request, signal) {
+      mux(request, signal) {
         const queue = new FrameQueue<RpcRequest<MuxFrame>>()
         muxQueues.add(queue)
         for (const session of ctx.sessions.list()) {
@@ -3464,13 +3575,16 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             }
           })],
         ]
-        return queue.iterate(signal, () => {
+        // Filtering wraps the queue here rather than in each carrier: both the
+        // fetch carrier and the WebSocket downlink open this stream, and a
+        // third one must not be able to forget.
+        return filterFrames(queue.iterate(signal, () => {
           muxQueues.delete(queue)
           for (const dispose of disposers) dispose()
-        })
+        }), request.principal, ownership())
       },
 
-      host(_request, signal) {
+      host(request, signal) {
         const queue = new FrameQueue<RpcRequest<HostFrame>>()
         const committedWorkspaces = ctx.workspaceRegistry.list()
         const committedWorkspaceIds = new Set(
@@ -3571,7 +3685,11 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             }),
           )),
         ]
-        return queue.iterate(signal, () => { for (const dispose of disposers) dispose() })
+        return filterFrames(
+          queue.iterate(signal, () => { for (const dispose of disposers) dispose() }),
+          request.principal,
+          ownership(),
+        )
       },
     },
 

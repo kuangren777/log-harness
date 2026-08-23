@@ -17,9 +17,10 @@ import {
   type SessionSearchHit,
   type SessionSearchRequest,
 } from '@deepseek-ai/dsh-session-query'
-import type { RpcRequest } from '@deepseek-ai/dsh-host-apiproxy/api'
+import type { AuthorizedRequest } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { createApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
@@ -29,8 +30,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 const sid = (value: string): SessionId => value as SessionId
 const defaults = { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' }
 
-function request(query: string): RpcRequest<{ query: string }> {
-  return { rpcId: RpcId(`search-${query}`), payload: { query } }
+function request(query: string): AuthorizedRequest<{ query: string }> {
+  return { rpcId: RpcId(`search-${query}`), payload: { query }, principal: LOCAL_PRINCIPAL }
 }
 
 function header(id: string, cwd: string | null = '/project'): SessionHeader {

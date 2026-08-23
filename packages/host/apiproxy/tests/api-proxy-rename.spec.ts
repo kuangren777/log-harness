@@ -16,15 +16,16 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionTitleService from '@deepseek-ai/dsh-session-title'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
-import type { RpcRequest } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
+import type { AuthorizedRequest } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 const sid = (id: string): SessionId => id as SessionId
 
 let nextRpc = 1
-function request<P>(payload: P): RpcRequest<P> {
-  return { rpcId: RpcId(`fr-${String(nextRpc++)}`), payload }
+function request<P>(payload: P): AuthorizedRequest<P> {
+  return { rpcId: RpcId(`fr-${String(nextRpc++)}`), payload, principal: LOCAL_PRINCIPAL }
 }
 
 async function composed(withTitles = true): Promise<Context> {

@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import type { IncomingMessage } from 'node:http'
 import type { Duplex } from 'node:stream'
 import WebSocket, { WebSocketServer } from 'ws'
+import type { Principal } from '@deepseek-ai/dsh-auth'
 import type {
   ApiProxy, HostFrame, MuxFrame, RpcRequest, ServerRequest,
 } from '@deepseek-ai/dsh-host-apiproxy/api'
@@ -60,11 +61,13 @@ export class WebSocketDownlinks {
    * @param req - HTTP upgrade request.
    * @param socket - Raw socket transferred by the HTTP server.
    * @param head - Bytes already read after the upgrade headers.
+   * @param principal - the principal the transport authenticated this socket as.
    */
-  handleMux(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+  handleMux(req: IncomingMessage, socket: Duplex, head: Buffer, principal: Principal): void {
     this.upgrade(req, socket, head, signal => this.api.events.mux({
       rpcId: RpcId(randomUUID()),
       payload: {},
+      principal,
     }, signal))
   }
 
@@ -73,11 +76,13 @@ export class WebSocketDownlinks {
    * @param req - HTTP upgrade request.
    * @param socket - Raw socket transferred by the HTTP server.
    * @param head - Bytes already read after the upgrade headers.
+   * @param principal - the principal the transport authenticated this socket as.
    */
-  handleHost(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+  handleHost(req: IncomingMessage, socket: Duplex, head: Buffer, principal: Principal): void {
     this.upgrade(req, socket, head, signal => this.api.events.host({
       rpcId: RpcId(randomUUID()),
       payload: {},
+      principal,
     }, signal))
   }
 
@@ -137,17 +142,34 @@ export class WebSocketDownlinks {
   }
 }
 
+/** The refusals an upgrade can earn, and the status line and body each sends. */
+const UPGRADE_REFUSALS = {
+  401: { line: 'HTTP/1.1 401 Unauthorized', body: 'unauthorized' },
+  403: { line: 'HTTP/1.1 403 Forbidden', body: 'forbidden' },
+  503: { line: 'HTTP/1.1 503 Service Unavailable', body: 'unavailable' },
+} as const
+
+/** Why one upgrade was refused; the statuses are not interchangeable. */
+export type UpgradeRefusal = keyof typeof UPGRADE_REFUSALS
+
 /**
- * Reject an untrusted upgrade before protocol negotiation.
+ * Reject an upgrade before protocol negotiation.
+ *
+ * 403 says the request came from somewhere this deployment does not serve,
+ * 401 says it carried no usable credential, and 503 says this host is
+ * configured to authenticate but currently cannot. A browser retries only the
+ * second after signing in.
  * @param socket - Raw HTTP socket that remains owned by the caller.
+ * @param status - the refusal to send.
  */
-export function rejectWebSocketUpgrade(socket: Duplex): void {
+export function rejectWebSocketUpgrade(socket: Duplex, status: UpgradeRefusal): void {
+  const refusal = UPGRADE_REFUSALS[status]
   socket.end([
-    'HTTP/1.1 403 Forbidden',
+    refusal.line,
     'Connection: close',
     'Content-Type: text/plain; charset=utf-8',
-    'Content-Length: 9',
+    `Content-Length: ${String(Buffer.byteLength(refusal.body))}`,
     '',
-    'forbidden',
+    refusal.body,
   ].join('\r\n'))
 }

@@ -7,11 +7,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId, WorkspaceId } from '../src/client/api.ts'
 import { RpcId } from '../src/client/api.ts'
-import type { HostFrame, MuxFrame, RpcMessage, RpcRequest } from '../src/client/api.ts'
+import type { AuthorizedRequest, HostFrame, MuxFrame, RpcMessage, RpcRequest } from '../src/client/api.ts'
 import { FixtureApiClient, createFixtureApi } from '../src/client/fixture.ts'
 
 const sid = (id: string): SessionId => id as SessionId
-const req = <P>(payload: P): RpcRequest<P> => ({ rpcId: RpcId(`t-${Math.abs(Math.sin(reqCount++)).toString(36).slice(2, 10)}`), payload })
+const req = <P>(payload: P): AuthorizedRequest<P> =>
+  ({ rpcId: RpcId(`t-${Math.abs(Math.sin(reqCount++)).toString(36).slice(2, 10)}`), payload, principal: { kind: 'local' } })
 let reqCount = 0
 
 interface TimingHooks {

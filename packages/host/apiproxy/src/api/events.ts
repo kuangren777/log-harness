@@ -13,7 +13,7 @@ import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { CallId } from '@deepseek-ai/dsh-llm/brand'
 import type { JsonValue, SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ToolCallView, ToolResultView } from '@deepseek-ai/dsh-tools/presentation'
-import type { RpcError, RpcId, RpcRequest } from './rpc.ts'
+import type { AuthorizedRequest, RpcError, RpcId, RpcRequest } from './rpc.ts'
 import type { JobView } from './jobs.ts'
 import type { WorkspaceView } from './workspace.ts'
 
@@ -53,13 +53,13 @@ export interface EventsApi {
    * since: resume hook, unimplemented in v1 (ignored if passed); reconnection = reopen the
    * stream + refetch history.
    */
-  mux(request: RpcRequest<{ since?: Record<SessionId, number> }>, signal: AbortSignal): AsyncIterable<RpcRequest<MuxFrame>>
+  mux(request: AuthorizedRequest<{ since?: Record<SessionId, number> }>, signal: AbortSignal): AsyncIterable<RpcRequest<MuxFrame>>
 
   /**
    * Host-level info stream: session create/destroy, running-status flips, and
    * agent failures with no turn position. Empty payload uses `{}`.
    */
-  host(request: RpcRequest<{}>, signal: AbortSignal): AsyncIterable<RpcRequest<HostFrame>>
+  host(request: AuthorizedRequest<{}>, signal: AbortSignal): AsyncIterable<RpcRequest<HostFrame>>
 }
 
 /**

@@ -19,6 +19,7 @@ import type { ApiProxy, MuxFrame, RpcRequest } from '@deepseek-ai/dsh-host-apipr
 import type { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { RpcId as mintRpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '../src/api-proxy.ts'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 async function harness(): Promise<{ ctx: Context; api: ApiProxy }> {
   const ctx = new Context()
@@ -44,7 +45,7 @@ function openMux(api: ApiProxy, abort: AbortController): { frames: MuxFrame[]; e
   const envelopes: RpcRequest<MuxFrame>[] = []
   const waiters: { type: MuxFrame['type']; resolve: (frame: MuxFrame) => void }[] = []
   void (async () => {
-    for await (const envelope of api.events.mux({ rpcId: mintRpcId('t-mux'), payload: {} }, abort.signal)) {
+    for await (const envelope of api.events.mux({ rpcId: mintRpcId('t-mux'), payload: {}, principal: LOCAL_PRINCIPAL }, abort.signal)) {
       frames.push(envelope.payload)
       envelopes.push(envelope)
       for (let i = waiters.length - 1; i >= 0; i -= 1) {

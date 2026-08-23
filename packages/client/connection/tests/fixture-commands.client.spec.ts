@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionId } from '../src/client/api.ts'
 import { RpcId } from '../src/client/api.ts'
-import type { RpcRequest } from '../src/client/api.ts'
+import type { AuthorizedRequest } from '../src/client/api.ts'
 import { FixtureApiClient, createFixtureApi, createFixtureFaces } from '../src/client/fixture.ts'
 
 /** Drive one commands Remote endpoint against the fixture state graph. */
@@ -23,7 +23,8 @@ async function callRemote<T>(
 
 const sid = (id: string): SessionId => id as SessionId
 let reqCount = 0
-const req = <P>(payload: P): RpcRequest<P> => ({ rpcId: RpcId(`t-${reqCount++}`), payload })
+const req = <P>(payload: P): AuthorizedRequest<P> =>
+  ({ rpcId: RpcId(`t-${reqCount++}`), payload, principal: { kind: 'local' } })
 
 describe('createFixtureApi commands/skills', () => {
   it('serves the addressed session catalog', async () => {

@@ -13,7 +13,7 @@ import AgentRegistry, { type AgentFactory } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SessionStore, { SessionId, type Session } from '@deepseek-ai/dsh-session'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
-import { RpcId, type RpcRequest } from '../src/api/rpc.ts'
+import { RpcId, type AuthorizedRequest } from '../src/api/rpc.ts'
 import type { HostFrame } from '../src/api/events.ts'
 import {
   InvalidPresetIdError, PresetExistsError, resolveSessionPreset, UnknownPresetError,
@@ -22,10 +22,11 @@ import type {} from '@deepseek-ai/dsh-agent-presets/types'
 import { GoalId } from '@deepseek-ai/dsh-goal'
 import { createApiProxy } from '../src/api-proxy.ts'
 import { describe, expect, it } from 'vitest'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 let nextRpc = 0
-function request<P>(payload: P): RpcRequest<P> {
-  return { rpcId: RpcId(`preset-${String(nextRpc++)}`), payload }
+function request<P>(payload: P): AuthorizedRequest<P> {
+  return { rpcId: RpcId(`preset-${String(nextRpc++)}`), payload, principal: LOCAL_PRINCIPAL }
 }
 
 /** Minimal live agent; the gateway only needs identity and its session. */

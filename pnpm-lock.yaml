@@ -964,6 +964,43 @@ importers:
         specifier: workspace:^
         version: link:../../workspace/workspace
 
+  packages/auth/auth-gate:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-auth-sqlite':
+        specifier: workspace:^
+        version: link:../auth-sqlite
+      '@deepseek-ai/dsh-client-connection':
+        specifier: workspace:^
+        version: link:../../client/connection
+      '@deepseek-ai/dsh-host-apiproxy':
+        specifier: workspace:^
+        version: link:../../host/apiproxy
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: workspace:^
+        version: link:../../host/webserver
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mail':
+        specifier: workspace:^
+        version: link:../../mail/mail
+      '@deepseek-ai/dsh-mail-file':
+        specifier: workspace:^
+        version: link:../../mail/mail-file
+
   packages/auth/auth-sqlite:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -1566,6 +1603,9 @@ importers:
       '@deepseek-ai/dsh-attachment':
         specifier: workspace:^
         version: link:../../attachment/attachment
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../../auth/auth
       '@deepseek-ai/dsh-commands':
         specifier: workspace:^
         version: link:../../interaction/commands
@@ -5075,6 +5115,9 @@ importers:
       '@deepseek-ai/dsh-attachment':
         specifier: workspace:^
         version: link:../../attachment/attachment
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../../auth/auth
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
         version: link:../../util/brand

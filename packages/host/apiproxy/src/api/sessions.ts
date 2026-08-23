@@ -11,7 +11,7 @@ import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
 // The pure-type outlet: api/ is browser-importable, and the package root's
 // cordis Context merge (via dsh-agent) must not enter client aggregates.
 import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
-import type { RpcId, RpcRequest, RpcResponse } from './rpc.ts'
+import type { AuthorizedRequest, RpcId, RpcRequest, RpcResponse } from './rpc.ts'
 import type { ToolEventView } from './events.ts'
 import type { WorkspaceId } from './workspace.ts'
 
@@ -235,7 +235,7 @@ export interface SessionSearchItem {
 /** Session-domain unary methods (the map keys session.* of RpcMethodMap). */
 export interface SessionsApi {
   /** Lists persisted sessions (updatedAt descending). v1 returns everything; cursor is a reserved seat, unimplemented. */
-  list(request: RpcRequest<{ cursor?: string }>): Promise<RpcResponse<{ items: SessionSummary[] }>>
+  list(request: AuthorizedRequest<{ cursor?: string }>): Promise<RpcResponse<{ items: SessionSummary[] }>>
 
   /**
    * Searches the current user/assistant/steering message surface across
@@ -243,7 +243,7 @@ export interface SessionsApi {
    * no continuation cursor; `hasMore` asks the client to refine the query.
    */
   search(
-    request: RpcRequest<{ query: string }>,
+    request: AuthorizedRequest<{ query: string }>,
     signal: AbortSignal,
   ): Promise<RpcResponse<{ items: SessionSearchItem[]; hasMore: boolean }>>
 
@@ -262,7 +262,7 @@ export interface SessionsApi {
    * id fails with `agent-preset-not-found`, and a preset whose composition
    * cannot be mounted fails with `agent-preset-invalid`.
    */
-  create(request: RpcRequest<{ workspaceId?: WorkspaceId; cwd?: string; sessionId?: SessionId; agentPreset?: string }>):
+  create(request: AuthorizedRequest<{ workspaceId?: WorkspaceId; cwd?: string; sessionId?: SessionId; agentPreset?: string }>):
   Promise<RpcResponse<{ sessionId: SessionId; agentPreset?: string }>>
 
   /**

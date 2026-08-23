@@ -11,12 +11,43 @@ export interface ConnectionRpcHandlerOptions {
   readonly authority: ConnectionRpcAuthority
 }
 
-/** Handler invoked after Connection has decoded the transport envelope. */
+/**
+ * The request facts a channel may need beyond its payload. A channel that
+ * authenticates its own caller — the sign-in channel is the reason this
+ * exists — cannot read them from the envelope: credentials ride headers, and
+ * the client address is a property of the socket rather than of the message.
+ */
+export interface ConnectionRpcCaller {
+  /** Request headers as the carrier received them. */
+  readonly headers: Headers
+  /** Client address the HTTP server saw, or `undefined` when the carrier exposes none. */
+  readonly ip: string | undefined
+}
+
+/**
+ * A reply that also sets the browser's credential cookie.
+ *
+ * `Set-Cookie` is the only header a channel may contribute, and only because
+ * an HttpOnly credential cannot be delivered any other way; every other
+ * response header belongs to the carrier.
+ */
+export interface ConnectionRpcReply {
+  /** The business result, wrapped into the standard server-response envelope. */
+  readonly result: RpcResult<unknown>
+  /** Complete `Set-Cookie` header value to send with this reply. */
+  readonly setCookie: string
+}
+
+/**
+ * Handler invoked after Connection has decoded the transport envelope. A
+ * handler that needs neither the caller facts nor a cookie declares neither.
+ */
 export type ConnectionRpcHandler = (
   endpoint: string,
   payload: unknown,
   signal: AbortSignal,
-) => Promise<RpcResult<unknown>>
+  caller: ConnectionRpcCaller,
+) => Promise<RpcResult<unknown> | ConnectionRpcReply>
 
 /** Synchronous ownership test for one endpoint on a shared RPC channel. */
 export type ConnectionRpcEndpointMatcher = (endpoint: string) => boolean

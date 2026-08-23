@@ -23,15 +23,16 @@ import {
   type PersistenceBackend,
   type StoredPrefix,
 } from '@deepseek-ai/dsh-session-persistence'
-import type { RpcRequest } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
+import type { AuthorizedRequest } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 const sid = (id: string): SessionId => id as SessionId
 
 let nextRpc = 1
-function request<P>(payload: P): RpcRequest<P> {
-  return { rpcId: RpcId(`cold-${String(nextRpc++)}`), payload }
+function request<P>(payload: P): AuthorizedRequest<P> {
+  return { rpcId: RpcId(`cold-${String(nextRpc++)}`), payload, principal: LOCAL_PRINCIPAL }
 }
 
 function header(id: string, createdAt: number, extra: Partial<SessionHeader> = {}): SessionHeader {

@@ -15,6 +15,7 @@ import { bridge, type FetchHandler } from './http-bridge.ts'
 import { isTrustedApiRequest } from './api-request-trust.ts'
 import { API_PATH } from './api-path.ts'
 import type {
+  ConnectionRpcCaller,
   ConnectionRpcEndpointMatcher,
   ConnectionRpcHandler,
   ConnectionRpcHandlerOptions,
@@ -28,7 +29,7 @@ const ENDPOINT_SEGMENT_PATTERN = /^[A-Za-z0-9_$.-]+$/
 
 interface ConnectionRpcInterceptor {
   readonly matches: ConnectionRpcEndpointMatcher
-  readonly fetchHandler: FetchHandler
+  readonly handler: ConnectionRpcHandler
   readonly options: ConnectionRpcHandlerOptions
 }
 
@@ -66,11 +67,13 @@ export class HostConnectionService extends Service implements HostConnectionHand
    * Compose one shared-channel Fetch handler from its interceptor and fallback.
    * @param channel - shared channel mounted by Connection.
    * @param fallback - handler for endpoints not claimed by the interceptor.
+   * @param ip - client address the HTTP server saw, passed on to a claiming interceptor.
    * @returns Fetch handler that selects exactly one target for each request.
    */
   createSharedFetchHandler(
     channel: '/api',
     fallback: FetchHandler,
+    ip?: string,
   ): FetchHandler {
     return {
       fetch: (request) => {
@@ -82,7 +85,7 @@ export class HostConnectionService extends Service implements HostConnectionHand
         if (interceptor.options.authority === 'loopback' && !isTrustedApiRequest(request, [])) {
           return Promise.resolve(new Response('forbidden', { status: 403 }))
         }
-        return interceptor.fetchHandler.fetch(request)
+        return rpcFetchHandler(channel, interceptor.handler, ip).fetch(request)
       },
     }
   }
@@ -95,7 +98,6 @@ export class HostConnectionService extends Service implements HostConnectionHand
   ): () => Promise<void> {
     assertChannel(channel)
     const trustedHosts = options.authority === 'loopback' ? [] : this.trustedHosts
-    const fetchHandler = rpcFetchHandler(channel, handler)
     const route: WebRoute = {
       kind: 'prefix',
       path: channel,
@@ -105,7 +107,10 @@ export class HostConnectionService extends Service implements HostConnectionHand
           res.end('forbidden')
           return
         }
-        await bridge(req, res, fetchHandler)
+        // The Fetch handler is built per request because the client address
+        // is a socket fact the bridged Request no longer carries, and a
+        // channel that rate-limits its own callers needs it.
+        await bridge(req, res, rpcFetchHandler(channel, handler, req.socket?.remoteAddress))
       },
     }
     return owner.effect(
@@ -124,11 +129,7 @@ export class HostConnectionService extends Service implements HostConnectionHand
     if (channel !== API_PATH) {
       throw new Error(`connection: invalid shared RPC channel ${JSON.stringify(channel)}`)
     }
-    const interceptor: ConnectionRpcInterceptor = {
-      matches,
-      fetchHandler: rpcFetchHandler(channel, handler),
-      options,
-    }
+    const interceptor: ConnectionRpcInterceptor = { matches, handler, options }
     return owner.effect(() => {
       if (this.interceptors.has(channel)) {
         throw new Error(`connection: shared RPC channel ${JSON.stringify(channel)} already has an interceptor`)
@@ -144,6 +145,7 @@ export class HostConnectionService extends Service implements HostConnectionHand
 function rpcFetchHandler(
   channel: string,
   handler: ConnectionRpcHandler,
+  ip: string | undefined,
 ): FetchHandler {
   return {
     async fetch(request: Request): Promise<Response> {
@@ -177,9 +179,12 @@ function rpcFetchHandler(
         })
       }
 
+      const caller: ConnectionRpcCaller = { headers: request.headers, ip }
       try {
-        const result = await handler(endpoint, message.payload, request.signal)
-        return fullResponse(message.rpcId, result)
+        const reply = await handler(endpoint, message.payload, request.signal, caller)
+        return 'ok' in reply
+          ? fullResponse(message.rpcId, reply)
+          : fullResponse(message.rpcId, reply.result, reply.setCookie)
       } catch (error) {
         return new Response(`handler failure: ${String(error)}`, { status: 500 })
       }
@@ -212,9 +217,13 @@ function errorResponse(rpcId: RpcIdType, error: RpcError): Response {
   return fullResponse(rpcId, { ok: false, error })
 }
 
-function fullResponse(rpcId: RpcIdType, result: RpcServerResponse['result']): Response {
+function fullResponse(
+  rpcId: RpcIdType,
+  result: RpcServerResponse['result'],
+  setCookie?: string,
+): Response {
   const body: RpcServerResponse = { type: 'server-response', rpcId, result }
-  return Response.json(body)
+  return Response.json(body, setCookie === undefined ? {} : { headers: { 'set-cookie': setCookie } })
 }
 
 function assertChannel(channel: string): void {

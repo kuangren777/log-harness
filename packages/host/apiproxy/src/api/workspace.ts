@@ -7,7 +7,7 @@
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { RpcRequest, RpcResponse } from './rpc.ts'
+import type { AuthorizedRequest, RpcRequest, RpcResponse } from './rpc.ts'
 
 /**
  * Wire-side workspace id brand. Deliberately re-declared here rather than
@@ -43,7 +43,7 @@ export interface WorkspaceApi {
    * `host/archived-sessions-changed`). Archived sessions stay in their
    * workspace's `sessionIds` account; grouping surfaces hide them.
    */
-  list(request: RpcRequest<{}>): Promise<RpcResponse<{ items: WorkspaceView[]; archivedSessionIds: SessionId[] }>>
+  list(request: AuthorizedRequest<{}>): Promise<RpcResponse<{ items: WorkspaceView[]; archivedSessionIds: SessionId[] }>>
 
   /**
    * Creates (or idempotently resolves) a workspace over an EXISTING directory
@@ -53,7 +53,7 @@ export interface WorkspaceApi {
    * distinct canonical paths whose basenames produce the same display title;
    * the registry's basename title default names the new workspace.
    */
-  create(request: RpcRequest<{ path: string }>):
+  create(request: AuthorizedRequest<{ path: string }>):
   Promise<RpcResponse<{ workspace: WorkspaceView; created: boolean }>>
 
   /**

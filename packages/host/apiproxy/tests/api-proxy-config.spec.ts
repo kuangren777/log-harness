@@ -28,16 +28,17 @@ import type {
   ResolvedCredential,
 } from '@deepseek-ai/dsh-credentials'
 import type { HostFrame } from '../src/api/index.ts'
-import type { RpcRequest, RpcResponse } from '../src/api/rpc.ts'
+import type { AuthorizedRequest, RpcResponse } from '../src/api/rpc.ts'
 import { RpcId } from '../src/api/rpc.ts'
 import { AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-agent-default-model'
 import { createApiProxy } from '../src/api-proxy.ts'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 const DEFAULTS = { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' }
 
 let nextRpc = 1
-function request<P>(payload: P): RpcRequest<P> {
-  return { rpcId: RpcId(`req-${String(nextRpc++)}`), payload }
+function request<P>(payload: P): AuthorizedRequest<P> {
+  return { rpcId: RpcId(`req-${String(nextRpc++)}`), payload, principal: LOCAL_PRINCIPAL }
 }
 
 function expectOk<T>(response: RpcResponse<T>): T {

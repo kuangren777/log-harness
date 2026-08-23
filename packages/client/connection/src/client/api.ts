@@ -22,7 +22,7 @@ export type {
 } from '@deepseek-ai/dsh-host-apiproxy/api'
 export type { ToolCallView, ToolResultView } from '@deepseek-ai/dsh-tools/presentation'
 export type {
-  RpcRequest, RpcResponse, RpcResult, RpcError, RpcErrorCode,
+  AuthorizedRequest, RpcRequest, RpcResponse, RpcResult, RpcError, RpcErrorCode,
   ClientRequest, ServerResponse, ServerRequest, ClientResponse, RpcMessage, RpcReceipt,
 } from '@deepseek-ai/dsh-host-apiproxy/api'
 // transportError lives in the apiproxy api layer (beside RpcResult, its

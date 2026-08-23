@@ -28,6 +28,13 @@ export { toFetchHandler } from './fetch/handler.ts'
 export { AbstractApiClient, InProcessApiClient } from './fetch/client.ts'
 export type { IApiClient } from './fetch/client.ts'
 export { createApiProxy } from './api-proxy.ts'
+export { policyOf, UNARY_METHODS } from './fetch/handler.ts'
+export { forbiddenError, ownsPayload, permitsPolicy } from './authorization.ts'
+export { UNAVAILABLE_OWNERSHIP } from './authorization.ts'
+export type {
+  MethodPolicy, OwnableIdKey, OwnershipLookup, RequestAuthorization, RequestGate, RequestHeaders,
+} from './authorization.ts'
+export { filterFrames } from './frame-visibility.ts'
 export type { ApiProxyDefaults } from './api-proxy.ts'
 
 declare module '@deepseek-ai/cordis' {

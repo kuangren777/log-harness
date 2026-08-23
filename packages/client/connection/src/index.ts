@@ -2,20 +2,23 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-attachment'
+import { LOCAL_PRINCIPAL, type Principal } from '@deepseek-ai/dsh-auth'
 // Activates the webServer Context merge used below.
 import type { WebRoute, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
-import { toFetchHandler } from '@deepseek-ai/dsh-host-apiproxy'
+import { toFetchHandler, type RequestGate } from '@deepseek-ai/dsh-host-apiproxy'
 import { API_PATH, HOST_EVENTS_PATH, MUX_EVENTS_PATH } from './api-path.ts'
-import { bridge, DEFAULT_MAX_REQUEST_BODY_BYTES } from './http-bridge.ts'
+import { bridge, DEFAULT_MAX_REQUEST_BODY_BYTES, type FetchHandler } from './http-bridge.ts'
 import { assertTrustedAuthority, isTrustedApiRequest } from './api-request-trust.ts'
 import { HostConnectionService } from './rpc-host.ts'
 import { rejectWebSocketUpgrade, WebSocketDownlinks } from './websocket-downlink.ts'
 
 export type {
   ConnectionRpcAuthority,
+  ConnectionRpcCaller,
   ConnectionRpcEndpointMatcher,
   ConnectionRpcHandler,
   ConnectionRpcHandlerOptions,
+  ConnectionRpcReply,
   HostConnectionHandle,
   HostConnectionRpc,
 } from './rpc.ts'
@@ -75,8 +78,11 @@ export const Config: z<ConnectionConfig> = z.object({
  * environment-variable name is configured and where from, which is
  * reconnaissance no anonymous caller should have. `trustedHosts` is a
  * DNS-rebinding fence, explicitly not authentication, so the whole
- * configuration plane stays loopback-same-origin until a real authentication
- * layer exists. `llm.discoverModels` belongs to that plane on both counts: it
+ * configuration plane stays loopback-same-origin on a deployment that mounts
+ * no request gate. A deployment that mounts one keeps this fence AND requires
+ * an administrator for every method listed here: the two answer different
+ * questions — where the request came from, and who made it — and the weaker
+ * one must not be able to stand in for the other. `llm.discoverModels` belongs to that plane on both counts: it
  * carries a draft credential, and it makes the HOST issue a GET to a URL the
  * caller chose and reports back the status or the parsed body — an anonymous
  * LAN caller would have a probe for whatever the host can reach and the
@@ -147,28 +153,73 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
   for (const entry of trustedHosts) assertTrustedAuthority(entry)
   if (ctx.get('apiProxy') !== undefined) assertImageBodyCapacity(ctx, maxRequestBodyBytes)
   const connection = new HostConnectionService(ctx, trustedHosts)
-  const fetchHandler = connection.createSharedFetchHandler(API_PATH, {
-    async fetch(request) {
-      const pathname = new URL(request.url).pathname
-      const method = pathname.startsWith(`${API_PATH}/`)
-        ? pathname.slice(API_PATH.length + 1)
-        : undefined
-      if (method !== undefined
-        && PRIVILEGED_METHODS.has(method)
-        && !isTrustedApiRequest(request, trustedHosts)) {
-        return new Response('forbidden', { status: 403 })
-      }
-      if (request.method === 'GET' && (pathname === MUX_EVENTS_PATH || pathname === HOST_EVENTS_PATH)) {
-        return new Response('upgrade required', {
-          status: 426,
-          headers: { connection: 'Upgrade', upgrade: 'websocket' },
-        })
-      }
-      const apiProxy = ctx.get('apiProxy')
-      if (apiProxy === undefined) return new Response('not found', { status: 404 })
-      return toFetchHandler(apiProxy).fetch(request)
-    },
-  })
+  /**
+   * The /api Fetch handler for ONE already-authenticated request. It is built
+   * per request because the principal is a request fact: a handler built once
+   * at load could only serve every caller as the same one.
+   */
+  const fetchHandlerFor = (principal: Principal, gate: RequestGate | undefined, ip?: string): FetchHandler =>
+    connection.createSharedFetchHandler(API_PATH, {
+      async fetch(request) {
+        const pathname = new URL(request.url).pathname
+        const method = pathname.startsWith(`${API_PATH}/`)
+          ? pathname.slice(API_PATH.length + 1)
+          : undefined
+        if (method !== undefined && PRIVILEGED_METHODS.has(method)) {
+          if (!isTrustedApiRequest(request, trustedHosts)) {
+            return new Response('forbidden', { status: 403 })
+          }
+          // Defense in depth beside the gateway's own policy table: this list
+          // and that table are maintained apart, and the configuration plane
+          // is where a disagreement would cost the most.
+          if (gate !== undefined && !(principal.kind === 'user' && principal.admin)) {
+            return new Response('forbidden', { status: 403 })
+          }
+        }
+        if (request.method === 'GET' && (pathname === MUX_EVENTS_PATH || pathname === HOST_EVENTS_PATH)) {
+          return new Response('upgrade required', {
+            status: 426,
+            headers: { connection: 'Upgrade', upgrade: 'websocket' },
+          })
+        }
+        const apiProxy = ctx.get('apiProxy')
+        if (apiProxy === undefined) return new Response('not found', { status: 404 })
+        return toFetchHandler(
+          apiProxy,
+          gate === undefined ? undefined : { principalFor: () => principal, ownership: gate.ownership },
+        ).fetch(request)
+      },
+    }, ip)
+
+  /**
+   * Whether one request may be served, and as whom.
+   *
+   * Three outcomes, and the third is the one that matters most: a composition
+   * that mounts an auth provider WITHOUT its request gate means to
+   * authenticate and cannot, so this host stops serving rather than serving
+   * every caller anonymously. Without either, every request is `local`, which
+   * is what keeps a single-tenant deployment behaving exactly as it did before
+   * this fence existed.
+   */
+  const admit = async (
+    headers: Parameters<RequestGate['authenticate']>[0],
+    scope: Context,
+  ): Promise<
+    | { admitted: true; principal: Principal; gate: RequestGate | undefined }
+    | { admitted: false; status: 401 | 503; gate: RequestGate | undefined }
+  > => {
+    const gate = scope.get('authGate')
+    if (gate === undefined) {
+      return scope.get('auth') === undefined
+        ? { admitted: true, principal: LOCAL_PRINCIPAL, gate }
+        : { admitted: false, status: 503, gate }
+    }
+    const principal = await gate.authenticate(headers)
+    return principal === undefined
+      ? { admitted: false, status: 401, gate }
+      : { admitted: true, principal, gate }
+  }
+
   const route: WebRoute = {
     kind: 'prefix',
     path: API_PATH,
@@ -178,7 +229,22 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
         res.end('forbidden')
         return
       }
-      await bridge(req, res, fetchHandler, maxRequestBodyBytes)
+      const admission = await admit(req.headers, ctx)
+      if (!admission.admitted) {
+        // A stale cookie is cleared with the refusal so a browser stops
+        // resending a credential this host will never accept again.
+        res.writeHead(admission.status, admission.gate === undefined
+          ? {}
+          : { 'set-cookie': admission.gate.clearedCookie() })
+        res.end(admission.status === 401 ? 'unauthorized' : 'unavailable')
+        return
+      }
+      await bridge(
+        req,
+        res,
+        fetchHandlerFor(admission.principal, admission.gate, req.socket?.remoteAddress),
+        maxRequestBodyBytes,
+      )
     },
   }
   ctx.effect(() => ctx.webServer.register(route), 'client-connection: /api route')
@@ -187,21 +253,33 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
     const downlinks = new WebSocketDownlinks(apiCtx.apiProxy)
     const registerDownlink = (
       path: string,
-      handle: WebUpgradeRoute['handler'],
+      handle: (principal: Principal, ...args: Parameters<WebUpgradeRoute['handler']>) => void,
     ): void => {
       apiCtx.effect(() => apiCtx.webServer.registerUpgrade({
         path,
-        handler: (req, socket, head) => {
+        handler: async (req, socket, head) => {
           if (!isTrustedApiRequest(req, trustedHosts)) {
-            rejectWebSocketUpgrade(socket)
+            rejectWebSocketUpgrade(socket, 403)
             return
           }
-          return handle(req, socket, head)
+          // A downlink is a long-lived read of every attached session, so an
+          // unauthenticated one is refused before negotiation rather than
+          // opened and filtered to nothing.
+          const admission = await admit(req.headers, apiCtx)
+          if (!admission.admitted) {
+            rejectWebSocketUpgrade(socket, admission.status)
+            return
+          }
+          handle(admission.principal, req, socket, head)
         },
       }), `client-connection: ${path} WebSocket`)
     }
     apiCtx.effect(() => () => downlinks.close(), 'client-connection: WebSocket downlinks')
-    registerDownlink(MUX_EVENTS_PATH, (req, socket, head) => { downlinks.handleMux(req, socket, head) })
-    registerDownlink(HOST_EVENTS_PATH, (req, socket, head) => { downlinks.handleHost(req, socket, head) })
+    registerDownlink(MUX_EVENTS_PATH, (principal, req, socket, head) => {
+      downlinks.handleMux(req, socket, head, principal)
+    })
+    registerDownlink(HOST_EVENTS_PATH, (principal, req, socket, head) => {
+      downlinks.handleHost(req, socket, head, principal)
+    })
   })
 }

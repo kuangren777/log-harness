@@ -11,15 +11,16 @@ import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
-import type { RpcRequest } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
+import type { AuthorizedRequest } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 const sid = (id: string): SessionId => id as SessionId
 
 let nextRpc = 1
-function request<P>(payload: P): RpcRequest<P> {
-  return { rpcId: RpcId(`fork-${String(nextRpc++)}`), payload }
+function request<P>(payload: P): AuthorizedRequest<P> {
+  return { rpcId: RpcId(`fork-${String(nextRpc++)}`), payload, principal: LOCAL_PRINCIPAL }
 }
 
 async function composed(workspaces: readonly Workspace[] = []): Promise<Context> {

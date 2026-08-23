@@ -10,9 +10,16 @@ import { randomUUID } from 'node:crypto'
 import type { z } from 'zod'
 import type { ApiProxy, MuxFrame, HostFrame } from '../api/index.ts'
 import { sessionLogQuerySchema } from '../api/downloads.schema.ts'
+import { LOCAL_PRINCIPAL, type Principal } from '@deepseek-ai/dsh-auth'
 import type { RequestPayload, ResponseValue, RpcMethodMap } from '../api/rpc-map.ts'
-import type { ClientRequest, RpcError, RpcRequest, RpcResponse, ServerRequest, ServerResponse } from '../api/rpc.ts'
+import type {
+  AuthorizedRequest, ClientRequest, RpcError, RpcRequest, RpcResponse, ServerRequest, ServerResponse,
+} from '../api/rpc.ts'
 import { RpcId } from '../api/rpc.ts'
+import {
+  forbiddenError, permitsPolicy, UNAVAILABLE_OWNERSHIP, type MethodPolicy, type OwnableIdKey,
+  type OwnershipLookup, type RequestAuthorization,
+} from '../authorization.ts'
 import type { Wire } from '../api/rpc.schema.ts'
 import { clientRequestSchema, clientResponseSchema } from '../api/rpc.schema.ts'
 import {
@@ -83,7 +90,7 @@ import {
 type UnaryRoutes = {
   [K in keyof RpcMethodMap]: {
     schema: z.ZodType<Wire<RequestPayload<K>>>
-    invoke(api: ApiProxy, request: RpcRequest<RequestPayload<K>>, signal: AbortSignal): Promise<RpcResponse<ResponseValue<K>>>
+    invoke(api: ApiProxy, request: AuthorizedRequest<RequestPayload<K>>, signal: AbortSignal): Promise<RpcResponse<ResponseValue<K>>>
   }
 }
 
@@ -143,9 +150,135 @@ const UNARY_ROUTES: UnaryRoutes = {
   'llm.discoverModels': { schema: llmDiscoverModelsRequestSchema, invoke: (api, r, signal) => api.llm.discoverModels(r, signal) },
 }
 
+/**
+ * `owner` is offered only to a method whose payload addresses something
+ * ownable. Without a `sessionId`, `parentSessionId`, or `workspaceId` there is
+ * nothing for an owner check to resolve, so the row would silently pass every
+ * authenticated caller.
+ */
+type OwnerCapable<K extends keyof RpcMethodMap> =
+  [Extract<keyof RequestPayload<K>, OwnableIdKey>] extends [never] ? never : 'owner'
+
+/** The policies one method may declare. */
+type PolicyRow<K extends keyof RpcMethodMap> = 'user' | 'admin' | OwnerCapable<K>
+
+/**
+ * Authorization table, keyed by (and compiler-locked to) RpcMethodMap beside
+ * UNARY_ROUTES: a new method fails to compile until someone decides who may
+ * call it. Policies are enforced only when a deployment hands
+ * {@link toFetchHandler} a {@link RequestAuthorization}; without one every
+ * request is `local` and passes.
+ *
+ * The non-obvious rows:
+ *
+ * - `session.create` is `user`, not `owner`, because the client pre-allocates
+ *   the session id it asks for: an id with no owner is the normal case, and an
+ *   owner check would refuse every fresh session. The implementation makes the
+ *   decision instead — it refuses a workspace or an already-owned id the
+ *   caller does not own, and records the new session's owner.
+ * - `session.list`, `session.search`, and `workspace.list` are `user` because
+ *   they answer across accounts; the implementation narrows the answer to what
+ *   the caller owns rather than refusing the call.
+ * - The subagent methods are `owner` on `parentSessionId`. A subagent catalog
+ *   and transcript are projections of one parent conversation, so owning that
+ *   parent is the whole question; the children have no ownership rows.
+ * - `host.listDirectory` and `host.createDirectory` are `user`, while
+ *   `host.pickDirectory` and `host.openPath` are `admin`. Reading and creating
+ *   a directory is what a workspace picker does, and any caller that may open
+ *   a session already runs commands as this process through the default
+ *   toolset; the other two drive the host machine's desktop instead of
+ *   answering the caller.
+ * - The settings, credentials, agent-preset authoring, `skill.inventory`, and
+ *   `llm.discoverModels` rows are `admin`: they are the configuration plane
+ *   the browser-trust fence already pins to loopback, and reading them is as
+ *   privileged as writing them.
+ * - `llm.providers` and `llm.models` stay `user`: the catalog carries provider
+ *   ids, display names, and model lists, and every session composer needs it.
+ */
+const METHOD_POLICY: { [K in keyof RpcMethodMap]: PolicyRow<K> } = {
+  'session.list': 'user',
+  'session.search': 'user',
+  'session.create': 'user',
+  'session.history': 'owner',
+  'session.models': 'owner',
+  'session.selectModel': 'owner',
+  'session.rename': 'owner',
+  'session.fork': 'owner',
+  'session.prompt': 'owner',
+  'session.attachment': 'owner',
+  'session.updateQueue': 'owner',
+  'session.cancel': 'owner',
+  'subagent.list': 'owner',
+  'subagent.history': 'owner',
+  'subagent.prompt': 'owner',
+  'subagent.interrupt': 'owner',
+  'host.describe': 'user',
+  'host.pickDirectory': 'admin',
+  'host.listDirectory': 'user',
+  'host.createDirectory': 'user',
+  'host.openPath': 'admin',
+  'workspace.list': 'user',
+  'workspace.create': 'user',
+  'workspace.rename': 'owner',
+  'workspace.delete': 'owner',
+  'workspace.insertBefore': 'owner',
+  'workspace.insertSessionBefore': 'owner',
+  'workspace.archiveSession': 'owner',
+  'skill.list': 'owner',
+  'skill.inventory': 'admin',
+  'agentPreset.list': 'user',
+  'agentPreset.select': 'owner',
+  'agentPreset.read': 'admin',
+  'agentPreset.copy': 'admin',
+  'agentPreset.openDocument': 'admin',
+  'agentPreset.remove': 'admin',
+  'goal.create': 'owner',
+  'goal.edit': 'owner',
+  'goal.pause': 'owner',
+  'goal.resume': 'owner',
+  'goal.complete': 'owner',
+  'goal.clear': 'owner',
+  'settings.describe': 'admin',
+  'settings.openDocument': 'admin',
+  'settings.update': 'admin',
+  'settings.replace': 'admin',
+  'settings.mutate': 'admin',
+  'credentials.describe': 'admin',
+  'credentials.set': 'admin',
+  'credentials.unset': 'admin',
+  'llm.providers': 'user',
+  'llm.models': 'user',
+  'llm.discoverModels': 'admin',
+}
+
+/**
+ * One method's policy, as the table declares it.
+ * @param method - the RPC method name.
+ * @returns the declared policy.
+ */
+export function policyOf(method: keyof RpcMethodMap): MethodPolicy {
+  return METHOD_POLICY[method]
+}
+
 /** Route lookup that narrows an arbitrary path segment to a map key (single cast point for the string→key refinement). */
 function methodFor(path: string): keyof RpcMethodMap | undefined {
   return Object.hasOwn(UNARY_ROUTES, path) ? path as keyof RpcMethodMap : undefined
+}
+
+/**
+ * Every unary method this carrier serves, derived from the dispatch table so
+ * that a caller enumerating methods — an authorization suite asserting what
+ * each policy admits — cannot fall behind a new row.
+ */
+export const UNARY_METHODS: readonly (keyof RpcMethodMap)[] = Object.keys(UNARY_ROUTES) as (keyof RpcMethodMap)[]
+
+/**
+ * The single-tenant authorization: every request is `local`, and no ownership
+ * is ever consulted because `local` passes every policy before the lookup.
+ */
+const LOCAL_AUTHORIZATION: RequestAuthorization = {
+  principalFor: () => LOCAL_PRINCIPAL,
+  ownership: UNAVAILABLE_OWNERSHIP,
 }
 
 /**
@@ -178,14 +311,22 @@ function fullResponse(narrow: RpcResponse<unknown>): Response {
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters
 async function handleUnary<K extends keyof RpcMethodMap>(
   api: ApiProxy, method: K, message: ClientRequest, signal: AbortSignal,
+  principal: Principal, ownership: OwnershipLookup,
 ): Promise<Response> {
   const route = UNARY_ROUTES[method]
   const payload = route.schema.safeParse(message.payload)
   if (!payload.success) {
     return errorResponse(message.rpcId, { code: 'bad-request', message: `invalid payload for ${method}`, details: { issues: payload.error.issues } })
   }
+  // Authorization runs after parsing because an `owner` policy resolves ids
+  // out of the payload, and before dispatch because a refused call must not
+  // reach the implementation at all.
+  if (!await permitsPolicy(METHOD_POLICY[method], payload.data, principal, ownership)) {
+    return errorResponse(message.rpcId, forbiddenError())
+  }
+  const request: AuthorizedRequest<RequestPayload<K>> = { rpcId: message.rpcId, payload: payload.data, principal }
   try {
-    return fullResponse(await route.invoke(api, { rpcId: message.rpcId, payload: payload.data }, signal))
+    return fullResponse(await route.invoke(api, request, signal))
   } catch (error: unknown) {
     // The impl never throws business errors; reaching here means the implementation itself crashed — 500, carrier layer.
     return new Response(`handler failure: ${String(error)}`, { status: 500 })
@@ -239,9 +380,13 @@ function sseResponse(frames: AsyncIterable<RpcRequest<MuxFrame | HostFrame>>): R
 /**
  * Wraps an ApiProxy into a pure fetch function (isomorphic point: feed the returned fetch straight to InProcessApiClient).
  * @param api - the host-side ApiProxy implementation.
+ * @param authorization - who each request acts as and how ownership resolves; omitted, every request is the `local` principal and every policy passes.
  * @returns an object holding `fetch(Request)`; paths outside /api/ return 404.
  */
-export function toFetchHandler(api: ApiProxy): { fetch: typeof fetch } {
+export function toFetchHandler(
+  api: ApiProxy,
+  authorization: RequestAuthorization = LOCAL_AUTHORIZATION,
+): { fetch: typeof fetch } {
   return {
     // Signature matches global fetch: the isomorphic point hands this function to InProcessApiClient as its transport aspect,
     // Clients call in (url, init) form — normalize to Request before handling.
@@ -249,14 +394,18 @@ export function toFetchHandler(api: ApiProxy): { fetch: typeof fetch } {
       const req = input instanceof Request ? input : new Request(input, init)
       const url = new URL(req.url)
       const path = url.pathname
+      const principal = authorization.principalFor(req)
+      const ownership = authorization.ownership
 
       // No-envelope read channels (SSE GET streams + host-only download):
-      // physical routes that answer directly, without a wire envelope.
+      // physical routes that answer directly, without a wire envelope. The two
+      // streams subscribe every session on the host, so the gateway decides
+      // them frame by frame; the carrier only states whose stream it is.
       if (path === '/api/events.mux' && req.method === 'GET') {
-        return sseResponse(api.events.mux({ rpcId: RpcId(randomUUID()), payload: {} }, req.signal))
+        return sseResponse(api.events.mux({ rpcId: RpcId(randomUUID()), payload: {}, principal }, req.signal))
       }
       if (path === '/api/events.host' && req.method === 'GET') {
-        return sseResponse(api.events.host({ rpcId: RpcId(randomUUID()), payload: {} }, req.signal))
+        return sseResponse(api.events.host({ rpcId: RpcId(randomUUID()), payload: {}, principal }, req.signal))
       }
       if (path === '/api/session.export' && (req.method === 'GET' || req.method === 'HEAD')) {
         // Query params are a different boundary from the POST envelope, but
@@ -264,6 +413,11 @@ export function toFetchHandler(api: ApiProxy): { fetch: typeof fetch } {
         const parsed = sessionLogQuerySchema.safeParse(Object.fromEntries(url.searchParams))
         if (!parsed.success) {
           return new Response('missing or invalid sessionId query parameter', { status: 400 })
+        }
+        // The export streams one session's complete log; it is the download
+        // face of `session.history` and carries the same `owner` policy.
+        if (!await permitsPolicy('owner', parsed.data, principal, ownership)) {
+          return new Response('forbidden', { status: 403 })
         }
         const response = await api.downloads.sessionLog(parsed.data, req.signal)
         if (req.method === 'GET') return response
@@ -297,6 +451,10 @@ export function toFetchHandler(api: ApiProxy): { fetch: typeof fetch } {
       if (path === '/api/respond') {
         const parsed = clientResponseSchema.safeParse(body)
         if (!parsed.success) return Response.json({ accepted: false, reason: 'bad-response' })
+        // No policy row: a response addresses a pending server request by its
+        // unguessable rpcId, which relates to no session, workspace, or
+        // account. Reaching this carrier at all is the authorization — an
+        // unauthenticated request is refused by the transport before dispatch.
         return Response.json(await api.respond(parsed.data))
       }
 
@@ -315,7 +473,7 @@ export function toFetchHandler(api: ApiProxy): { fetch: typeof fetch } {
       if (message.method !== method) {
         return errorResponse(message.rpcId, { code: 'bad-request', message: `method "${message.method}" does not match path "${method}"`, details: { issues: [] } })
       }
-      return handleUnary(api, method, message, req.signal)
+      return handleUnary(api, method, message, req.signal, principal, ownership)
     },
   }
 }

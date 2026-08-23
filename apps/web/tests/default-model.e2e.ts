@@ -20,6 +20,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
 import { ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, saveFailureShot } from './support.ts'
+import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
 
 /** Points the shipped shared Agent default at this scenario's own route. */
 const OVERLAY = fileURLToPath(new URL('./default-model.overlay.yml', import.meta.url))
@@ -42,6 +43,7 @@ describe('web e2e: the composer model switch is the default for later sessions',
     const response = await scaffold.ctx.apiProxy.sessions.create({
       rpcId: `default-model-create-${sessionId}` as never,
       payload: { sessionId: SessionId(sessionId), cwd: scaffold.workspaceCwd },
+      principal: LOCAL_PRINCIPAL,
     })
     if (!response.result.ok) throw new Error(`session.create failed: ${response.result.error.message}`)
     return response.result.value.sessionId
