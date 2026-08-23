@@ -40,6 +40,8 @@
 | `{ modelInvocable: false, userInvocable: true }` | 排除 | 包含 |
 | `{ modelInvocable: false, userInvocable: false }` | 排除 | 排除 |
 
+<a id="user-settings-overrides"></a>
+
 ### 用户设置覆盖
 
 只要挂载了 `ctx.settings` 服务，注册表就拥有 `skills` 设置命名空间（`SKILLS_SETTINGS_NAMESPACE`）：一个以 skill 名称为键的字典，条目携带可选布尔字段 `model` 与 `user`。之所以用 skill 名称作键，是因为层合并已经为每个名称裁决出唯一胜出者。不是合法 skill 名称的键会让写入失败，已存储的这类键会让注册本身失败。没有挂载设置服务就没有覆盖，也不会失败。
@@ -58,7 +60,7 @@ skills:
 | `{ user: false }` | 列出且可加载 | 不出现；`/name` 保持为普通文本 |
 | `{ model: false, user: false }` | 隐藏 | 隐藏 |
 
-该配置段的一次提交变更会使目录缓存失效并发出 `skills/change`；新增或移除覆盖的挂载与卸载同样如此；不携带任何覆盖的挂载与卸载不改变任何东西，因此保持静默。[策略覆盖 Agent Note](../../../.agents/notes/implemented/feature/2026-08-22-skill-policy-overrides.md) 负责阐述归属与键选择的理由。
+该配置段的一次提交变更会使目录缓存失效并发出 `skills/change`；新增或移除覆盖的挂载与卸载同样如此；不携带任何覆盖的挂载与卸载不改变任何东西，因此保持静默。[策略覆盖 Agent Note](../../../.agents/notes/implemented/feature/2026-08-22-skill-policy-overrides.zh.md) 负责阐述归属与键选择的理由。
 
 ### 共享的面向模型渲染
 

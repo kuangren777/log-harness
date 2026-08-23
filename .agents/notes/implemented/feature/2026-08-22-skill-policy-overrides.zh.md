@@ -6,7 +6,7 @@ Status: implemented
 
 ## Problem
 
-一个 skill 的两个调用接口过去完全由其作者决定：`disable-model-invocation` 与 `user-invocable` frontmatter，或运行时贡献传给 `register()` 的策略。用户若想把某个随包发布或共享的 skill 移出模型目录——或把某个吵闹的 skill 移出自己的 `/` 菜单——就必须去改一个未必归自己所有的文件，而随包发布的 skill 根目录根本无法编辑。[分层发现](2026-08-22-layered-skill-discovery.md)扩大了一次会话能看到的根目录集合，这让缺口更明显，而不是更小。
+一个 skill 的两个调用接口过去完全由其作者决定：`disable-model-invocation` 与 `user-invocable` frontmatter，或运行时贡献传给 `register()` 的策略。用户若想把某个随包发布或共享的 skill 移出模型目录——或把某个吵闹的 skill 移出自己的 `/` 菜单——就必须去改一个未必归自己所有的文件，而随包发布的 skill 根目录根本无法编辑。[分层发现](2026-08-22-layered-skill-discovery.zh.md)扩大了一次会话能看到的根目录集合，这让缺口更明显，而不是更小。
 
 ## Decision
 

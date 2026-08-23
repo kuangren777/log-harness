@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-22-skill-policy-overrides.md
 2026-08-22-skill-policy-overrides.md: de103e7d10c612d0fa0aa9e5d3aa6b6d50e928e4
-2026-08-22-skill-policy-overrides.zh.md: ad2d861d332433b04e6476d8dd330c09f9b7db6d
+2026-08-22-skill-policy-overrides.zh.md: 9bf724d1a6036b09344eceb8bb57053b0d593e66
