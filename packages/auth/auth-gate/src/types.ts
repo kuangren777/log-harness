@@ -61,6 +61,12 @@ export interface PasswordForgotResult {
 
 /** `password.reset` — the mailed token and the new password. */
 export interface PasswordResetPayload {
+  /**
+   * The address the reset was requested for. The token already names its user;
+   * this is checked against that user so a token on its own cannot reset a
+   * password whose address the caller does not know.
+   */
+  email: string
   /** The token from the reset link. */
   token: string
   /** The new password. */

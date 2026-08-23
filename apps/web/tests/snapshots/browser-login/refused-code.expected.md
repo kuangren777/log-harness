@@ -1,0 +1,8 @@
+- dialog "Sign in":
+  - heading "Enter the code" [level=1]
+  - paragraph: A six-digit code was sent to your mailbox. Enter it before it expires.
+  - text: Code
+  - textbox "Code": "000000"
+  - alert: That code is wrong or no longer valid. Enter it again.
+  - button "Verify"
+  - button "Back"

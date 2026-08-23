@@ -513,6 +513,21 @@ register(definition: ToolDefinition): () => void
 restrict(filter: ToolRestriction): () => void
 
 /**
+ * The global tool names one scope may name in a {@link restrict} filter:
+ * everything the scope inherits, before its own registrations and before any
+ * restriction already in force.
+ *
+ * A caller that computes an `allow` list from a policy needs exactly this
+ * set. Deriving it from {@link schemas} instead would be wrong twice: that
+ * view already has restrictions applied, and it carries the scope's own
+ * registrations and the reserved presentation transport, all of which
+ * {@link restrict} refuses to be handed.
+ * @param scope - the viewing scope (the agent); omitted = the global view.
+ * @returns the restrictable names, in registration order.
+ */
+restrictableNames(scope?: ScopeKey): readonly string[]
+
+/**
  * Register a monotonic guard after the extensible `tools/pre-execute`
  * waterfall. A plain-context guard applies globally; one registered through
  * `agent.ctx` applies only to that agent. Any matching guard may deny by

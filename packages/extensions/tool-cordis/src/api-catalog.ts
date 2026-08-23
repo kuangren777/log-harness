@@ -383,6 +383,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Root interface of the unified API. New client-request domain = one new file pair + one field here + one map row.',
     methods: [
       {
+        signature: 'authAdmin: AuthAdminApi',
+        description: 'Administration plane of the auth seam; every row is an `admin` policy.',
+        parameters: [],
+      },
+      {
         signature: 'downloads: DownloadsApi',
         description: 'Host-only download surfaces (GET, no wire envelope); absent from IApiClient.',
         parameters: [],
@@ -460,6 +465,235 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Generate or read one deterministic model-request version from the stored normalized image.',
         parameters: [{ name: 'ref', description: 'durable provider-independent normalized attachment reference.' }, { name: 'policy', description: 'exact route pixel and encoded-byte budget.' }, { name: 'signal', description: 'optional cancellation.' }],
         returns: 'request bytes and the cache/upload identity covering every transform input.',
+      },
+    ],
+  },
+  {
+    key: 'auth',
+    summary: 'Abstract authentication and authorization service.',
+    description: 'Abstract authentication and authorization service.\n\nEvery method is asynchronous because a provider owns durable storage, and every credential-checking method answers with a value rather than an error: verifyLogin returns an outcome, authenticateToken and the one-time-token methods return `undefined`. A failed check is an expected result, and giving it a distinct failure shape would let a caller tell an unknown account from a wrong password. Deliberate refusals — a duplicate address, a builtin group, a rate limit — throw `AuthError` with a code.\n\nSecurity limits are the provider\'s, not the caller\'s: rate limiting, lockout, and attempt caps live inside these methods so that no call site can omit them.',
+    methods: [
+      {
+        signature: 'abstract createUser(email: string, password: string): Promise<UserId>',
+        description: 'Register an account. The address is stored as given and compared case-insensitively, so one address cannot be registered twice in different cases. The password is hashed before storage and never retained.',
+        parameters: [{ name: 'email', description: 'the account\'s e-mail address.' }, { name: 'password', description: 'the plaintext password.' }],
+        returns: 'the new account\'s id.',
+        throws: ['AuthError `duplicate-email` when the address is already registered.'],
+      },
+      {
+        signature: 'abstract getUserByEmail(email: string): Promise<UserRecord | undefined>',
+        description: 'Look one account up by address, case-insensitively. The password hash is never part of the result.',
+        parameters: [{ name: 'email', description: 'the address to look up.' }],
+        returns: 'the account, or `undefined` when no account has that address.',
+      },
+      {
+        signature: 'abstract listUsers(): Promise<readonly UserRecord[]>',
+        description: 'Every account, without password hashes — the administration roster. There is no filter or page: the deployments this seam serves administer a team, and a roster small enough to render is small enough to return.',
+        parameters: [],
+        returns: 'the accounts, oldest first.',
+      },
+      {
+        signature: 'abstract setUserDisabled(userId: UserId, disabled: boolean): Promise<void>',
+        description: 'Disable or restore one account. A disabled account fails verifyLogin and stops authenticating, but its rows stay, so its sessions, ownership, and audit history survive the block. Restoring is the same operation with `false`: the alternative would make a mistaken disable a database repair.\n\nLive login sessions are NOT revoked here. Revocation is revokeAllSessions, and a caller that means to end an account\'s access now calls both; keeping them separate is what lets an administrator disable an account without deciding its sessions\' fate in the same click.',
+        parameters: [{ name: 'userId', description: 'the account to update.' }, { name: 'disabled', description: 'whether the account is blocked from authenticating.' }],
+        throws: ['AuthError `unknown-subject` when no such account exists.'],
+      },
+      {
+        signature: 'abstract principalOf(userId: UserId): Promise<Principal | undefined>',
+        description: 'Resolve one account to its principal, without a credential.\n\nauthenticateToken answers the same question for a request that presents a token. This answers it for a Consumer that already knows the account — the owner of an agent session — and therefore has no token to present. Rule evaluation needs the whole principal, not just the id: the administrator bypass in permits reads `admin`, and a Consumer that reconstructed it from a group list would be free to get it wrong.',
+        parameters: [{ name: 'userId', description: 'the account to resolve.' }],
+        returns: 'the principal, or `undefined` when the account is unknown or disabled.',
+      },
+      {
+        signature: 'abstract setPassword(userId: UserId, password: string): Promise<void>',
+        description: 'Replace an account\'s password. Existing login sessions are unaffected; revoke them separately when the change is a response to a compromise.',
+        parameters: [{ name: 'userId', description: 'the account to update.' }, { name: 'password', description: 'the new plaintext password.' }],
+        throws: ['AuthError `unknown-subject` when no such account exists.'],
+      },
+      {
+        signature: 'abstract verifyLogin(email: string, password: string, ip?: string): Promise<LoginOutcome>',
+        description: 'Check a password, enforcing this seam\'s fixed attempt limits and lockout.\n\nFailure never states why. The same outcome comes back for an unknown address, a wrong password, and a disabled account, and a failed attempt costs the same work whether or not an account exists, so the login form cannot be used to enumerate accounts. Attempts are counted durably against both the submitted address and the client address, so a restart does not reset a lockout.',
+        parameters: [{ name: 'email', description: 'the submitted address.' }, { name: 'password', description: 'the submitted password.' }, { name: 'ip', description: 'the client address, when the caller knows one; without it only the per-address limit applies.' }],
+        returns: 'the account on success, otherwise a failure carrying any lockout deadline.',
+      },
+      {
+        signature: 'abstract issueAuthSession(userId: UserId, meta: AuthSessionMeta): Promise<IssuedAuthSession>',
+        description: 'Issue a login session and its bearer token. The token is returned once; storage holds only its digest, so the row cannot be replayed as a credential by whoever reads the database.',
+        parameters: [{ name: 'userId', description: 'the account to issue for.' }, { name: 'meta', description: 'client facts recorded for the user\'s own session list.' }],
+        returns: 'the session id, the bearer token, and its expiry.',
+        throws: ['AuthError `unknown-subject` when no such account exists.'],
+      },
+      {
+        signature: 'abstract authenticateToken(token: string): Promise<Principal | undefined>',
+        description: 'Resolve a bearer token to its principal, refreshing the session\'s last-seen time. Expiry, revocation, and a disabled account all answer `undefined`, indistinguishably from an unknown token.',
+        parameters: [{ name: 'token', description: 'the presented bearer token.' }],
+        returns: 'the authenticated principal, or `undefined` when the token does not authenticate.',
+      },
+      {
+        signature: 'abstract revokeSession(authSessionId: AuthSessionId): Promise<void>',
+        description: 'Revoke one login session. Revoking an unknown or already-revoked session is a no-op: the caller\'s intent is satisfied either way.',
+        parameters: [{ name: 'authSessionId', description: 'the session to revoke.' }],
+      },
+      {
+        signature: 'abstract revokeAllSessions(userId: UserId): Promise<void>',
+        description: 'Revoke every live login session for one account — the operation a password change or a compromise report calls.',
+        parameters: [{ name: 'userId', description: 'the account whose sessions to revoke.' }],
+      },
+      {
+        signature: 'abstract issueOneTimeToken( kind: OneTimeTokenKind, userId: UserId, ttlMs: number, ): Promise<IssuedOneTimeToken>',
+        description: 'Issue a single-use secret: a six-digit code for `2fa`, a bearer-strength token for the link kinds. The secret is returned once and stored only as a digest. Issuance is rate limited per account and, for `reset-password`, per address.',
+        parameters: [{ name: 'kind', description: 'what the secret is for.' }, { name: 'userId', description: 'the account it belongs to.' }, { name: 'ttlMs', description: 'how long it stays valid, in milliseconds.' }],
+        returns: 'the row id, the secret, and its expiry.',
+        throws: ['AuthError `unknown-subject` when no such account exists, or `rate-limited` when issuance is too frequent.'],
+      },
+      {
+        signature: 'abstract consumeOneTimeToken(kind: OneTimeTokenKind, token: string): Promise<UserId | undefined>',
+        description: 'Redeem a link-kind secret. Redemption is single-use and atomic: two concurrent presentations of one token resolve at most one of them. Expired, already-consumed, and unknown tokens are indistinguishable.\n\nRedeeming a `verify-email` secret also confirms the account\'s address, in the same durable operation. That is the contract, not an incidental effect of consumption: the two are one fact, and moving the confirmation to a separate setter would let a crash spend the single-use link without recording what it proved — an account stuck unverified with no secret left to prove it — and would leave a second route that spends the link and records nothing. A repeat confirmation keeps the first one\'s timestamp, so UserRecord.emailVerifiedAt is when the address was first proven.',
+        parameters: [{ name: 'kind', description: 'the kind the secret must have been issued for.' }, { name: 'token', description: 'the presented secret.' }],
+        returns: 'the account the secret belonged to, or `undefined` when it does not redeem.',
+      },
+      {
+        signature: 'abstract verifyTotpCode(oneTimeTokenId: OneTimeTokenId, code: string): Promise<UserId | undefined>',
+        description: 'Verify a `2fa` code against one issued challenge. A wrong code counts an attempt; reaching the fixed cap kills the challenge outright rather than leaving it open for the rest of its lifetime, so a six-digit secret cannot be ground down. Success consumes the challenge.',
+        parameters: [{ name: 'oneTimeTokenId', description: 'the challenge to verify against.' }, { name: 'code', description: 'the presented code.' }],
+        returns: 'the account the challenge belonged to, or `undefined` when it does not verify.',
+      },
+      {
+        signature: 'abstract listGroups(): Promise<readonly GroupRecord[]>',
+        description: 'Every group, builtin ones included.',
+        parameters: [],
+        returns: 'the groups, ordered by creation time.',
+      },
+      {
+        signature: 'abstract createGroup(name: string): Promise<GroupId>',
+        description: 'Create a permission group.',
+        parameters: [{ name: 'name', description: 'the group\'s unique name.' }],
+        returns: 'the new group\'s id.',
+        throws: ['AuthError `duplicate-group-name` when a group already has that name.'],
+      },
+      {
+        signature: 'abstract deleteGroup(groupId: GroupId): Promise<void>',
+        description: 'Delete a group, along with its memberships and rules. A builtin group is refused: the administrator group is what makes an administrator, so deleting it could leave a deployment with no one able to restore it.',
+        parameters: [{ name: 'groupId', description: 'the group to delete.' }],
+        throws: ['AuthError `builtin-group` for a builtin group, `unknown-subject` when no such group exists.'],
+      },
+      {
+        signature: 'abstract renameGroup(groupId: GroupId, name: string): Promise<void>',
+        description: 'Rename a group. A builtin group is refused, for the same reason its deletion is: its name is part of the schema.',
+        parameters: [{ name: 'groupId', description: 'the group to rename.' }, { name: 'name', description: 'the new unique name.' }],
+        throws: ['AuthError `builtin-group` for a builtin group, `unknown-subject` when no such group exists.'],
+      },
+      {
+        signature: 'abstract setMembers(groupId: GroupId, userIds: readonly UserId[]): Promise<void>',
+        description: 'Replace a group\'s membership wholesale. Passing the complete set rather than adding and removing one at a time is what lets an administration UI save a membership editor without a read-modify-write race.',
+        parameters: [{ name: 'groupId', description: 'the group to update.' }, { name: 'userIds', description: 'the complete membership after the call.' }],
+        throws: ['AuthError `unknown-subject` when the group or any listed account does not exist.'],
+      },
+      {
+        signature: 'abstract listMembers(groupId: GroupId): Promise<readonly UserId[]>',
+        description: 'One group\'s membership.',
+        parameters: [{ name: 'groupId', description: 'the group to read.' }],
+        returns: 'the member accounts; an unknown group has no members.',
+      },
+      {
+        signature: 'abstract setRules(groupId: GroupId, rules: readonly PermissionRule[]): Promise<void>',
+        description: 'Replace a group\'s rules wholesale, for the same reason setMembers replaces membership wholesale.',
+        parameters: [{ name: 'groupId', description: 'the group to update.' }, { name: 'rules', description: 'the complete rule set after the call.' }],
+        throws: ['AuthError `unknown-subject` when no such group exists.'],
+      },
+      {
+        signature: 'abstract listRules(groupId: GroupId): Promise<readonly PermissionRule[]>',
+        description: 'One group\'s rules.',
+        parameters: [{ name: 'groupId', description: 'the group to read.' }],
+        returns: 'the group\'s rules; an unknown group has none.',
+      },
+      {
+        signature: 'abstract rulesFor(userId: UserId): Promise<readonly PermissionRule[]>',
+        description: 'Every rule that applies to one account: the union of its groups\' rules. The union is safe to take without ordering because evaluate\'s precedence is order-independent — one deny refuses regardless of which group contributed it.',
+        parameters: [{ name: 'userId', description: 'the account to collect rules for.' }],
+        returns: 'the applicable rules; an unknown account has none.',
+      },
+      {
+        signature: 'abstract recordSessionOwner(sessionId: SessionId, userId: UserId): Promise<void>',
+        description: 'Record which account owns one agent session. Ownership lives here rather than in the session log because it is an access-control fact about the deployment, not a model-visible fact about the conversation.',
+        parameters: [{ name: 'sessionId', description: 'the agent session.' }, { name: 'userId', description: 'the owning account.' }],
+        throws: ['AuthError `unknown-subject` when no such account exists.'],
+      },
+      {
+        signature: 'abstract ownerOfSession(sessionId: SessionId): Promise<UserId | undefined>',
+        description: 'Who owns one agent session.',
+        parameters: [{ name: 'sessionId', description: 'the agent session.' }],
+        returns: 'the owning account, or `undefined` for a session recorded before auth was mounted.',
+      },
+      {
+        signature: 'abstract listOwnedSessions(userId: UserId): Promise<readonly SessionId[]>',
+        description: 'Every agent session one account owns.',
+        parameters: [{ name: 'userId', description: 'the owning account.' }],
+        returns: 'the owned session ids, most recently recorded first.',
+      },
+      {
+        signature: 'abstract recordWorkspaceOwner(workspaceId: WorkspaceId, userId: UserId): Promise<void>',
+        description: 'Record which account owns one workspace; the workspace twin of recordSessionOwner.',
+        parameters: [{ name: 'workspaceId', description: 'the workspace.' }, { name: 'userId', description: 'the owning account.' }],
+        throws: ['AuthError `unknown-subject` when no such account exists.'],
+      },
+      {
+        signature: 'abstract ownerOfWorkspace(workspaceId: WorkspaceId): Promise<UserId | undefined>',
+        description: 'Who owns one workspace.',
+        parameters: [{ name: 'workspaceId', description: 'the workspace.' }],
+        returns: 'the owning account, or `undefined` for a workspace recorded before auth was mounted.',
+      },
+      {
+        signature: 'abstract listOwnedWorkspaces(userId: UserId): Promise<readonly WorkspaceId[]>',
+        description: 'Every workspace one account owns.',
+        parameters: [{ name: 'userId', description: 'the owning account.' }],
+        returns: 'the owned workspace ids, most recently recorded first.',
+      },
+      {
+        signature: 'abstract audit(entry: AuditEntry): Promise<void>',
+        description: 'Append one audit record. Providers also write their own records for the security events they own, so a caller adds only what it alone knows.',
+        parameters: [{ name: 'entry', description: 'the record; it must not carry a password, code, or token.' }],
+      },
+      {
+        signature: 'abstract readAudit(limit: number): Promise<readonly AuditRecord[]>',
+        description: 'Read the most recent audit records. Without a read path the log would be unverifiable — neither an administration view nor this seam\'s own no-secrets test could confirm what was written.',
+        parameters: [{ name: 'limit', description: 'how many records to return, most recent first; a timestamp tie keeps insertion order.' }],
+        returns: 'the records.',
+      },
+    ],
+  },
+  {
+    key: 'authGate',
+    summary: 'The authentication a transport asks for before it admits a request.',
+    description: 'The authentication a transport asks for before it admits a request.\n\nDeclared here rather than in the package that implements it because both sides of the question live below that package: the gateway needs the Principal to dispatch, and the transport that admits the request needs to resolve one before it does. A transport reads it optionally (`ctx.get(\'authGate\')`) — an absent gate is a single-tenant deployment, not a failure.',
+    methods: [
+      {
+        signature: 'authenticate(headers: RequestHeaders): Promise<Principal | undefined>',
+        description: 'Resolve one request\'s credentials to its principal.',
+        parameters: [{ name: 'headers', description: 'the request\'s headers, in either HTTP representation.' }],
+        returns: 'the authenticated principal, or `undefined` when the request carries no valid credential.',
+      },
+      {
+        signature: 'sessionCookie(authSessionId: string, token: string, expiresAt: number): string',
+        description: 'The `Set-Cookie` value that installs one freshly issued login session.',
+        parameters: [{ name: 'authSessionId', description: 'the issued session\'s id, carried so a logout can revoke exactly this session.' }, { name: 'token', description: 'the issued bearer token.' }, { name: 'expiresAt', description: 'epoch milliseconds at which the token stops authenticating.' }],
+        returns: 'the header value to send.',
+      },
+      {
+        signature: 'clearedCookie(): string',
+        description: 'The `Set-Cookie` value that removes the login session cookie. Sent on logout and on any answer that establishes the caller has no usable session, so a stale cookie stops being resent.',
+        parameters: [],
+        returns: 'the header value to send.',
+      },
+      {
+        signature: 'notifyAddedToGroup(email: string, groupName: string): Promise<void>',
+        description: 'Tell one account it was added to a permission group.\n\nDeclared here because the gateway is the caller: `auth.admin.members.set` is what knows which accounts a save newly added, while the message itself belongs to the gate that already owns every other message this deployment sends. The notice is refused for an address with no account, so it cannot be used to mail a stranger.',
+        parameters: [{ name: 'email', description: 'the account\'s address.' }, { name: 'groupName', description: 'the group the account was added to.' }],
+      },
+      {
+        signature: 'readonly ownership: OwnershipLookup',
+        description: 'Ownership resolution backed by the same provider that authenticated the request.',
+        parameters: [],
       },
     ],
   },
@@ -1049,6 +1283,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Select a provider by the file\'s extension and run one query. Selection is per-query and order-independent; no match throws `LspError` `LSP_UNAVAILABLE`.',
         parameters: [{ name: 'request', description: 'the normalized query.' }, { name: 'signal', description: 'optional cancellation forwarded to the selected provider.' }],
         returns: 'the normalized, closed-union result.',
+      },
+    ],
+  },
+  {
+    key: 'mail',
+    summary: 'Abstract outbound mail service: one delivery operation over one configured sender.',
+    description: 'Abstract outbound mail service: one delivery operation over one configured sender.\n\nThe seam owns no address grammar. `to` reaches the provider as the caller typed it, and the transport behind the provider — an SMTP server\'s `RCPT TO`, a file the tests read back — is the boundary that accepts or rejects it. A same-process caller already satisfies MailMessage by type, and a second address parser here would only disagree with the transport that decides.\n\nThe sender identity is provider configuration, never part of a message: one mounted provider sends as one `from`, so a consumer cannot spoof another sender by composing a different record.',
+    methods: [
+      {
+        signature: 'abstract send(message: MailMessage): Promise<void>',
+        description: 'Deliver one message. The returned promise settles after the provider accepted the message for delivery — an SMTP server acknowledged it, a file write reached the mailbox — which is the strongest fact a sender can report; nothing downstream of that handoff is observable here.',
+        parameters: [{ name: 'message', description: 'the finished message to deliver.' }],
+        returns: 'a promise resolving once the provider accepted the message, rejecting when delivery failed.',
       },
     ],
   },
@@ -2110,6 +2357,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the exact disposer that lifts this restriction.',
       },
       {
+        signature: 'restrictableNames(scope?: ScopeKey): readonly string[]',
+        description: 'The global tool names one scope may name in a restrict filter: everything the scope inherits, before its own registrations and before any restriction already in force.\n\nA caller that computes an `allow` list from a policy needs exactly this set. Deriving it from schemas instead would be wrong twice: that view already has restrictions applied, and it carries the scope\'s own registrations and the reserved presentation transport, all of which restrict refuses to be handed.',
+        parameters: [{ name: 'scope', description: 'the viewing scope (the agent); omitted = the global view.' }],
+        returns: 'the restrictable names, in registration order.',
+      },
+      {
         signature: 'guard(guard: ToolGuard): () => void',
         description: 'Register a monotonic guard after the extensible `tools/pre-execute` waterfall. A plain-context guard applies globally; one registered through `agent.ctx` applies only to that agent. Any matching guard may deny by returning a reason, while no guard can force-allow a call another guard denied. The exact effect disposer is returned for ordered ownership and HMR cleanup.',
         parameters: [{ name: 'guard', description: 'synchronous check; a returned string denies the execution.' }],
@@ -2852,6 +3105,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AdapterRegistrationHandle {\n    (): void;\n    replace(providers: string[]): void;\n}',
   },
   {
+    name: 'AdminGroupView',
+    declaration: 'export interface AdminGroupView {\n    groupId: GroupId;\n    name: string;\n    builtin: boolean;\n    createdAt: number;\n    members: UserId[];\n    rules: AdminRuleView[];\n}',
+  },
+  {
+    name: 'AdminRuleView',
+    declaration: 'export interface AdminRuleView {\n    domain: PermissionDomain;\n    pattern: string;\n    effect: \'allow\' | \'deny\';\n}',
+  },
+  {
+    name: 'AdminUserView',
+    declaration: 'export interface AdminUserView {\n    userId: UserId;\n    email: string;\n    emailVerified: boolean;\n    disabled: boolean;\n    createdAt: number;\n}',
+  },
+  {
     name: 'Agent',
     declaration: 'export interface Agent {\n    readonly id: SessionId;\n    readonly options: AgentOptions;\n    readonly session: Session;\n    readonly inbox: Inbox;\n    readonly status: AgentStatus;\n    readonly ctx: Context;\n    cancel(cause: AgentCancelCause, options?: CancelOptions): void;\n    whenIdle(): Promise<void>;\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n    send(message: UserMessage, target: InboxTarget, wakeup: boolean): void;\n    followup(message: UserMessage): void;\n    steer(message: UserMessage): void;\n    inject(message: UserMessage): void;\n}',
   },
@@ -2956,6 +3221,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AttachmentId = Branded<\'AttachmentId\'>;',
   },
   {
+    name: 'AuditEntry',
+    declaration: 'export interface AuditEntry {\n    readonly event: string;\n    readonly actorUserId?: UserId;\n    readonly subject?: string;\n    readonly detail?: string;\n    readonly ip?: string;\n}',
+  },
+  {
+    name: 'AuditRecord',
+    declaration: 'export interface AuditRecord extends AuditEntry {\n    readonly auditId: string;\n    readonly ts: number;\n}',
+  },
+  {
+    name: 'AuthAdminApi',
+    declaration: 'export interface AuthAdminApi {\n    listUsers(request: AuthorizedRequest<{}>): Promise<RpcResponse<{\n        users: AdminUserView[];\n    }>>;\n    createUser(request: AuthorizedRequest<{\n        email: string;\n        password: string;\n    }>): Promise<RpcResponse<{\n        userId: UserId;\n    }>>;\n    disableUser(request: AuthorizedRequest<{\n        userId: UserId;\n        disabled: boolean;\n    }>): Promise<RpcResponse<{}>>;\n    listGroups(request: AuthorizedRequest<{}>): Promise<RpcResponse<{\n        groups: AdminGroupView[];\n    }>>;\n    createGroup(request: AuthorizedRequest<{\n        name: string;\n    }>): Promise<RpcResponse<{\n        groupId: GroupId;\n    }>>;\n    deleteGroup(request: AuthorizedRequest<{\n        groupId: GroupId;\n    }>): Promise<RpcResponse<{}>>;\n    renameGroup(request: AuthorizedRequest<{\n        groupId: GroupId;\n        name: string;\n    }>): Promise<RpcResponse<{}>>;\n    setMembers(request: AuthorizedRequest<{\n        groupId: GroupId;\n        userIds: UserId[];\n    }>): Promise<RpcResponse<{\n        added: UserId[];\n    }>>;\n    setRules(request: AuthorizedRequest<{\n        groupId: GroupId;\n        rules: AdminRuleView[];\n    }>): Promise<RpcResponse<{}>>;\n}',
+  },
+  {
     name: 'AuthorizationEntry',
     declaration: 'export interface AuthorizationEntry {\n    key: CredentialKey;\n    label: string;\n    methods: readonly AuthorizationMethod[];\n    inFlight: boolean;\n}',
   },
@@ -3002,6 +3279,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AuthorizationStatus',
     declaration: 'export type AuthorizationStatus = \'authorized\' | \'cancelled\';',
+  },
+  {
+    name: 'AuthorizedRequest',
+    declaration: 'export type AuthorizedRequest<P> = RpcRequest<P> & {\n    principal: Principal;\n};',
+  },
+  {
+    name: 'AuthSessionId',
+    declaration: 'export type AuthSessionId = Branded<\'AuthSessionId\'>;',
+  },
+  {
+    name: 'AuthSessionMeta',
+    declaration: 'export interface AuthSessionMeta {\n    readonly ip?: string;\n    readonly userAgent?: string;\n}',
   },
   {
     name: 'BackendRegistry',
@@ -3452,6 +3741,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface GrantRecord {\n    readonly kind: \'grant\';\n    readonly payload: unknown;\n}',
   },
   {
+    name: 'GroupId',
+    declaration: 'export type GroupId = Branded<\'GroupId\'>;',
+  },
+  {
+    name: 'GroupRecord',
+    declaration: 'export interface GroupRecord {\n    readonly groupId: GroupId;\n    readonly name: string;\n    readonly builtin: boolean;\n    readonly createdAt: number;\n}',
+  },
+  {
     name: 'ImageAttachmentLimits',
     declaration: 'export interface ImageAttachmentLimits {\n    maxImageBytes: number;\n    maxImagesPerMessage: number;\n    maxMessageImageBytes: number;\n    maxImagePixels: number;\n    maxImageDimension: number;\n    mediaTypes: readonly ImageMediaType[];\n}',
   },
@@ -3518,6 +3815,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'InvokeRemoteRequest',
     declaration: 'export interface InvokeRemoteRequest {\n    readonly namespace: string;\n    readonly method: string;\n    readonly args: Readonly<Record<string, unknown>>;\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'IssuedAuthSession',
+    declaration: 'export interface IssuedAuthSession {\n    readonly authSessionId: AuthSessionId;\n    readonly token: string;\n    readonly expiresAt: number;\n}',
+  },
+  {
+    name: 'IssuedOneTimeToken',
+    declaration: 'export interface IssuedOneTimeToken {\n    readonly oneTimeTokenId: OneTimeTokenId;\n    readonly secret: string;\n    readonly expiresAt: number;\n}',
   },
   {
     name: 'JobDoneListener',
@@ -3656,6 +3961,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export class LlmRuntime extends Service {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
   {
+    name: 'LoginOutcome',
+    declaration: 'export type LoginOutcome = {\n    readonly ok: true;\n    readonly userId: UserId;\n} | {\n    readonly ok: false;\n    readonly lockedUntil: number | undefined;\n};',
+  },
+  {
     name: 'LspHover',
     declaration: 'export interface LspHover {\n    readonly contents: string;\n    readonly range?: LspRange;\n}',
   },
@@ -3694,6 +4003,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'LspRange',
     declaration: 'export interface LspRange {\n    readonly start: LspPosition;\n    readonly end: LspPosition;\n}',
+  },
+  {
+    name: 'MailMessage',
+    declaration: 'export interface MailMessage {\n    readonly to: string;\n    readonly subject: string;\n    readonly text: string;\n    readonly html?: string;\n}',
   },
   {
     name: 'ManualCompactAgentContext',
@@ -3812,6 +4125,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface OneShotSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'one-shot\';\n    readonly label?: string;\n}',
   },
   {
+    name: 'OneTimeTokenId',
+    declaration: 'export type OneTimeTokenId = Branded<\'OneTimeTokenId\'>;',
+  },
+  {
+    name: 'OneTimeTokenKind',
+    declaration: 'export type OneTimeTokenKind = \'2fa\' | \'verify-email\' | \'reset-password\';',
+  },
+  {
+    name: 'OwnershipLookup',
+    declaration: 'export interface OwnershipLookup {\n    ownerOfSession(sessionId: SessionId): Promise<UserId | undefined>;\n    ownerOfWorkspace(workspaceId: WorkspaceId): Promise<UserId | undefined>;\n}',
+  },
+  {
+    name: 'PermissionDomain',
+    declaration: 'export type PermissionDomain = \'skill\' | \'tool\' | \'model\' | \'settings-section\';',
+  },
+  {
+    name: 'PermissionRule',
+    declaration: 'export interface PermissionRule {\n    readonly domain: PermissionDomain;\n    readonly pattern: string;\n    readonly effect: \'allow\' | \'deny\';\n}',
+  },
+  {
     name: 'PermissionSelect',
     declaration: 'export interface PermissionSelect {\n    options: PresetOption[];\n    currentValue: string;\n}',
   },
@@ -3854,6 +4187,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PreToolDecision',
     declaration: 'export type PreToolDecision = {\n    kind: \'allow\';\n} | {\n    kind: \'deny\';\n    reason: string;\n} | {\n    kind: \'ask\';\n    reason?: string;\n};',
+  },
+  {
+    name: 'Principal',
+    declaration: 'export type Principal = {\n    readonly kind: \'user\';\n    readonly userId: UserId;\n    readonly email: string;\n    readonly groups: readonly GroupId[];\n    readonly admin: boolean;\n} | {\n    readonly kind: \'local\';\n};',
   },
   {
     name: 'ProjectionChangeListener',
@@ -3936,6 +4273,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type RequestHeaderReason = \'initial\' | \'resume\' | \'change\';',
   },
   {
+    name: 'RequestHeaders',
+    declaration: 'export type RequestHeaders = IncomingHttpHeaders | Headers;',
+  },
+  {
     name: 'RequestImageAttachment',
     declaration: 'export interface RequestImageAttachment {\n    variantId: ImageVariantId;\n    attachment: ImageAttachmentRef;\n    data: Uint8Array;\n    mediaType: ImageMediaType;\n    bytes: number;\n    width: number;\n    height: number;\n    depth: \'uchar\';\n    space: \'srgb\';\n    hasAlpha: boolean;\n}',
   },
@@ -3994,6 +4335,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RpcReceipt',
     declaration: 'export type RpcReceipt = {\n    accepted: true;\n} | {\n    accepted: false;\n    reason: \'not-pending\' | \'bad-response\';\n};',
+  },
+  {
+    name: 'RpcRequest',
+    declaration: 'export interface RpcRequest<P> {\n    rpcId: RpcId;\n    payload: P;\n}',
+  },
+  {
+    name: 'RpcResponse',
+    declaration: 'export interface RpcResponse<T> {\n    rpcId: RpcId;\n    result: RpcResult<T>;\n}',
   },
   {
     name: 'RpcResult',
@@ -4849,7 +5198,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolRuntime',
-    declaration: 'export class ToolRuntime extends Service {\n    static inject;\n    static Config: z<Config>;\n    readonly [TOOL_RUNTIME_SCHEDULER]: ToolRuntimeScheduler;\n    constructor(ctx: Context, config: Config = {});\n    presentAs(mode: ToolPresentationMode): () => void;\n    register(definition: ToolDefinition): () => void;\n    restrict(filter: ToolRestriction): () => void;\n    guard(guard: ToolGuard): () => void;\n    get(name: string, scope?: ScopeKey): ToolDefinition | undefined;\n    schemas(scope?: ScopeKey): ToolSchema[];\n    executionMode(exec: ToolExecutionInput): ToolExecutionMode;\n    async execute(exec: ToolExecutionInput): Promise<ToolExecutionResult>;\n}',
+    declaration: 'export class ToolRuntime extends Service {\n    static inject;\n    static Config: z<Config>;\n    readonly [TOOL_RUNTIME_SCHEDULER]: ToolRuntimeScheduler;\n    constructor(ctx: Context, config: Config = {});\n    presentAs(mode: ToolPresentationMode): () => void;\n    register(definition: ToolDefinition): () => void;\n    restrict(filter: ToolRestriction): () => void;\n    restrictableNames(scope?: ScopeKey): readonly string[];\n    guard(guard: ToolGuard): () => void;\n    get(name: string, scope?: ScopeKey): ToolDefinition | undefined;\n    schemas(scope?: ScopeKey): ToolSchema[];\n    executionMode(exec: ToolExecutionInput): ToolExecutionMode;\n    async execute(exec: ToolExecutionInput): Promise<ToolExecutionResult>;\n}',
   },
   {
     name: 'ToolRuntimeScheduler',
@@ -4936,12 +5285,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface UpdateTeamTaskRequest {\n    readonly taskId: TeamTaskId;\n    readonly expectedRevision: number;\n    readonly action: TeamTaskAction;\n    readonly subject?: string;\n    readonly description?: string;\n    readonly blockedBy?: readonly TeamTaskId[];\n    readonly writeScopes?: readonly string[];\n    readonly owner?: string;\n}',
   },
   {
+    name: 'UserId',
+    declaration: 'export type UserId = Branded<\'UserId\'>;',
+  },
+  {
     name: 'UserMessage',
     declaration: 'export interface UserMessage extends Message {\n    readonly role: \'user\';\n}',
   },
   {
     name: 'UserQuestionProvider',
     declaration: 'export interface UserQuestionProvider {\n    ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer>;\n}',
+  },
+  {
+    name: 'UserRecord',
+    declaration: 'export interface UserRecord {\n    readonly userId: UserId;\n    readonly email: string;\n    readonly emailVerifiedAt: number | undefined;\n    readonly disabledAt: number | undefined;\n    readonly createdAt: number;\n}',
   },
   {
     name: 'WebBootEntry',

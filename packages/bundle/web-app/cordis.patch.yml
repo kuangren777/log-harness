@@ -297,6 +297,12 @@
     - id: ui-trajectory
       name: '@deepseek-ai/dsh-client-ui-trajectory'
 
+    # The browser sign-in surface. Harmless without authentication: its first
+    # call reaches for the request gate's `/auth` channel, and a deployment
+    # that mounts no gate has no such route, so every surface stays hidden.
+    - id: ui-auth
+      name: '@deepseek-ai/dsh-client-ui-auth'
+
 # ── the agent plane moves behind agent presets ─────────────────────────────
 #
 # Every row below composes what ONE agent contributes to the host registries:

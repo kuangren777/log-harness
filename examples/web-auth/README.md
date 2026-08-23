@@ -13,7 +13,11 @@ The bootstrap command comes first and runs once. It creates the first administra
 
 It mounts three rows, and all three are required. `dsh-auth-sqlite` stores accounts, groups, rules, sessions, one-time secrets, and the audit log. A mail provider delivers the sign-in code and the confirmation and reset links. [`dsh-auth-gate`](../../packages/auth/auth-gate/README.md) serves the `/auth` channel and answers the transport's per-request question. A composition that mounts the provider without the gate means to authenticate and cannot, so the host refuses to serve at all rather than serving every caller anonymously.
 
+Layering the overlay is what puts a login screen in front of the app. The shipped Web composition already carries [`dsh-client-ui-auth`](../../packages/client/ui-auth/README.md), which stays invisible while nothing serves the gate's `/auth` channel; with the overlay on, the browser opens on the sign-in card instead of a conversation, and the sidebar foot grows an account row with **Sign out** and **Sign out everywhere**.
+
 Signing in takes two steps: the password, then a six-digit code sent by mail. The browser is left holding an `HttpOnly; SameSite=Strict` session cookie, and every `/api` request and event-stream upgrade is authenticated from it. What an authenticated caller may then reach is the [gateway's policy table](../../packages/host/apiproxy/README.md), not this overlay.
+
+The reset and confirmation links the gate mails resolve against `baseUrl` and land back in the same app, so that value must name the origin the browser actually reaches.
 
 ## Before anyone else signs in
 

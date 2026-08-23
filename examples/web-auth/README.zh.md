@@ -13,7 +13,11 @@ bootstrap 命令排在前面，且只运行一次。它在 `$DSH_HOME/auth.db` �
 
 它挂载三行，三行缺一不可。`dsh-auth-sqlite` 保存账户、组、规则、会话、一次性凭据与审计日志。mail provider 投递登录验证码以及确认与重置链接。[`dsh-auth-gate`](../../packages/auth/auth-gate/README.zh.md) 提供 `/auth` 通道，并回答传输层对每个请求提出的问题。挂载了 provider 却没有 gate 的组合意图认证却无法认证，因此 host 宁可完全停止服务，也不会把每个调用方都当作匿名者来服务。
 
+叠加这个 overlay，正是应用前面出现登录界面的原因。已发布的 Web 组合本就带着 [`dsh-client-ui-auth`](../../packages/client/ui-auth/README.zh.md)，在没有任何东西服务门的 `/auth` 通道时它保持不可见；overlay 生效后，浏览器打开的是登录卡片而不是会话，侧边栏底部也多出一行账号，带**退出登录**与**退出全部设备**。
+
 登录分两步：先密码，再是邮件送达的六位验证码。浏览器随后持有一个 `HttpOnly; SameSite=Strict` 的会话 cookie，每个 `/api` 请求与事件流升级都据它认证。已认证的调用方接下来能触达什么，由[网关的策略表](../../packages/host/apiproxy/README.zh.md)决定，而不是这个 overlay。
+
+门发出的重置与确认链接以 `baseUrl` 为基准解析，并落回同一个应用，因此该值必须指向浏览器实际访问的 origin。
 
 ## 在其他人登录之前
 
