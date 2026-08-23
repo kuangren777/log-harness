@@ -352,14 +352,15 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
   // roster mounts it directly per session rather than as a row of the booted
   // tree. The row's documented fallback is the environment, so pin that: the
   // whole scaffold lifetime, not just the boot, since presets mount when a
-  // session is created. Without this a developer's real ~/.dsh/skills silently
-  // enters replay requests and goldens while CI sees none. `DSH_HOME` follows
-  // the resolved harness home so a scaffold sharing another's home — the
-  // cross-port persistence scenario — pins the same roots the settings and
-  // credentials rows were configured with.
+  // session is created. Without this a developer's real ~/.dsh, ~/.agents, or
+  // ~/.claude skills silently enter replay requests and goldens while CI sees
+  // none. `DSH_HOME` follows the resolved harness home so a scaffold sharing
+  // another's home — the cross-port persistence scenario — pins the same roots
+  // the settings and credentials rows were configured with.
   const skillRootEnvironment = {
     DSH_HOME: harnessHome,
     DSH_AGENTS_HOME: join(workspaceCwd, '.agents-home'),
+    DSH_CLAUDE_HOME: join(workspaceCwd, '.claude-home'),
     DSH_BUNDLED_SKILL_DIR: join(workspaceCwd, '.bundled-skills'),
   }
   const originalSkillRootEnvironment = Object.fromEntries(

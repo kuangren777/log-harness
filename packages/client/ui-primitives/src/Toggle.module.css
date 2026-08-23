@@ -1,0 +1,62 @@
+/* 28px-high compact control, sized like the Button "sm" capsule; no
+ * dedicated figma switch node — geometry and the 32x18 track/14px knob
+ * proportions are ours. */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 28px;
+  border: none;
+  border-radius: 14px;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.toggle:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.label {
+  user-select: none;
+}
+
+.track {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--dsw-alias-border-l2);
+  transition: background-color 120ms var(--ds-ease-in-out);
+}
+
+.track[data-checked] {
+  background: var(--dsw-alias-button-primary-fill);
+}
+
+.knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-layer-1);
+  transition: transform 120ms var(--ds-ease-in-out);
+}
+
+.track[data-checked] .knob {
+  transform: translateX(14px);
+}

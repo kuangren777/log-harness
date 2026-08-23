@@ -1,0 +1,50 @@
+- dialog "Settings":
+  - navigation:
+    - text: Settings
+    - button "General":
+      - img
+      - text: General
+    - button "Models":
+      - img
+      - text: Models
+    - button "Skills":
+      - img
+      - text: Skills
+    - button "Plugins":
+      - img
+      - text: Plugins
+    - button "Agent presets":
+      - img
+      - text: Agent presets
+  - button "Open configuration file"
+  - button "Close":
+    - img
+    - text: Close
+  - heading "Skills" [level=3]
+  - paragraph: Every skill this project discovers, and who may invoke it.
+  - paragraph: Discovered for {{cwd}}/workspace
+  - list:
+    - listitem:
+      - heading "Project (.dsh/skills)" [level=4]
+      - paragraph: {{cwd}}/workspace/.dsh/skills
+      - list:
+        - listitem:
+          - text: journey-project Only the project defines this one
+          - switch "Model may invoke journey-project" [checked]: Model
+          - switch "User may invoke journey-project" [checked]: User
+        - listitem:
+          - text: journey-shared Project copy of the shared skill
+          - switch "Model may invoke journey-shared" [checked]: Model
+          - switch "User may invoke journey-shared" [checked]: User
+    - listitem:
+      - heading "User (.dsh/skills)" [level=4]
+      - paragraph: {{cwd}}/.dsh-home/skills
+      - list:
+        - listitem:
+          - text: journey-shared User copy of the shared skill shadowed by a nearer definition
+          - switch "Model may invoke journey-shared" [checked] [disabled]: Model
+          - switch "User may invoke journey-shared" [checked] [disabled]: User
+        - listitem:
+          - text: journey-user Only the user home defines this one
+          - switch "Model may invoke journey-user" [checked]: Model
+          - switch "User may invoke journey-user" [checked]: User
