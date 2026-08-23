@@ -15,7 +15,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { AppFrame } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
 import type { AppFrameProps } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
-import { SIDEBAR_COLLAPSED } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
+import { PHONE_MAX_WIDTH, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
 import { createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
 import type {
   SessionId, SessionListState, WorkspaceListState,
@@ -52,13 +52,25 @@ function hookOf<T>(inst: { subscribe: (fn: () => void) => () => void; getSnapsho
   return function useSelector<S>(sel: (s: T) => S): S { return sel(useSyncExternalStore(inst.subscribe, inst.getSnapshot)) }
 }
 
+// The locale seat the renderer binds in production; the spec asserts against
+// the key so a copy change never moves an assertion.
+const translate = ((key: string) => key) as AppFrameProps['t']
+
 function mountFrame() {
   window.innerWidth = frameWidth // first-render viewport source before the observer fires
   const instance = createLayoutStore().create()
   const slotCalls: { key: string; props: unknown }[] = []
   const renderSlot = ((key: string, owner: object) => {
     slotCalls.push({ key, props: owner })
-    if (key === 'sidebar') return <div data-testid="sidebar-content" />
+    // Two controls so the drawer's Tab cycle has a real first and last stop.
+    if (key === 'sidebar') {
+      return (
+        <div data-testid="sidebar-content">
+          <button type="button">sidebar first</button>
+          <button type="button">sidebar last</button>
+        </div>
+      )
+    }
     if (key === 'conversation') return <div data-testid="center-content" />
     if (key === 'details') return <div data-testid="details-content" />
     if (key === 'conversation.empty') return <div data-testid="empty-content" />
@@ -88,6 +100,7 @@ function mountFrame() {
       useSessions={useSessions}
       useWorkspaces={((sel: (s: WorkspaceListState) => unknown) => sel(workspaceState)) as never}
       SessionProvider={SessionProviderStub}
+      t={translate}
     />
   )
   const utils = render(element())
@@ -394,5 +407,135 @@ describe('AppFrame — unmount with an in-flight resize frame', () => {
     frameWidth = 1250
     act(() => { fireResize?.(); fireResize?.(); vi.advanceTimersByTime(20) })
     expect(tracks(frame)).toEqual([280, 330])
+  })
+})
+
+describe('AppFrame — phone form', () => {
+  const PHONE_WIDTH = 390
+
+  /** The drawer toggle in the phone bar, by the accessible name the frame gives it. */
+  function toggleOf(frame: HTMLElement): HTMLButtonElement {
+    const button = frame.querySelector<HTMLButtonElement>('[class*="phoneToggle"]')
+    if (button === null) throw new Error('the phone bar rendered no toggle')
+    return button
+  }
+
+  function mountPhone() {
+    frameWidth = PHONE_WIDTH
+    const mounted = mountFrame()
+    return { ...mounted, toggle: toggleOf(mounted.frame) }
+  }
+
+  it('collapses to one conversation track with no drag handles', () => {
+    const { frame } = mountPhone()
+    expect(frame.style.gridTemplateColumns).toBe('minmax(0, 1fr)')
+    expect(frame.getAttribute('data-phone')).toBe('true')
+    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
+  })
+
+  it('keeps the three-column form one pixel above the breakpoint', () => {
+    frameWidth = PHONE_MAX_WIDTH + 1
+    const { frame } = mountFrame()
+    expect(frame.hasAttribute('data-phone')).toBe(false)
+    expect(tracks(frame)).toEqual([SIDEBAR_COLLAPSED, 0])
+  })
+
+  it('renders the sidebar wide inside the drawer rather than as the rail', () => {
+    const { slotCalls } = mountPhone()
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props)
+      .toEqual({ collapsed: false, width: SIDEBAR_DEFAULT })
+  })
+
+  it('names the drawer as a modal dialog and the toggle by its next action', () => {
+    const { frame, toggle } = mountPhone()
+    const drawer = frame.querySelector('[class*="sidebarCol"]')!
+    expect(drawer.getAttribute('role')).toBe('dialog')
+    expect(drawer.getAttribute('aria-modal')).toBe('true')
+    expect(drawer.getAttribute('aria-label')).toBe('drawer.label')
+    expect(toggle.getAttribute('aria-label')).toBe('drawer.open')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('the toggle opens the drawer, moves focus into it, and renders the backdrop', () => {
+    const { frame, toggle, getByText } = mountPhone()
+    expect(frame.querySelector('[data-drawer-backdrop]')).toBeNull()
+    act(() => { toggle.click() })
+    expect(frame.getAttribute('data-drawer-open')).toBe('true')
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(toggle.getAttribute('aria-label')).toBe('drawer.close')
+    expect(frame.querySelector('[data-drawer-backdrop]')).not.toBeNull()
+    expect(document.activeElement).toBe(getByText('sidebar first'))
+  })
+
+  it('Escape closes the drawer and returns focus to the toggle', () => {
+    const { frame, toggle } = mountPhone()
+    act(() => { toggle.focus(); toggle.click() })
+    act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+    expect(frame.hasAttribute('data-drawer-open')).toBe(false)
+    expect(document.activeElement).toBe(toggle)
+  })
+
+  it('a backdrop tap closes the drawer', () => {
+    const { frame, toggle } = mountPhone()
+    act(() => { toggle.focus(); toggle.click() })
+    const backdrop = frame.querySelector<HTMLElement>('[data-drawer-backdrop]')!
+    act(() => { backdrop.click() })
+    expect(frame.hasAttribute('data-drawer-open')).toBe(false)
+    expect(document.activeElement).toBe(toggle)
+  })
+
+  it('Tab cycles inside the open drawer instead of walking into the conversation', () => {
+    const { toggle, getByText } = mountPhone()
+    act(() => { toggle.focus(); toggle.click() })
+    const first = getByText('sidebar first')
+    const last = getByText('sidebar last')
+
+    // From the last stop, Tab wraps to the first.
+    act(() => { last.focus() })
+    const forward = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true })
+    act(() => { document.dispatchEvent(forward) })
+    expect(forward.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(first)
+
+    // From the first, Shift+Tab wraps to the last.
+    const backward = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true })
+    act(() => { document.dispatchEvent(backward) })
+    expect(backward.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(last)
+
+    // A Tab in the middle of the cycle is the browser's to handle.
+    act(() => { first.focus() })
+    const middle = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true })
+    act(() => { document.dispatchEvent(middle) })
+    expect(middle.defaultPrevented).toBe(false)
+  })
+
+  it('leaves keys other than Escape and Tab alone', () => {
+    const { frame, toggle } = mountPhone()
+    act(() => { toggle.click() })
+    const other = new KeyboardEvent('keydown', { key: 'a', cancelable: true })
+    act(() => { document.dispatchEvent(other) })
+    expect(other.defaultPrevented).toBe(false)
+    expect(frame.getAttribute('data-drawer-open')).toBe('true')
+  })
+
+  it('a close that followed focus leaving the drawer does not yank it back', () => {
+    const { frame, toggle } = mountPhone()
+    const outside = document.createElement('button')
+    document.body.append(outside)
+    act(() => { toggle.focus(); toggle.click() })
+    act(() => { outside.focus() })
+    act(() => { toggle.click() })
+    expect(frame.hasAttribute('data-drawer-open')).toBe(false)
+    expect(document.activeElement).toBe(outside)
+    outside.remove()
+  })
+
+  it('widening past the breakpoint restores the three-column frame', () => {
+    const { frame } = mountPhone()
+    frameWidth = 1920
+    act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    expect(frame.hasAttribute('data-phone')).toBe(false)
+    expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 0])
   })
 })

@@ -471,3 +471,23 @@
   opacity: 0.7;
   color: var(--dsw-alias-state-error-primary);
 }
+
+/* Touch-primary pointers: the composer's controls are the ones a phone user
+   aims at most, and the figma circles are cursor-sized. The circles grow to
+   the 44px tap-target floor; the native <select> chips grow in height only,
+   because their width is their label and the row already wraps. */
+@media (hover: none) and (pointer: coarse) {
+  .add {
+    width: 44px;
+    height: 44px;
+  }
+
+  .primary {
+    width: 44px;
+    height: 44px;
+  }
+
+  .select {
+    height: 44px;
+  }
+}

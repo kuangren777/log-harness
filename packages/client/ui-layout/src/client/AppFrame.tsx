@@ -9,19 +9,31 @@
  * entries retain identity. Pure component: everything arrives
  * through the three framework shares — zero cordis or framework imports,
  * zero self-made hooks.
+ *
+ * At or below PHONE_MAX_WIDTH the frame leaves that form for its phone
+ * layout: one full-width conversation column under a bar carrying the drawer
+ * toggle, the sidebar slot rendered wide inside an off-canvas drawer, and the
+ * details column out of the flow. The drawer is modal — Escape, the backdrop
+ * and the toggle all close it, Tab cycles inside it (drawer.ts), and closing
+ * it returns focus where it was when it opened.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-import { computeColumns, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
+import { IconPanelLeftOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import {
+  computeColumns, drawerWidth, PHONE_MAX_WIDTH, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT,
+} from './columns.ts'
+import { focusableWithin, trapTarget } from './drawer.ts'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
-/** Full composed props: runtime share + child-slot render share + store share. */
+/** Full composed props: runtime share + child-slot render share + store share + the frame's own copy. */
 export type AppFrameProps =
   & PropsRuntime<'root'>
   & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'shell.overlay'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
+  & PropsLocale<'layout'>
 
 /** Center column grid item (session-body building block). */
 function CenterColumn(props: { children?: ReactNode }) {
@@ -83,12 +95,52 @@ function DragHandle(props: { side: 'sidebar' | 'details'; left: number; onStart:
   )
 }
 
+/**
+ * Keyboard containment for the open phone drawer: Escape closes it, Tab
+ * cycles inside it, entering it lands on its first control, and leaving it
+ * restores the focus the opening gesture took — the toggle, in every path a
+ * user can reach it by.
+ * @param open - whether the drawer is currently revealed.
+ * @param panel - the drawer element.
+ * @param onClose - close request raised by Escape.
+ */
+function useDrawerContainment(
+  open: boolean,
+  panel: React.RefObject<HTMLElement | null>,
+  onClose: () => void,
+): void {
+  useEffect(() => {
+    if (!open) return
+    const root = panel.current
+    /* v8 ignore next -- the drawer element renders unconditionally in phone mode, so the ref is attached by effect time. */
+    if (root === null) return
+    const restore = document.activeElement
+    focusableWithin(root)[0]?.focus()
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') { onClose(); return }
+      if (event.key !== 'Tab') return
+      const target = trapTarget(root, document.activeElement, event.shiftKey)
+      if (target === undefined) return
+      event.preventDefault()
+      target.focus()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      // Only take focus back if the drawer still holds it: a close that
+      // followed the user clicking into the conversation must not yank it.
+      if (root.contains(document.activeElement) && restore instanceof HTMLElement) restore.focus()
+    }
+  }, [onClose, open, panel])
+}
+
 /** The three-column frame (see module doc). */
 export function AppFrame({
   useStore,
   useSessions,
   actions,
   renderSlot,
+  t,
 }: AppFrameProps) {
   const panels = useStore(s => s)
   const detailsSession = useSessions((s) => {
@@ -135,6 +187,11 @@ export function AppFrame({
   // absorbs the squeeze.
   const narrow = viewport < SIDEBAR_AUTO_COLLAPSE
   useEffect(() => { actions.setNarrow(narrow) }, [actions, narrow])
+  // The phone form reuses the narrow override as its drawer state: below the
+  // auto-collapse breakpoint toggleSidebar already flips exactly that flag,
+  // so the drawer, the sidebar's own toggle and ctx.layout stay one control.
+  const phone = viewport <= PHONE_MAX_WIDTH
+  const drawerOpen = phone && panels.narrowExpanded
   const sidebarCollapsed = narrow ? !panels.narrowExpanded : panels.sidebar === 0
   const sidebarPreference = sidebarCollapsed
     ? 0
@@ -161,26 +218,67 @@ export function AppFrame({
     actions.setDetails(detailsBase.current - dx)
   }, [actions])
 
+  const toggleSidebar = useCallback(() => { actions.toggleSidebar() }, [actions])
+  const drawer = useRef<HTMLDivElement | null>(null)
+  useDrawerContainment(drawerOpen, drawer, toggleSidebar)
+
+  // Phone: one full-width column under the toggle bar, the drawer taken out
+  // of the grid by CSS. Desktop: the solved three tracks.
+  const phoneWidth = drawerWidth(viewport)
+
   return (
     <div
       ref={frameRef}
       className={css.frame}
-      style={{ gridTemplateColumns: `${cols.sidebar}px minmax(0, 1fr) ${cols.details}px` }}
+      style={{
+        gridTemplateColumns: phone
+          ? 'minmax(0, 1fr)'
+          : `${cols.sidebar}px minmax(0, 1fr) ${cols.details}px`,
+      }}
       data-sidebar-collapsed={sidebarCollapsed || undefined}
       data-details-collapsed={cols.details === 0 || undefined}
       data-dragging={dragging || undefined}
+      data-phone={phone || undefined}
+      data-drawer-open={drawerOpen || undefined}
     >
-      <div className={css.sidebarCol}>
+      {phone && (
+        <header className={css.phoneBar}>
+          <button
+            type="button"
+            className={css.phoneToggle}
+            aria-label={drawerOpen ? t('drawer.close') : t('drawer.open')}
+            aria-expanded={drawerOpen}
+            aria-haspopup="dialog"
+            onClick={toggleSidebar}
+          >
+            <IconPanelLeftOutline16 size={20} />
+          </button>
+        </header>
+      )}
+      <div
+        ref={drawer}
+        className={css.sidebarCol}
+        role={phone ? 'dialog' : undefined}
+        aria-modal={phone ? true : undefined}
+        aria-label={phone ? t('drawer.label') : undefined}
+      >
         {/* Render-site slot call with live concession output: a closed
             sidebar keeps the mounted slot at the compact-rail width, and the
             component sees its rendered state as owner params decided here
             (collapsed follows the resolved rail, so a derived auto-collapse
-            renders the rail UI too). */}
+            renders the rail UI too). The drawer has no rail state — a phone
+            never shows the 56px column — so it always renders wide. */}
         {renderSlot('sidebar', {
-          collapsed: sidebarCollapsed,
-          width: cols.sidebar,
+          collapsed: phone ? false : sidebarCollapsed,
+          width: phone ? phoneWidth : cols.sidebar,
         })}
       </div>
+      {drawerOpen && (
+        // Pointer-only affordance, and deliberately not a control: Escape and
+        // the toggle are the keyboard paths, so exposing a third one would
+        // only add an unnamed tab stop in front of the drawer's own content.
+        <div className={css.drawerBackdrop} aria-hidden="true" data-drawer-backdrop onClick={toggleSidebar} />
+      )}
       <>
         {/* Both column occupants stay at fixed tree positions from first
             paint — no loading gate: a bare status line reads worse than
@@ -193,9 +291,10 @@ export function AppFrame({
       <div className={css.overlayLayer} data-shell-overlay>
         {renderSlot('shell.overlay', {})}
       </div>
-      {/* The collapsed rail is fixed-width: no resize handle while closed. */}
-      {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
-      {cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
+      {/* The collapsed rail is fixed-width: no resize handle while closed, and
+          the phone form has no resizable track at all. */}
+      {!phone && !sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
+      {!phone && cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
     </div>
   )
 }

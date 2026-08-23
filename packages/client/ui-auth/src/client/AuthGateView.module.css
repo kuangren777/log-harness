@@ -102,3 +102,29 @@
   outline: 2px solid var(--dsw-alias-brand-primary);
   outline-offset: 1px;
 }
+
+/* Phone form (width matches ui-layout's PHONE_MAX_WIDTH). The card already
+   sizes itself to the viewport; what changes is the frame around it — the
+   backdrop's insets come down to what a 360px screen can spare, it honours
+   the display's own safe areas, and the card is pinned to the top so a step
+   taller than the screen scrolls instead of being clipped at both ends (a
+   centered flex item overflows its scroll container's start edge). */
+@media (max-width: 640px) {
+  .backdrop {
+    align-items: flex-start;
+    padding:
+      max(16px, env(safe-area-inset-top, 0px))
+      max(16px, env(safe-area-inset-right, 0px))
+      max(16px, env(safe-area-inset-bottom, 0px))
+      max(16px, env(safe-area-inset-left, 0px));
+  }
+
+  .card {
+    padding: 20px;
+  }
+
+  /* The step-switching links are text buttons; give them the tap-target box. */
+  .link {
+    min-height: 44px;
+  }
+}

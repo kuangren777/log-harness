@@ -8,6 +8,26 @@ body,
   margin: 0;
 }
 
+/* Mobile browsers resolve a percentage height against the LARGE viewport — the
+   one with the URL bar retracted — so the frame's bottom row, the composer,
+   starts life underneath browser chrome and stays there until the user
+   scrolls. `dvh` tracks the visible viewport as that chrome and the on-screen
+   keyboard move it, which is what keeps the composer reachable while typing.
+   The percentage above remains the fallback for engines without the unit. */
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
+
+/* The app is a fixed frame with its own scroll regions; letting the document
+   itself rubber-band would pull-to-refresh the whole client away mid-turn. */
+body {
+  overscroll-behavior: none;
+}
+
 body {
   font-family: var(
     --dsw-font-family,

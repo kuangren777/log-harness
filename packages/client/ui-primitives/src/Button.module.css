@@ -25,6 +25,17 @@
   height: 36px;
 }
 
+/* Touch-primary pointers only (a touchscreen laptop driven by a mouse still
+   reports `fine`): 44px is the tap-target floor iOS and Android both publish,
+   and the figma 36px capsule is a cursor-sized control. The compact `.sm`
+   form keeps its own height — it exists for rows that are already dense, and
+   growing it there would break the row rather than the finger's aim. */
+@media (pointer: coarse) {
+  .md {
+    height: 44px;
+  }
+}
+
 /* Compact height for dense rows; no dedicated figma node (Icon_container
  * 28x28 is the icon-only form) — geometry is ours. */
 .sm {

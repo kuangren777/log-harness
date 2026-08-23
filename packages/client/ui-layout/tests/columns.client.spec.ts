@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CENTER_MIN, clampWidth, computeColumns,
+  CENTER_MIN, clampWidth, computeColumns, drawerWidth,
   DETAILS_DEFAULT, DETAILS_MIN, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, SIDEBAR_MIN,
 } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
 
@@ -91,5 +91,16 @@ describe('computeColumns — degenerate viewports', () => {
     // Reaches step 3's auto-close with the compact rail sidebar.
     expect(computeColumns(500, closed(300), open(DETAILS_DEFAULT)))
       .toEqual({ sidebar: SIDEBAR_COLLAPSED, center: 500 - SIDEBAR_COLLAPSED, details: 0 })
+  })
+})
+
+describe('drawerWidth', () => {
+  it('keeps a peek of the conversation beside the drawer at the phone targets', () => {
+    expect(drawerWidth(390)).toBe(SIDEBAR_DEFAULT)
+    expect(drawerWidth(360)).toBe(SIDEBAR_DEFAULT)
+  })
+
+  it('never goes below the sidebar floor, even when the peek no longer fits', () => {
+    expect(drawerWidth(300)).toBe(SIDEBAR_MIN)
   })
 })

@@ -117,3 +117,106 @@
 .overlayLayer > * {
   pointer-events: auto;
 }
+
+/* ─── Phone form (viewport <= PHONE_MAX_WIDTH) ────────────────────────────
+   One conversation column under a toggle bar; the sidebar column leaves the
+   grid for an off-canvas drawer and the details column leaves the flow
+   entirely (a phone never opens it). Safe-area insets are honoured here
+   rather than in each occupant: the frame is the only box that touches the
+   display edges. */
+
+.frame[data-phone] {
+  grid-template-rows: auto minmax(0, 1fr);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.frame[data-phone] .centerCol {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Mounted, never shown: the details panel has no phone form, and taking it
+   out of display also takes its controls out of the tab order. */
+.frame[data-phone] .detailsCol {
+  display: none;
+}
+
+/* Drawer bar: the only chrome the phone form adds. 44px is the tap-target
+   floor, and the top inset lives here because this is the topmost box. */
+.phoneBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 4px;
+  padding-top: env(safe-area-inset-top, 0px);
+  box-sizing: content-box;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-specific-sidebar-fill);
+}
+
+.phoneToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.phoneToggle:active {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.phoneToggle:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: -2px;
+}
+
+/* Off-canvas drawer. Absolute rather than fixed so the frame's own
+   `overflow: hidden` clips the parked column instead of leaving it able to
+   widen the page. `visibility` is what removes the parked drawer from the tab
+   order and the accessibility tree; it is switched at the END of the
+   slide-out and at the START of the slide-in, so neither direction hides the
+   animation. */
+.frame[data-phone] .sidebarCol {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  visibility: hidden;
+  border-right: none;
+  box-shadow: var(--dsw-shadow-lv3);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  transform: translateX(-100%);
+  transition:
+    transform var(--ds-transition-duration-slow) var(--ds-ease-in-out),
+    visibility 0s linear var(--ds-transition-duration-slow);
+}
+
+.frame[data-phone][data-drawer-open] .sidebarCol {
+  visibility: visible;
+  transform: translateX(0);
+  transition: transform var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.drawerBackdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  background: var(--dsw-alias-bg-mask-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame[data-phone] .sidebarCol {
+    transition: none;
+  }
+}

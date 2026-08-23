@@ -37,7 +37,16 @@ async function bench() {
 
 describe('ui-layout client apply', () => {
   it('declares its service dependencies', () => {
-    expect(inject).toEqual(['slots', 'theme'])
+    expect(inject).toEqual(['slots', 'theme', 'locale'])
+  })
+
+  it('registers the phone-chrome dictionaries under its own namespace', async () => {
+    const { ctx } = await bench()
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const locale = ctx.get('locale') as LocaleRuntime
+    expect(locale.bind('layout')('drawer.open')).toBe('Open sidebar')
+    await fiber.dispose()
   })
 
   it('provides ctx.layout and registers AppFrame into root with the three child declarations', async () => {

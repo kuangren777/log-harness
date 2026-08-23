@@ -10,7 +10,10 @@
  * SIDEBAR_COLLAPSED control rail while closed details resolve to zero width.
  * The SIDEBAR_AUTO_COLLAPSE breakpoint is consumed by AppFrame, which decides
  * the effective sidebar preference before solving; the solver itself stays
- * breakpoint-free.
+ * breakpoint-free. PHONE_MAX_WIDTH is the second breakpoint AppFrame reads:
+ * at or below it the frame leaves the three-column form entirely (one full
+ * width conversation column, the sidebar as an off-canvas drawer), so the
+ * solver is not consulted at all.
  */
 
 /** Resolved widths for one frame; center may drop below CENTER_MIN only at the final fallback. */
@@ -31,6 +34,18 @@ export const SIDEBAR_COLLAPSED = 56
  * LG breakpoint); a manual toggle below it re-expands over the squeezed center
  * (stores.ts narrowExpanded). */
 export const SIDEBAR_AUTO_COLLAPSE = 1024
+/**
+ * Viewport width at or below which the frame renders its phone form: a single
+ * full-width conversation column with the sidebar as an off-canvas drawer.
+ * Chosen above the 390x844 and 360x640 portrait targets and below the
+ * narrowest tablet portrait width, so every wider viewport keeps the
+ * three-column desktop frame it had.
+ */
+export const PHONE_MAX_WIDTH = 640
+
+/** Conversation strip left uncovered beside an open drawer, as a tap-to-close target. */
+export const PHONE_DRAWER_PEEK = 56
+
 /** Details drag clamp floor. */
 export const DETAILS_MIN = 300
 /** Details drag clamp ceiling. */
@@ -74,4 +89,16 @@ export function computeColumns(viewport: number, sidebar: number, details: numbe
   // Step 3: auto-close details (derived — preferences untouched); center
   // absorbs any remaining deficit (may drop below CENTER_MIN).
   return { sidebar: s, center: Math.max(0, viewport - s), details: 0 }
+}
+
+/**
+ * Rendered width of the phone drawer. The sidebar's own default, kept off the
+ * right edge so the conversation stays visible behind the backdrop, and never
+ * narrower than the sidebar's contract floor (its content does not reflow
+ * below it).
+ * @param viewport - available frame width in px.
+ * @returns the drawer's rendered width in px.
+ */
+export function drawerWidth(viewport: number): number {
+  return Math.min(SIDEBAR_DEFAULT, Math.max(SIDEBAR_MIN, viewport - PHONE_DRAWER_PEEK))
 }

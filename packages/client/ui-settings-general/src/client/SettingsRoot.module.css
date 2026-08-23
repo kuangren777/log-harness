@@ -224,3 +224,81 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* Phone form (width matches ui-layout's PHONE_MAX_WIDTH, where the shell drops
+   to its single-column frame): the two-pane desktop panel cannot survive 360px
+   — a 188px nav rail would leave the options column narrower than one setting
+   row. The panel goes full-bleed, the nav rail becomes a horizontal chip
+   scroller above the options, and the close button leaves the flow for the
+   panel's top-right corner so the nav band starts at the very top. */
+@media (max-width: 640px) {
+  .panel {
+    position: relative;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    border-radius: 0;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
+  }
+
+  .nav {
+    flex: none;
+    width: auto;
+    gap: 10px;
+    padding: 12px 0 0;
+  }
+
+  /* Room for the corner close button, which is out of flow here. */
+  .navTitle {
+    padding: 0 56px 0 16px;
+  }
+
+  .navList {
+    flex-direction: row;
+    gap: 6px;
+    padding: 0 16px 4px;
+    overflow-x: auto;
+    /* The row is a horizontal scroller by necessity; a bar over 40px cells
+       would eat the label, and the overflowing chips are their own affordance. */
+    scrollbar-width: none;
+  }
+
+  .navCell {
+    flex: none;
+    min-height: 44px;
+  }
+
+  .navLabel {
+    flex: none;
+  }
+
+  .header {
+    position: absolute;
+    top: env(safe-area-inset-top, 0px);
+    right: 0;
+    z-index: 1;
+    align-items: center;
+    gap: 4px;
+    height: auto;
+    padding: 8px;
+  }
+
+  /* Tap-target floor; the desktop 28px circle is a pointer-sized control. */
+  .close {
+    width: 44px;
+    height: 44px;
+    border-radius: 44px;
+  }
+
+  .options {
+    padding: 0 16px 16px;
+  }
+
+  .trigger.rail {
+    width: 44px;
+    height: 44px;
+  }
+}

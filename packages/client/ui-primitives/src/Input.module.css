@@ -9,6 +9,13 @@
   background: var(--dsw-alias-bg-layer-1);
 }
 
+/* Tap-target floor on touch-primary pointers; see Button.module.css. */
+@media (pointer: coarse) {
+  .wrap {
+    height: 44px;
+  }
+}
+
 .wrap:focus-within {
   border-color: var(--dsw-alias-brand-primary);
 }

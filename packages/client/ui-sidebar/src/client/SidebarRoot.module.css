@@ -337,3 +337,28 @@
     animation: none;
   }
 }
+
+/* Touch-primary pointers (a phone drawer, or the rail on a tablet). Two
+   separate problems: the controls are cursor-sized, and the rail's expand
+   affordance is revealed by hover, which a finger cannot produce — so the
+   panel icon replaces the resting whale mark outright there. */
+@media (hover: none) and (pointer: coarse) {
+  /* Wide forms only: the 56px rail cannot hold a 44px control, and the phone
+     drawer — the surface a finger actually reaches — is always wide. */
+  .root:not(.collapsed) .iconButton {
+    width: 44px;
+    height: 44px;
+  }
+
+  .root:not(.collapsed) .newSession {
+    height: 44px;
+  }
+
+  .collapsed .toggle .panelIcon {
+    display: inline;
+  }
+
+  .collapsed .toggle .railMark {
+    display: none;
+  }
+}
