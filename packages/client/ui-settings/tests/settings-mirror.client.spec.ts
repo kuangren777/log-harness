@@ -96,7 +96,7 @@ describe('SettingsDescribeMirror', () => {
     const mirror = new SettingsDescribeMirror({ settings: { describe: describeCall } } as never, 'memory')
     await mirror.ensure()
     await mirror.load()
-    expect(mirror.getSnapshot()).toEqual({ status: 'unavailable', view: undefined, error: null })
+    expect(mirror.getSnapshot()).toEqual({ status: 'unavailable', view: undefined, error: null, reach: 'unknown' })
     expect(describeCall).not.toHaveBeenCalled()
   })
 
@@ -118,7 +118,7 @@ describe('SettingsDescribeMirror', () => {
     const describeCall = vi.fn()
     const mirror = new SettingsDescribeMirror({ settings: { describe: describeCall } } as never)
     mirror.acceptView(view('theme', 1))
-    expect(mirror.getSnapshot()).toEqual({ status: 'idle', view: undefined, error: null })
+    expect(mirror.getSnapshot()).toEqual({ status: 'idle', view: undefined, error: null, reach: 'unknown' })
   })
 
   it('acceptView appends a namespace the held view has not seen yet', async () => {

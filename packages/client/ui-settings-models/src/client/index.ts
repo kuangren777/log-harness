@@ -118,23 +118,33 @@ export function apply(ctx: ClientContext): void {
     }
   }, 'ui-settings-models: pushed invalidations')
 
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: 'models',
-    order: 10,
-    label: () => t('nav'),
-    inject: injected,
-  }, ModelsSection))
-  ctx.slots.inject('settings.onboarding', () => ctx.slots.register({
-    name: 'settings.onboarding',
-    id: 'welcome-notice',
-    order: -100,
-    inject: welcomeInjected,
-  }, WelcomeNotice))
-  ctx.slots.inject('settings.onboarding', () => ctx.slots.register({
-    name: 'settings.onboarding',
-    id: 'deepseek-official',
-    order: 0,
-    inject: deepSeekOnboardingInjected,
-  }, DeepSeekOnboardingDialog))
+  // The page edits providers and their keys, and both onboarding steps exist
+  // to walk a first-run user into writing one — all of it the settings
+  // document and the credential plane. A caller the Host refuses those gets
+  // none of the three; the composer's model picker, which reads the catalog
+  // the Host still serves, is a separate package.
+  ctx.settingsScope.whileReachable(() => {
+    const disposers = [
+      ctx.slots.inject('settings.section', () => ctx.slots.register({
+        name: 'settings.section',
+        id: 'models',
+        order: 10,
+        label: () => t('nav'),
+        inject: injected,
+      }, ModelsSection)),
+      ctx.slots.inject('settings.onboarding', () => ctx.slots.register({
+        name: 'settings.onboarding',
+        id: 'welcome-notice',
+        order: -100,
+        inject: welcomeInjected,
+      }, WelcomeNotice)),
+      ctx.slots.inject('settings.onboarding', () => ctx.slots.register({
+        name: 'settings.onboarding',
+        id: 'deepseek-official',
+        order: 0,
+        inject: deepSeekOnboardingInjected,
+      }, DeepSeekOnboardingDialog)),
+    ]
+    return () => { for (const dispose of disposers) dispose() }
+  })
 }

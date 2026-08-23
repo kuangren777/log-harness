@@ -1,0 +1,47 @@
+- dialog "Settings":
+  - navigation:
+    - text: Settings
+    - button "General":
+      - img
+      - text: General
+    - button "Models":
+      - img
+      - text: Models
+    - button "Skills":
+      - img
+      - text: Skills
+    - button "Plugins":
+      - img
+      - text: Plugins
+    - button "Agent presets":
+      - img
+      - text: Agent presets
+    - button "Access":
+      - img
+      - text: Access
+  - button "Open configuration file"
+  - button "Close":
+    - img
+    - text: Close
+  - heading "Access" [level=3]
+  - paragraph: Accounts, permission groups, membership, and the rules each group carries.
+  - heading "Accounts" [level=4]
+  - paragraph: Every account in this deployment. Delivering a new account’s first password to its owner is your job.
+  - textbox "E-mail address"
+  - textbox "Initial password"
+  - button "Create account" [disabled]
+  - list:
+    - listitem:
+      - text: ada@example.test Address unconfirmed
+      - button "Disable ada@example.test": Disable
+    - listitem:
+      - text: ben@example.test Address unconfirmed
+      - button "Disable ben@example.test": Disable
+  - heading "Groups" [level=4]
+  - paragraph: Select a group to edit its membership and its rules.
+  - textbox "Group name"
+  - button "Create group" [disabled]
+  - list:
+    - listitem:
+      - button "Edit admin": admin
+      - text: Builtin

@@ -10,6 +10,7 @@ import type { ApiProxy, HostFrame, MuxFrame } from '../api/index.ts'
 import type { RequestPayload, ResponseValue, RpcMethodMap } from '../api/rpc-map.ts'
 import type { ClientRequest, ClientResponse, RpcMessage, RpcReceipt, RpcRequest, RpcResponse, ServerRequest } from '../api/rpc.ts'
 import { RpcId } from '../api/rpc.ts'
+import { forbiddenError } from '../authorization.ts'
 import type { Wire } from '../api/rpc.schema.ts'
 import { rpcReceiptSchema, serverRequestSchema, serverResponseSchema } from '../api/rpc.schema.ts'
 import { hostFrameSchema, muxFrameSchema } from '../api/events.schema.ts'
@@ -263,6 +264,23 @@ type UnaryTimeoutPolicy = 'default' | 'caller-signal-only'
 const INTERNAL_BASE = 'http://dsh.internal'
 
 /**
+ * One non-2xx answer from the `/api` carrier. It carries the status so
+ * {@link AbstractApiClient.callUnary} can tell an authorization refusal, which
+ * the carrier answers before the gateway is reached, from a transport failure
+ * a later call could survive.
+ */
+class ApiTransportError extends Error {
+  /**
+   * @param path - the `/api` path that answered.
+   * @param status - the HTTP status it answered with.
+   */
+  constructor(path: string, readonly status: number) {
+    super(`transport failure for ${path}: HTTP ${status}`)
+    this.name = 'ApiTransportError'
+  }
+}
+
+/**
  * Abstract fetch-carrier client. Subclasses supply the transport (doFetch) and may refine the
  * per-message tap (onEnvelope) — platform aspects stay in subclasses, protocol invariants stay
  * here. Envelope observation is a first-class aspect of this data middle layer: the instance
@@ -350,7 +368,7 @@ export abstract class AbstractApiClient implements IApiClient {
       body: JSON.stringify(body),
       ...requestSignal === undefined ? {} : { signal: requestSignal },
     })
-    if (!response.ok) throw new Error(`transport failure for ${path}: HTTP ${response.status}`)
+    if (!response.ok) throw new ApiTransportError(path, response.status)
     return response
   }
 
@@ -358,6 +376,11 @@ export abstract class AbstractApiClient implements IApiClient {
    * Unary protocol path: mint → tap → POST full form → envelope parse → verify
    * echo → value parse → tap → narrow. Virtual so a fake carrier (fixture) can
    * override transport at this layer.
+   *
+   * An HTTP 403 is normalized to the `forbidden` business error rather than
+   * thrown: it is the same refusal the gateway's policy table makes, and one
+   * representation of it is what keeps a caller from reporting a decision as a
+   * transport failure. Every other non-2xx status still throws.
    */
   protected async callUnary<K extends keyof RpcMethodMap>(
     method: K,
@@ -367,7 +390,19 @@ export abstract class AbstractApiClient implements IApiClient {
   ): Promise<RpcResponse<ResponseValue<K>>> {
     const message: ClientRequest = { type: 'client-request', rpcId: this.mintRpcId(), method, payload }
     this.onEnvelope(message)
-    const response = await this.postJson(`/api/${method}`, message, signal, timeoutPolicy)
+    let response: Response
+    try {
+      response = await this.postJson(`/api/${method}`, message, signal, timeoutPolicy)
+    } catch (error) {
+      // Two layers refuse an unauthorized caller: the browser-trust fence in
+      // front of this carrier answers 403 without an envelope, and the
+      // gateway's own policy table answers the `forbidden` business error. A
+      // caller cannot act on the difference, so both arrive as one value —
+      // which is what lets a surface tell a decision it must respect from a
+      // failure it may retry.
+      if (!(error instanceof ApiTransportError) || error.status !== 403) throw error
+      return { rpcId: message.rpcId, result: { ok: false, error: forbiddenError() } }
+    }
     const full = serverResponseSchema.parse(await response.json())
     this.onEnvelope(full)
     if (full.rpcId !== message.rpcId) throw new Error(`rpcId mismatch for ${method}: sent ${message.rpcId}, got ${full.rpcId}`)

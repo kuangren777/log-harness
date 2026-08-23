@@ -209,6 +209,12 @@
     - id: ui-settings-skills
       name: '@deepseek-ai/dsh-client-ui-settings-skills'
 
+    # Administration of accounts, groups, and permission rules. Registers for
+    # everybody and renders an explained empty page for anyone the request gate
+    # does not name an administrator; the Host's refusal is the actual control.
+    - id: ui-settings-access
+      name: '@deepseek-ai/dsh-client-ui-settings-access'
+
     - id: ui-conversation
       name: '@deepseek-ai/dsh-client-ui-conversation'
 

@@ -73,6 +73,7 @@
     "tests/skill-user-invoke.e2e.ts",
     "tests/skills-settings.e2e.ts",
     "tests/browser-login.e2e.ts",
+    "tests/access-administration.e2e.ts",
     "tests/permission-policy-context.e2e.ts",
     "tests/access-confirmation.e2e.ts",
     "tests/agent-preset-selection.e2e.ts",

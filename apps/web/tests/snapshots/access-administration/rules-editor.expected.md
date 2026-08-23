@@ -1,0 +1,91 @@
+- dialog "Settings":
+  - navigation:
+    - text: Settings
+    - button "General":
+      - img
+      - text: General
+    - button "Models":
+      - img
+      - text: Models
+    - button "Skills":
+      - img
+      - text: Skills
+    - button "Plugins":
+      - img
+      - text: Plugins
+    - button "Agent presets":
+      - img
+      - text: Agent presets
+    - button "Access":
+      - img
+      - text: Access
+  - button "Open configuration file"
+  - button "Close":
+    - img
+    - text: Close
+  - heading "Access" [level=3]
+  - paragraph: Accounts, permission groups, membership, and the rules each group carries.
+  - heading "Accounts" [level=4]
+  - paragraph: Every account in this deployment. Delivering a new account’s first password to its owner is your job.
+  - textbox "E-mail address"
+  - textbox "Initial password"
+  - button "Create account" [disabled]
+  - list:
+    - listitem:
+      - text: ada@example.test Address unconfirmed
+      - button "Disable ada@example.test": Disable
+    - listitem:
+      - text: ben@example.test Address unconfirmed
+      - button "Disable ben@example.test": Disable
+  - heading "Groups" [level=4]
+  - paragraph: Select a group to edit its membership and its rules.
+  - textbox "Group name"
+  - button "Create group" [disabled]
+  - list:
+    - listitem:
+      - button "Edit admin": admin
+      - text: Builtin
+    - listitem:
+      - button "Edit journey-team": journey-team
+      - textbox "Rename journey-team": journey-team
+      - button "Rename" [disabled]
+      - button "Delete journey-team": Delete
+  - heading "Membership" [level=4]
+  - paragraph: Tick the accounts that belong to journey-team. Newly added members are mailed a notice.
+  - list:
+    - listitem:
+      - switch "ada@example.test belongs to journey-team": ada@example.test
+    - listitem:
+      - switch "ben@example.test belongs to journey-team" [checked]: ben@example.test
+  - heading "Rules" [level=4]
+  - paragraph: "Rules apply per domain. The first rule addressing a domain turns that whole domain into an allowlist: deny beats allow, and a name no rule matches is refused."
+  - list:
+    - listitem:
+      - text: Allow · Skills · *
+      - 'button "Remove rule: Allow Skills *"': Remove
+    - listitem:
+      - text: Deny · Skills · journey-secret
+      - 'button "Remove rule: Deny Skills journey-secret"': Remove
+  - combobox "Domain":
+    - option "Skills" [selected]
+    - option "Tools"
+    - option "Models"
+    - option "Settings namespaces"
+  - combobox "Effect":
+    - option "Allow"
+    - option "Deny" [selected]
+  - textbox "Name, or a prefix ending in *"
+  - button "Add rule" [disabled]
+  - paragraph: "A * allow rule was added alongside it — without one, this single denial would also refuse every other name in the domain. It is an ordinary rule: delete it to get a strict allowlist."
+  - paragraph: Unsaved changes; the preview below already counts them.
+  - button "Save rules"
+  - button "Discard changes"
+  - heading "What a member would see" [level=5]
+  - paragraph: Resolved from the current rules, unsaved changes included, for an ordinary member of journey-team. An administrator bypasses rules, so this is not you.
+  - list:
+    - listitem: "Skills: open except for the written denials."
+    - listitem: "Tools: no rules, fully open."
+    - listitem: "Models: no rules, fully open."
+    - listitem: "Settings namespaces: no rules, fully open."
+  - paragraph: "Skills visible (1): journey-open"
+  - paragraph: "Skills refused (1): journey-secret"

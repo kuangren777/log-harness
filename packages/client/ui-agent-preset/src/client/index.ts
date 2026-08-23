@@ -204,21 +204,31 @@ export function apply(ctx: ClientContext): void {
     makeDefault: (id: string) => section.makeDefault(id),
   })
 
-  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-    name: 'settings.general.item',
-    id: 'agent-preset',
-    order: -25,
-    locale: 'settings.agentPreset',
-    inject: injected,
-  }, AgentPresetRow))
-  // Ordered after Models: choosing a model is routine, and composing an
-  // agent is the deployment-shaping act behind it.
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: 'agent-presets',
-    order: 20,
-    label: () => ctx.locale.bind('settings.agentPreset')('nav'),
-    locale: 'settings.agentPreset',
-    inject: sectionInjected,
-  }, AgentPresetSection))
+  // Both surfaces manage the deployment's preset roster — the row picks the
+  // default the settings document records, the page reads and rearranges the
+  // presets themselves — so both leave the settings UI for a caller the Host
+  // refuses that document. Choosing a preset for one session is the composer
+  // seat above, which is not gated.
+  ctx.settingsScope.whileReachable(() => {
+    const disposers = [
+      ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+        name: 'settings.general.item',
+        id: 'agent-preset',
+        order: -25,
+        locale: 'settings.agentPreset',
+        inject: injected,
+      }, AgentPresetRow)),
+      // Ordered after Models: choosing a model is routine, and composing an
+      // agent is the deployment-shaping act behind it.
+      ctx.slots.inject('settings.section', () => ctx.slots.register({
+        name: 'settings.section',
+        id: 'agent-presets',
+        order: 20,
+        label: () => ctx.locale.bind('settings.agentPreset')('nav'),
+        locale: 'settings.agentPreset',
+        inject: sectionInjected,
+      }, AgentPresetSection)),
+    ]
+    return () => { for (const dispose of disposers) dispose() }
+  })
 }

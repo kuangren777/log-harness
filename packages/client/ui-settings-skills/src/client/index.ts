@@ -81,11 +81,13 @@ export function apply(ctx: ClientContext): void {
     }
   }, 'ui-settings-skills: pushed invalidations')
 
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
+  // The page is the configuration plane's read of the skill catalog, so a
+  // caller the Host refuses that plane has no filtered version of it to see.
+  ctx.settingsScope.whileReachable(() => ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'skills',
     order: 12,
     label: () => t('nav'),
     inject: () => controller.inject(t),
-  }, SkillsSection))
+  }, SkillsSection)))
 }

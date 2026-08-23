@@ -263,6 +263,45 @@ export class SettingsScopeBinder extends Service {
   }
 
   /**
+   * Keep one settings surface registered only while the Host has not refused
+   * this browser the settings document — the hide half of the settings
+   * visibility rule (README).
+   *
+   * The registration is created on the CALLER's fiber (the service proxy binds
+   * `this.ctx` at call time) and disposed if a refusal arrives, so a section
+   * whose whole data plane is closed to this caller leaves the navigation
+   * instead of rendering a refusal. It grants nothing: the surface is
+   * registered for every answer other than a refusal the Host actually made,
+   * and the Host refuses each call again regardless of what renders.
+   * @param register - creates the registration; returns its disposer.
+   */
+  whileReachable(register: () => () => void): void {
+    const mirror = this.mirror
+    this.ctx.effect(() => {
+      let registration: (() => void) | undefined
+      const sync = (): void => {
+        const open = mirror.getSnapshot().reach !== 'refused'
+        if (open === (registration !== undefined)) return
+        if (registration === undefined) {
+          registration = register()
+          return
+        }
+        registration()
+        registration = undefined
+      }
+      const unsubscribe = mirror.subscribe(sync)
+      sync()
+      // The gate is the only reader some sections have, so it starts the one
+      // read the answer comes from rather than waiting for a bound scope.
+      void mirror.ensure()
+      return () => {
+        unsubscribe()
+        registration?.()
+      }
+    }, 'ui-settings: settings-document visibility')
+  }
+
+  /**
    * Bind one namespace scope on the CALLER's plugin lifecycle — the service
    * proxy binds `this.ctx` to the caller at call time, so the scope's disposer
    * belongs to the calling fiber. The scope derives from the shared mirror

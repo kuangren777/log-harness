@@ -233,6 +233,7 @@
       "@deepseek-ai/dsh-client-ui-settings-models": ["./packages/client/ui-settings-models/src"],
       "@deepseek-ai/dsh-client-ui-settings-plugin-inventory": ["./packages/client/ui-settings-plugin-inventory/src"],
       "@deepseek-ai/dsh-client-ui-settings-skills": ["./packages/client/ui-settings-skills/src"],
+      "@deepseek-ai/dsh-client-ui-settings-access": ["./packages/client/ui-settings-access/src"],
       "@deepseek-ai/dsh-client-ui-auth": ["./packages/client/ui-auth/src"],
       "@deepseek-ai/dsh-client-locale": ["./packages/client/locale/src"],
       "@deepseek-ai/dsh-client-web": ["./packages/client/web/src"],

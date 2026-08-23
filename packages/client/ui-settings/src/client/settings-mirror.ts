@@ -24,18 +24,37 @@ export interface SettingsDescribeView {
   hasDocument: boolean
 }
 
+/**
+ * Whether the Host lets this browser read the settings document.
+ *
+ * The Host decides; the mirror only reports what it answered. `refused` is
+ * therefore never inferred from a missing answer — only from a refusal the
+ * Host actually made — and a surface reading it must not treat any other value
+ * as permission for anything.
+ */
+export type SettingsReach =
+  /** No answer yet, or the last read failed without a decision. */
+  | 'unknown'
+  /** The Host served the document to this caller. */
+  | 'granted'
+  /** The Host refused this caller the configuration plane. */
+  | 'refused'
+
 /** Mirror state every derived settings surface renders from. */
 export interface SettingsMirrorSnapshot {
   /**
-   * `unavailable` is the terminal non-loopback state; `ready` persists across
-   * later failed refreshes (the held view keeps serving); `idle` means no
-   * answer is held and no read is running, so `ensure` will start one.
+   * `unavailable` is terminal: a non-loopback browser, or a caller the Host
+   * refused. `ready` persists across later failed refreshes (the held view
+   * keeps serving); `idle` means no answer is held and no read is running, so
+   * `ensure` will start one.
    */
   status: 'idle' | 'loading' | 'ready' | 'unavailable'
   /** The last good answer; undefined until the first success. */
   view: SettingsDescribeView | undefined
   /** The latest refresh failure message, cleared by the next success. */
   error: string | null
+  /** The Host's own answer about this browser's access to the document. */
+  reach: SettingsReach
 }
 
 /**
@@ -89,6 +108,7 @@ export class SettingsDescribeMirror implements SettingsDescribeFace {
       status: persistence === 'host' ? 'idle' : 'unavailable',
       view: undefined,
       error: null,
+      reach: 'unknown',
     })
   }
 
@@ -108,11 +128,15 @@ export class SettingsDescribeMirror implements SettingsDescribeFace {
 
   /**
    * Refresh from the Host. A call during an in-flight read marks one rerun
-   * after it settles instead of racing a second wire read.
+   * after it settles instead of racing a second wire read. Once the Host has
+   * refused this caller the read stops for the page's life: the refusal is a
+   * decision about who is asking, and only a new credential changes it — which
+   * arrives as a fresh page, not as a reconnect.
    * @returns settlement after this call's freshness is reflected.
    */
   load(): Promise<void> {
     if (this.persistence === 'memory') return Promise.resolve()
+    if (this.getSnapshot().reach === 'refused') return Promise.resolve()
     if (this.inFlight !== undefined) {
       this.rerun = true
       return this.inFlight
@@ -178,27 +202,40 @@ export class SettingsDescribeMirror implements SettingsDescribeFace {
         // rerun.
         this.rerun = false
         const generation = ++this.generation
-        let outcome: { view: SettingsDescribeView } | { failure: string }
+        let outcome: { view: SettingsDescribeView } | { failure: string } | { refused: true }
         try {
           const response = await this.api.settings.describe({})
           outcome = response.result.ok
             ? { view: response.result.value }
-            : { failure: response.result.error.message }
+            : response.result.error.code === 'forbidden'
+              ? { refused: true }
+              : { failure: response.result.error.message }
         } catch (error) {
           outcome = { failure: error instanceof Error ? error.message : String(error) }
         }
         // A write answer invalidates a document read before that write committed.
         if (generation !== this.generation) continue
+        if ('refused' in outcome) {
+          // Terminal, and with no error text: the transport message behind a
+          // refusal describes a decision the reader cannot act on, and a
+          // surface that showed it would be offering a retry for an answer
+          // that will not change.
+          this.store.set({ status: 'unavailable', view: undefined, error: null, reach: 'refused' })
+          return
+        }
         if ('view' in outcome) {
-          this.store.set({ status: 'ready', view: outcome.view, error: null })
+          this.store.set({ status: 'ready', view: outcome.view, error: null, reach: 'granted' })
         } else {
           const held = this.store.getSnapshot()
           // No answer yet: fall back to idle so `ensure` retries; with one, the
           // held view keeps serving and only the error field reports the miss.
+          // A failure decides nothing about reach — retrying is exactly what
+          // distinguishes it from a refusal.
           this.store.set({
             status: held.view === undefined ? 'idle' : 'ready',
             view: held.view,
             error: outcome.failure,
+            reach: held.reach,
           })
         }
       } while (this.shouldRerun())

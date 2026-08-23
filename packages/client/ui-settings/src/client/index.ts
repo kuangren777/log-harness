@@ -29,7 +29,9 @@ export type {
 export type { SettingsScopeController, SettingsScopeBinder } from './settings-scope.ts'
 export type { SettingsSchemaService } from './schema.ts'
 export type { SchemaNode } from './schema.ts'
-export type { SettingsDescribeFace, SettingsDescribeView, SettingsMirrorSnapshot } from './settings-mirror.ts'
+export type {
+  SettingsDescribeFace, SettingsDescribeView, SettingsMirrorSnapshot, SettingsReach,
+} from './settings-mirror.ts'
 
 /**
  * Required services: the wire handle for the mirror's reads and the forwarded

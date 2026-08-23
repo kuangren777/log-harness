@@ -38,7 +38,7 @@ export type {} from '@deepseek-ai/dsh-skill/types'
  * the carrier's runtime values stay behind their own module edge.
  */
 export type {
-  AuthRequiredSource,
+  AdminGroupView, AdminRuleView, AdminUserView, AuthRequiredSource,
   ClientResponse, ConfigurableProviderView, ConnectionHandle, ConnectionSinks, ContentBlock,
   CredentialView, DirectoryListing, DiscoveredModelView, HistoryEntry, HostFrame, IApiClient,
   MessageId, ModelCatalogFailure, ModelProviderGroup, ModelReasoningEffort, ModelSelection,
@@ -47,8 +47,8 @@ export type {
   SessionSummary, SettingsNamespaceView, SettingsPathOpView, SkillEntry, SkillInventory,
   SkillInventoryEntry, SkillInventoryGroup, SkillInvocationSurfaces, SkillPolicyOverrideView,
   StreamChunk,
-  SubagentAddress, SubagentCatalog, JobView, ToolCallView, ToolEventView, ToolResultView,
-  WorkspaceId, WorkspaceView,
+  SubagentAddress, SubagentCatalog, GroupId, JobView, ToolCallView, ToolEventView, ToolResultView,
+  UserId, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-connection/client'
 export type {} from '@deepseek-ai/dsh-api-gateway/client'
 export type {} from '@deepseek-ai/dsh-cordis-host-runner/remote'

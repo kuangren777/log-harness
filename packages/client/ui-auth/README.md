@@ -39,6 +39,6 @@ None; the package contributes no request content, so no prefix can be invalidate
 ## Known Limitations and Deferred Work
 
 - **A changed credential costs a page re-boot** — sign-in and both sign-outs reload the page rather than re-driving the shell's post-connect sequence, because the object layer offers no seam for re-authenticating a live connection; the streams would otherwise keep running under the credential they were opened with.
-- **No administration surface** — accounts, groups, and rules are managed outside the browser; this package covers only what the signed-in person does with their own account.
+- **No administration surface** — accounts, groups, and rules belong to [`dsh-client-ui-settings-access`](../ui-settings-access/README.md); this package covers only what the signed-in person does with their own account.
 - **The account row shows an address, not a session inventory** — `me` reports the account and its groups, and the gate publishes no list of a user's other live sessions, so "sign out everywhere" cannot say how many it ended.
 - **A non-HTTP carrier never reports 401** — the worker-preview transport supplies its own API client and no HTTP status reaches the latch, so a sign-in surface there would have to be opened by the boot read alone.

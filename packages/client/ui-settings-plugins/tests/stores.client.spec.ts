@@ -643,6 +643,7 @@ describe('ConfigurablePluginsTabController', () => {
       status: 'ready' as const,
       view: { writable: true, hasDocument: true, namespaces: [] },
       error: null,
+      reach: 'granted' as const,
     }
     const describeFace = {
       getSnapshot: () => snapshot,
@@ -668,6 +669,7 @@ describe('ConfigurablePluginsTabController', () => {
         }],
       },
       error: null,
+      reach: 'granted',
     }
     notify()
 

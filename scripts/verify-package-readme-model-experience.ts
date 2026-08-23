@@ -122,6 +122,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/auth/auth-sqlite': { kind: 'none', reason: 'The credential and permission store serves Host authorization decisions; no stored record reaches a model request.' },
   'packages/auth/auth-gate': { kind: 'indirect', reason: 'The gate writes no model-facing text; it only removes registrations dsh-tools owns from one agent and refuses a route the adapter would otherwise be given.' },
   'packages/client/ui-auth': { kind: 'none', reason: 'The sign-in surface renders the request gate\'s answers in the browser; no address, password, code, or session fact enters a model request.' },
+  'packages/client/ui-settings-access': { kind: 'none', reason: 'The administration surface renders the auth seam\'s answers in the browser; no account, group, rule, or password enters a model request.' },
   'packages/mail/mail': { kind: 'none', reason: 'The seam moves operator-facing mail; no message field, delivery result, or configuration value enters a model request.' },
   'packages/mail/mail-file': { kind: 'none', reason: 'The mailbox is a host-side file no consumer reads back into a model request.' },
   'packages/mail/mail-smtp': { kind: 'none', reason: 'Message content, credentials, and SMTP errors stay on the host; the provider registers nothing model-facing.' },

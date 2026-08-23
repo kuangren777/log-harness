@@ -121,7 +121,9 @@ export function apply(ctx: ClientContext): void {
 
   // This package owns the one Plugins navigation entry and the tab chrome;
   // feature plugins contribute pages without competing for Settings nav rows.
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
+  // Every tab is a view of the settings document, so the section leaves the
+  // navigation for a caller the Host refuses that document.
+  ctx.settingsScope.whileReachable(() => ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'plugins',
     order: 15,
@@ -129,7 +131,7 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: sectionInjected,
     children: { 'settings.plugins.tab': { kind: 'list', scope: 'root' } },
-  }, PluginsSettingsSection))
+  }, PluginsSettingsSection)))
 
   // The existing configuration page is one ordinary tab. It keeps ownership
   // of the card slot and the three shipped card contributions below.

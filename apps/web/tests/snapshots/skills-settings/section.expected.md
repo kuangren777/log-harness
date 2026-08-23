@@ -16,6 +16,9 @@
     - button "Agent presets":
       - img
       - text: Agent presets
+    - button "Access":
+      - img
+      - text: Access
   - button "Open configuration file"
   - button "Close":
     - img

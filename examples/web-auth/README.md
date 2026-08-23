@@ -17,6 +17,12 @@ Layering the overlay is what puts a login screen in front of the app. The shippe
 
 Signing in takes two steps: the password, then a six-digit code sent by mail. The browser is left holding an `HttpOnly; SameSite=Strict` session cookie, and every `/api` request and event-stream upgrade is authenticated from it. What an authenticated caller may then reach is the [gateway's policy table](../../packages/host/apiproxy/README.md), not this overlay.
 
+## Administering the other accounts
+
+The first administrator administers everyone else from the browser. **Settings → Access**, contributed by [`dsh-client-ui-settings-access`](../../packages/client/ui-settings-access/README.md), lists every account and every permission group, creates and disables accounts, creates and renames and deletes groups, moves accounts between them, and edits the rules a group carries. The section is present for everybody and renders one explanatory paragraph for anyone the gate does not name an administrator; hiding it is a courtesy, and the refusal that matters is the gateway's, which rejects all nine `auth.admin.*` methods from a non-administrator.
+
+Rules are where a deployment gets itself into trouble. A domain no rule addresses is fully open, and the first rule addressing it turns that whole domain into an allowlist — so a lone `deny secret-skill` denies every skill the group has, not one. The Access page seeds an `allow *` rule beside a domain's first denial, warns by name when a domain admits nothing, and previews the real skill catalog as a member of the group would see it before anything is saved.
+
 The reset and confirmation links the gate mails resolve against `baseUrl` and land back in the same app, so that value must name the origin the browser actually reaches.
 
 ## Before anyone else signs in
