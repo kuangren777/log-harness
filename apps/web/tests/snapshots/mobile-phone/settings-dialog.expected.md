@@ -1,0 +1,30 @@
+- dialog "Settings":
+  - navigation:
+    - text: Settings
+    - button "General":
+      - img
+      - text: General
+    - button "Access":
+      - img
+      - text: Access
+  - button "Close":
+    - img
+    - text: Close
+  - text: Language
+  - button "English":
+    - text: English
+    - img
+  - text: Appearance
+  - button "Light":
+    - img
+    - text: Light
+  - button "Dark":
+    - img
+    - text: Dark
+  - button "System" [pressed]:
+    - img
+    - text: System
+  - text: Enter behavior while busy Busy only; Cmd/Ctrl+Enter uses the other behavior
+  - button "Queue":
+    - text: Queue
+    - img

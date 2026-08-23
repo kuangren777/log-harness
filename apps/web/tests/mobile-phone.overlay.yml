@@ -1,0 +1,28 @@
+# The multi-user overlay the phone journey signs in through — the same three
+# rows examples/web-auth/cordis.yml ships, pointed at the scaffold's isolated
+# harness home. The journey needs them because the sign-in card is one of the
+# surfaces it measures at 390px.
+#
+# `baseUrl` is a fixed literal rather than the scaffold's bound origin: the
+# scenario reads its second factor out of the mailbox file and never opens a
+# mailed link, so nothing resolves against it, and an overlay cannot see a port
+# the launcher picks at boot.
+
+- insert:
+    - id: auth
+      name: '@deepseek-ai/dsh-auth-sqlite'
+      config:
+        path: !!js dshHomePath('auth.db')
+
+    - id: mail
+      name: '@deepseek-ai/dsh-mail-file'
+      config:
+        path: !!js dshHomePath('mailbox.jsonl')
+
+    - id: auth-gate
+      name: '@deepseek-ai/dsh-auth-gate'
+      config:
+        baseUrl: 'http://127.0.0.1:3080'
+        # The lane serves plain loopback HTTP, where a `Secure` cookie would
+        # never be sent and no sign-in could complete.
+        cookieSecure: false

@@ -2,9 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- viewport-fit=cover is what makes env(safe-area-inset-*) resolve to
+         anything but zero; the shell frame pads itself with those insets. No
+         maximum-scale: pinch zoom stays available. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- iOS reads neither the manifest's icons nor its display mode. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="DSH" />
+    <!-- `default`, not `black-translucent`: the translucent bar draws the page
+         through it, and this app's background follows a user-chosen theme. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- No static theme-color: ui-layout's ThemePresenter owns that node and
+         rewrites it per theme, and a document-order-earlier static one would
+         win over the presenter's for the whole session. -->
     <title>DSH Local Build</title>
   </head>
   <body>

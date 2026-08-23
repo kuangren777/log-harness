@@ -258,6 +258,10 @@ export function AppFrame({
       <div
         ref={drawer}
         className={css.sidebarCol}
+        // Phone: the drawer's own box, parked one width to the left while
+        // closed (AppFrame.module.css explains why this is `left`, not a
+        // transform).
+        style={phone ? { width: phoneWidth, left: drawerOpen ? 0 : -phoneWidth } : undefined}
         role={phone ? 'dialog' : undefined}
         aria-modal={phone ? true : undefined}
         aria-label={phone ? t('drawer.label') : undefined}

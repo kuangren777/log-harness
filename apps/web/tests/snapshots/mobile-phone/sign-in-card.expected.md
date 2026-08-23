@@ -1,0 +1,9 @@
+- dialog "Sign in":
+  - heading "Sign in" [level=1]
+  - paragraph: This deployment requires you to sign in.
+  - text: E-mail address
+  - textbox "E-mail address"
+  - text: Password
+  - textbox "Password"
+  - button "Sign in"
+  - button "Forgot your password?"

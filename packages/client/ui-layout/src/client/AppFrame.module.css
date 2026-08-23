@@ -180,15 +180,20 @@
 
 /* Off-canvas drawer. Absolute rather than fixed so the frame's own
    `overflow: hidden` clips the parked column instead of leaving it able to
-   widen the page. `visibility` is what removes the parked drawer from the tab
-   order and the accessibility tree; it is switched at the END of the
-   slide-out and at the START of the slide-in, so neither direction hides the
-   animation. */
+   widen the page, and slid with `left` rather than a transform: a transformed
+   ancestor becomes the containing block for `position: fixed` descendants,
+   and ui-settings renders its full-viewport panel as a descendant of this
+   column — it would be sized to the 280px drawer instead of the screen.
+   AppFrame supplies both the width and the parked/open `left` inline, because
+   the drawer's width is solved in px (columns.ts drawerWidth).
+
+   `visibility` is what removes the parked drawer from the tab order and the
+   accessibility tree; it is switched at the END of the slide-out and at the
+   START of the slide-in, so neither direction hides the animation. */
 .frame[data-phone] .sidebarCol {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
   z-index: 10;
   visibility: hidden;
   border-right: none;
@@ -196,16 +201,14 @@
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
-  transform: translateX(-100%);
   transition:
-    transform var(--ds-transition-duration-slow) var(--ds-ease-in-out),
+    left var(--ds-transition-duration-slow) var(--ds-ease-in-out),
     visibility 0s linear var(--ds-transition-duration-slow);
 }
 
 .frame[data-phone][data-drawer-open] .sidebarCol {
   visibility: visible;
-  transform: translateX(0);
-  transition: transform var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+  transition: left var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
 .drawerBackdrop {
@@ -217,6 +220,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .frame[data-phone] .sidebarCol {
-    transition: none;
+    transition: visibility 0s;
   }
 }
