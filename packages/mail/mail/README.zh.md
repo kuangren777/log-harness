@@ -6,7 +6,10 @@
 
 ## 服务 API
 
-```ts ignore-check
+```ts
+import { Service } from '@deepseek-ai/cordis'
+import type { MailMessage } from '@deepseek-ai/dsh-mail'
+
 abstract class MailService extends Service {
   abstract send(message: MailMessage): Promise<void>
 }

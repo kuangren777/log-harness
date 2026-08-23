@@ -6,7 +6,9 @@ Service Definition of the [authentication and authorization](../README.md) capab
 
 ## Principal
 
-```ts ignore-check
+```ts
+import type { GroupId, UserId } from '@deepseek-ai/dsh-auth'
+
 type Principal =
   | { kind: 'user'; userId: UserId; email: string; groups: readonly GroupId[]; admin: boolean }
   | { kind: 'local' }

@@ -46,10 +46,21 @@ flowchart LR
   pkg_tool_bash["tool-bash"]
   pkg_hooks_claude_code["hooks-claude-code"]
   pkg_hooks_codex["hooks-codex"]
+  pkg_auth["auth"]
+  svc_auth["ctx.auth<br/>Accounts and permission groups"]
+  pkg_auth_sqlite["auth-sqlite"]
+  pkg_auth_gate["auth-gate"]
+  pkg_apiproxy["apiproxy"]
+  pkg_tool_skill["tool-skill"]
+  svc_authGate["ctx.authGate<br/>Request authentication gate"]
+  pkg_client_connection["client-connection"]
+  pkg_mail["mail"]
+  svc_mail["ctx.mail<br/>Outbound mail seam"]
+  pkg_mail_smtp["mail-smtp"]
+  pkg_mail_file["mail-file"]
   pkg_settings["settings"]
   svc_settings["ctx.settings<br/>User-settings seam"]
   pkg_settings_file["settings-file"]
-  pkg_apiproxy["apiproxy"]
   pkg_credentials["credentials"]
   svc_credentials["ctx.credentials<br/>Credential seam"]
   pkg_credentials_local["credentials-local"]
@@ -87,7 +98,6 @@ flowchart LR
   svc_tools["ctx.tools<br/>Tool registry and guarded execution pipeline"]
   pkg_tool_ask_user["tool-ask-user"]
   pkg_tool_cordis["tool-cordis"]
-  pkg_tool_skill["tool-skill"]
   pkg_tool_subagent["tool-subagent"]
   pkg_tool_todo["tool-todo"]
   pkg_user_questions["user-questions"]
@@ -211,9 +221,13 @@ flowchart LR
   pkg_agent_team --> svc_agentTeams
   pkg_api_gateway --> svc_typertGateway
   pkg_apiproxy --> svc_apiProxy
+  pkg_apiproxy --> svc_authGate
   pkg_approval --> svc_approval
   pkg_attachment --> svc_attachments
   pkg_attachment_local --> svc_attachments
+  pkg_auth --> svc_auth
+  pkg_auth_gate --> svc_authGate
+  pkg_auth_sqlite --> svc_auth
   pkg_authorization --> svc_authorization
   pkg_bash_local --> svc_shell
   pkg_bash_sandbox --> svc_shell
@@ -247,6 +261,9 @@ flowchart LR
   pkg_llm_replay --> svc_llm
   pkg_lsp --> svc_lsp
   pkg_lsp_local --> svc_lsp
+  pkg_mail --> svc_mail
+  pkg_mail_file --> svc_mail
+  pkg_mail_smtp --> svc_mail
   pkg_message_feedback --> svc_messageFeedback
   pkg_modules --> svc_clientModules
   pkg_permission_presets --> svc_permissionPresets
@@ -320,6 +337,11 @@ flowchart LR
   svc_approval --> pkg_tools
   svc_attachments --> pkg_host_runtime
   svc_attachments --> pkg_llm_pi_ai
+  svc_auth --> pkg_apiproxy
+  svc_auth --> pkg_auth_gate
+  svc_auth --> pkg_tool_skill
+  svc_authGate --> pkg_apiproxy
+  svc_authGate --> pkg_client_connection
   svc_authorization --> pkg_llm_pi_ai
   svc_clientModules --> pkg_hmr
   svc_codeRuntime --> pkg_tools
@@ -344,6 +366,7 @@ flowchart LR
   svc_llm --> pkg_agent_loop
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
+  svc_mail --> pkg_auth_gate
   svc_sandbox --> pkg_bash_sandbox
   svc_sandbox --> pkg_terminal_bash
   svc_sandboxPolicy --> pkg_bash_sandbox
@@ -436,6 +459,9 @@ flowchart LR
 | `ctx.typert` | `core` | [`typert-registry`](../packages/typert/registry) | - | [`typert-loader`](../packages/typert/loader), [`api-gateway`](../packages/api/gateway) | - | 插件直接或通过 dsh-typert-loader 注册实时 zod 贡献；API 网关消费调用描述符和提供方，其他运行时消费方则在各自边界查询 schema 与反射元数据。 |
 | `ctx.typertGateway` | `core` | [`api-gateway`](../packages/api/gateway) | - | - | - | 将生成的 Remote 描述符与实时 Cordis 服务关联，解析已注册的身份，并通过共享的 Connection RPC 载体提供一元调用。 |
 | `ctx.sessionPersistence` | `seam` | [`session-persistence`](../packages/session/session-persistence) | [`session-persistence-jsonl`](../packages/session/session-persistence-jsonl), [`session-persistence-sqlite`](../packages/session/session-persistence-sqlite) | [`agent-loop`](../packages/core/agent-loop), [`tool-bash`](../packages/shell/tool-bash), [`hooks-claude-code`](../packages/hooks/hooks-claude-code), [`hooks-codex`](../packages/hooks/hooks-codex), [`session-query`](../packages/session-query/session-query), [`session-query-sqlite`](../packages/session-query/session-query-sqlite), [`message-feedback`](../packages/feedback/message-feedback) | - | 各后端持久化同一套 SessionEvent 词汇；应用在组合时选择后端。 |
+| `ctx.auth` | `seam` | [`auth`](../packages/auth/auth) | [`auth-sqlite`](../packages/auth/auth-sqlite) | [`auth-gate`](../packages/auth/auth-gate), `apiproxy`, [`tool-skill`](../packages/skill/tool-skill) | - | 保存账户、组、规则、登录会话、一次性凭据与资源归属；规则词汇按 deny 优先于 allow、再优先于默认拒绝求值，而没有任何规则涉及的域保持开放。密码以 scrypt 散列存储，令牌只存摘要。 |
+| `ctx.authGate` | `seam` | `apiproxy` | [`auth-gate`](../packages/auth/auth-gate) | [`client-connection`](../packages/client/connection), `apiproxy` | - | 把请求的 cookie 转成 principal，供传输层决定放行还是拒绝。声明在网关旁边，因为 fetch 路由与两条 WebSocket 升级路径都会在派发前询问它；未挂载 gate 的部署把每个请求都当作拥有全部权限的 local principal。 |
+| `ctx.mail` | `seam` | [`mail`](../packages/mail/mail) | [`mail-smtp`](../packages/mail/mail-smtp), [`mail-file`](../packages/mail/mail-file) | [`auth-gate`](../packages/auth/auth-gate) | - | 通过可替换传输通道提供单一 send 操作；挂载的提供方持有发件人身份，并以引用而非字面量解析其凭据。文件提供方为测试与 journey 每封邮件写一行 JSON。 |
 | `ctx.settings` | `seam` | [`settings`](../packages/settings/settings) | [`settings-file`](../packages/settings/settings-file) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | 插件注册命名空间 schema 并解析分层值；提供方存储原始文档。LLM（大语言模型）适配器在用户分区下将其入口配置注册为组合基础；Web 网关提供经过脱敏的分层描述符，并写入用户层。 |
 | `ctx.credentials` | `seam` | [`credentials`](../packages/credentials/credentials) | [`credentials-local`](../packages/credentials/credentials-local) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | 配置携带对机密信息的引用；提供方拥有实际值。消费方按操作解析，因此轮换后的凭据会在紧接着的下一次请求中生效；Web 网关提供不含实际值的视图和只写存储。 |
 | `ctx.authorization` | `seam` | [`authorization`](../packages/credentials/authorization) | - | [`llm-pi-ai`](../packages/llm/llm-pi-ai) | - | flow 由知道如何取得某份凭据的插件注册，并以其写入的记录为键；seam 拥有这段对话与"每个键同时只跑一次尝试"的生命周期，而非协议本身。 |

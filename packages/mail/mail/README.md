@@ -6,7 +6,10 @@ Service Definition of the [outbound mail](../README.md) capability seam: one abs
 
 ## Service API
 
-```ts ignore-check
+```ts
+import { Service } from '@deepseek-ai/cordis'
+import type { MailMessage } from '@deepseek-ai/dsh-mail'
+
 abstract class MailService extends Service {
   abstract send(message: MailMessage): Promise<void>
 }

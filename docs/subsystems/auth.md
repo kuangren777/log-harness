@@ -480,7 +480,9 @@ abstract listMembers(groupId: GroupId): Promise<readonly UserId[]>
 
 /**
  * Replace a group's rules wholesale, for the same reason {@link setMembers}
- * replaces membership wholesale.
+ * replaces membership wholesale. A provider MUST keep the given order: it is
+ * the order an administration page redisplays, and a set that came back
+ * shuffled would read as an edit nobody made.
  * @param groupId - the group to update.
  * @param rules - the complete rule set after the call.
  * @throws AuthError `unknown-subject` when no such group exists.
@@ -488,7 +490,7 @@ abstract listMembers(groupId: GroupId): Promise<readonly UserId[]>
 abstract setRules(groupId: GroupId, rules: readonly PermissionRule[]): Promise<void>
 
 /**
- * One group's rules.
+ * One group's rules, in the order the last {@link setRules} supplied them.
  * @param groupId - the group to read.
  * @returns the group's rules; an unknown group has none.
  */

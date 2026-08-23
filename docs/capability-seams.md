@@ -44,10 +44,21 @@ flowchart LR
   pkg_tool_bash["tool-bash"]
   pkg_hooks_claude_code["hooks-claude-code"]
   pkg_hooks_codex["hooks-codex"]
+  pkg_auth["auth"]
+  svc_auth["ctx.auth<br/>Accounts and permission groups"]
+  pkg_auth_sqlite["auth-sqlite"]
+  pkg_auth_gate["auth-gate"]
+  pkg_apiproxy["apiproxy"]
+  pkg_tool_skill["tool-skill"]
+  svc_authGate["ctx.authGate<br/>Request authentication gate"]
+  pkg_client_connection["client-connection"]
+  pkg_mail["mail"]
+  svc_mail["ctx.mail<br/>Outbound mail seam"]
+  pkg_mail_smtp["mail-smtp"]
+  pkg_mail_file["mail-file"]
   pkg_settings["settings"]
   svc_settings["ctx.settings<br/>User-settings seam"]
   pkg_settings_file["settings-file"]
-  pkg_apiproxy["apiproxy"]
   pkg_credentials["credentials"]
   svc_credentials["ctx.credentials<br/>Credential seam"]
   pkg_credentials_local["credentials-local"]
@@ -85,7 +96,6 @@ flowchart LR
   svc_tools["ctx.tools<br/>Tool registry and guarded execution pipeline"]
   pkg_tool_ask_user["tool-ask-user"]
   pkg_tool_cordis["tool-cordis"]
-  pkg_tool_skill["tool-skill"]
   pkg_tool_subagent["tool-subagent"]
   pkg_tool_todo["tool-todo"]
   pkg_user_questions["user-questions"]
@@ -209,9 +219,13 @@ flowchart LR
   pkg_agent_team --> svc_agentTeams
   pkg_api_gateway --> svc_typertGateway
   pkg_apiproxy --> svc_apiProxy
+  pkg_apiproxy --> svc_authGate
   pkg_approval --> svc_approval
   pkg_attachment --> svc_attachments
   pkg_attachment_local --> svc_attachments
+  pkg_auth --> svc_auth
+  pkg_auth_gate --> svc_authGate
+  pkg_auth_sqlite --> svc_auth
   pkg_authorization --> svc_authorization
   pkg_bash_local --> svc_shell
   pkg_bash_sandbox --> svc_shell
@@ -245,6 +259,9 @@ flowchart LR
   pkg_llm_replay --> svc_llm
   pkg_lsp --> svc_lsp
   pkg_lsp_local --> svc_lsp
+  pkg_mail --> svc_mail
+  pkg_mail_file --> svc_mail
+  pkg_mail_smtp --> svc_mail
   pkg_message_feedback --> svc_messageFeedback
   pkg_modules --> svc_clientModules
   pkg_permission_presets --> svc_permissionPresets
@@ -318,6 +335,11 @@ flowchart LR
   svc_approval --> pkg_tools
   svc_attachments --> pkg_host_runtime
   svc_attachments --> pkg_llm_pi_ai
+  svc_auth --> pkg_apiproxy
+  svc_auth --> pkg_auth_gate
+  svc_auth --> pkg_tool_skill
+  svc_authGate --> pkg_apiproxy
+  svc_authGate --> pkg_client_connection
   svc_authorization --> pkg_llm_pi_ai
   svc_clientModules --> pkg_hmr
   svc_codeRuntime --> pkg_tools
@@ -342,6 +364,7 @@ flowchart LR
   svc_llm --> pkg_agent_loop
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
+  svc_mail --> pkg_auth_gate
   svc_sandbox --> pkg_bash_sandbox
   svc_sandbox --> pkg_terminal_bash
   svc_sandboxPolicy --> pkg_bash_sandbox
@@ -434,6 +457,9 @@ flowchart LR
 | `ctx.typert` | `core` | [`typert-registry`](../packages/typert/registry) | - | [`typert-loader`](../packages/typert/loader), [`api-gateway`](../packages/api/gateway) | - | Plugins register live zod contributions directly or through dsh-typert-loader; the API gateway consumes invocation descriptors and providers, while other runtime consumers query schemas and reflection metadata at their own edges. |
 | `ctx.typertGateway` | `core` | [`api-gateway`](../packages/api/gateway) | - | - | - | Associates generated Remote descriptors with live Cordis services, resolves registered identities, and exposes unary calls through the shared Connection RPC carrier. |
 | `ctx.sessionPersistence` | `seam` | [`session-persistence`](../packages/session/session-persistence) | [`session-persistence-jsonl`](../packages/session/session-persistence-jsonl), [`session-persistence-sqlite`](../packages/session/session-persistence-sqlite) | [`agent-loop`](../packages/core/agent-loop), [`tool-bash`](../packages/shell/tool-bash), [`hooks-claude-code`](../packages/hooks/hooks-claude-code), [`hooks-codex`](../packages/hooks/hooks-codex), [`session-query`](../packages/session-query/session-query), [`session-query-sqlite`](../packages/session-query/session-query-sqlite), [`message-feedback`](../packages/feedback/message-feedback) | - | Backends persist the same SessionEvent vocabulary; apps choose a backend at composition time. |
+| `ctx.auth` | `seam` | [`auth`](../packages/auth/auth) | [`auth-sqlite`](../packages/auth/auth-sqlite) | [`auth-gate`](../packages/auth/auth-gate), `apiproxy`, [`tool-skill`](../packages/skill/tool-skill) | - | Stores accounts, groups, rules, login sessions, one-time secrets and resource ownership; the rule vocabulary is evaluated deny over allow over default-deny, and a domain no rule addresses stays open. Passwords are scrypt hashes and tokens are stored only as digests. |
+| `ctx.authGate` | `seam` | `apiproxy` | [`auth-gate`](../packages/auth/auth-gate) | [`client-connection`](../packages/client/connection), `apiproxy` | - | Turns a request's cookie into a principal for the transport to admit or refuse. Declared beside the gateway because both the fetch route and the two WebSocket upgrades ask it before dispatch; a deployment that mounts no gate answers every request as the full-rights local principal. |
+| `ctx.mail` | `seam` | [`mail`](../packages/mail/mail) | [`mail-smtp`](../packages/mail/mail-smtp), [`mail-file`](../packages/mail/mail-file) | [`auth-gate`](../packages/auth/auth-gate) | - | One send operation over a swappable transport; the mounted provider owns the sender identity and resolves its credentials through references rather than literals. The file provider writes one JSON line per message for tests and journeys. |
 | `ctx.settings` | `seam` | [`settings`](../packages/settings/settings) | [`settings-file`](../packages/settings/settings-file) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | Plugins register namespace schemas and resolve layered values; providers store the raw document. The LLM adapters register their entry config as the composition base under the user section; the web gateway serves redacted layered descriptors and writes the user layer. |
 | `ctx.credentials` | `seam` | [`credentials`](../packages/credentials/credentials) | [`credentials-local`](../packages/credentials/credentials-local) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the web gateway exposes value-free views and write-only storage. |
 | `ctx.authorization` | `seam` | [`authorization`](../packages/credentials/authorization) | - | [`llm-pi-ai`](../packages/llm/llm-pi-ai) | - | Flows are registered by the plugin that knows how to obtain one credential and keyed by the record they write; the seam owns the conversation and the one-attempt-per-key lifecycle, never the protocol. |

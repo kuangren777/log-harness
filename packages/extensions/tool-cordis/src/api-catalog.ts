@@ -597,13 +597,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'abstract setRules(groupId: GroupId, rules: readonly PermissionRule[]): Promise<void>',
-        description: 'Replace a group\'s rules wholesale, for the same reason setMembers replaces membership wholesale.',
+        description: 'Replace a group\'s rules wholesale, for the same reason setMembers replaces membership wholesale. A provider MUST keep the given order: it is the order an administration page redisplays, and a set that came back shuffled would read as an edit nobody made.',
         parameters: [{ name: 'groupId', description: 'the group to update.' }, { name: 'rules', description: 'the complete rule set after the call.' }],
         throws: ['AuthError `unknown-subject` when no such group exists.'],
       },
       {
         signature: 'abstract listRules(groupId: GroupId): Promise<readonly PermissionRule[]>',
-        description: 'One group\'s rules.',
+        description: 'One group\'s rules, in the order the last setRules supplied them.',
         parameters: [{ name: 'groupId', description: 'the group to read.' }],
         returns: 'the group\'s rules; an unknown group has none.',
       },
