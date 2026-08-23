@@ -127,6 +127,7 @@ describe('skill-filesystem watcher failures', () => {
     const fiber = await ctx.plugin(SkillFileSystem, {
       dshHome: join(alias, '.dsh'),
       agentsHome: join(alias, '.agents'),
+      claudeHome: join(alias, '.claude'),
       watch: true,
     })
 
@@ -169,11 +170,12 @@ describe('skill-filesystem watcher failures', () => {
     const fiber = await ctx.plugin(SkillFileSystem, {
       dshHome: join(home, '.dsh'),
       agentsHome: join(home, '.agents'),
+      claudeHome: join(home, '.claude'),
       watch: true,
       watchPollIntervalMs: 10,
     })
     expect(await ctx.skills.snapshot()).toEqual({ skills: [], complete: true })
-    expect(watcherHarness.watchFiles).toHaveLength(2)
+    expect(watcherHarness.watchFiles).toHaveLength(3)
     let invalidations = 0
     ctx.on('skills/change', () => { invalidations += 1 })
 
@@ -183,8 +185,50 @@ describe('skill-filesystem watcher failures', () => {
     await settle()
 
     expect(invalidations).toBe(0)
-    expect(watcherHarness.watchFiles).toHaveLength(2)
+    expect(watcherHarness.watchFiles).toHaveLength(3)
     await fiber.dispose()
+  })
+
+  it('owns every walked ancestor root under one project key and releases them together', async () => {
+    const home = await tempDir('skill-watch-walk-home')
+    const first = await tempDir('skill-watch-walk-first')
+    const second = await tempDir('skill-watch-walk-second')
+    const firstCwd = join(first, 'nested')
+    const secondCwd = join(second, 'nested')
+    await mkdir(join(first, '.git'), { recursive: true })
+    await mkdir(join(second, '.git'), { recursive: true })
+    await mkdir(firstCwd, { recursive: true })
+    await mkdir(secondCwd, { recursive: true })
+    await writeSkill(join(firstCwd, '.dsh/skills'), 'first-nested-skill')
+    await writeSkill(join(first, '.agents/skills'), 'first-root-skill')
+    const ctx = new Context()
+    await ctx.plugin(SkillRegistry)
+    const fiber = await ctx.plugin(SkillFileSystem, {
+      dshHome: join(home, '.dsh'),
+      agentsHome: join(home, '.agents'),
+      claudeHome: join(home, '.claude'),
+      watch: true,
+      watchMaxProjects: 1,
+      watchPollIntervalMs: 10,
+      watchStabilityThresholdMs: 20,
+    })
+
+    try {
+      expect((await ctx.skills.list({ cwd: firstCwd })).map(skill => skill.name))
+        .toEqual(['first-nested-skill', 'first-root-skill'])
+      // Two walked directories times three configured skill directories, minus
+      // the two that exist and hold a native watcher, plus the three user roots.
+      expect(watcherHarness.watchFiles).toHaveLength(7)
+      expect(watcherHarness.watchers).toHaveLength(2)
+
+      await ctx.skills.list({ cwd: secondCwd })
+
+      expect(watcherHarness.watchers.every(watcher => watcher.closeCalls > 0)).toBe(true)
+      expect(watcherHarness.watchFiles.filter(control => control.path.startsWith(first))).toEqual([])
+      expect(watcherHarness.watchFiles).toHaveLength(9)
+    } finally {
+      await fiber.dispose()
+    }
   })
 
   it('keeps skills loadable across persistent watcher startup failures without caching them', async () => {
@@ -202,6 +246,7 @@ describe('skill-filesystem watcher failures', () => {
     const fiber = await ctx.plugin(SkillFileSystem, {
       dshHome: join(home, '.dsh'),
       agentsHome: join(home, '.agents'),
+      claudeHome: join(home, '.claude'),
       watch: true,
       watchUsePolling: true,
       watchFollowSymlinks: false,
@@ -243,6 +288,7 @@ describe('skill-filesystem watcher failures', () => {
     const fiber = await ctx.plugin(SkillFileSystem, {
       dshHome: join(home, '.dsh'),
       agentsHome: join(home, '.agents'),
+      claudeHome: join(home, '.claude'),
       watch: true,
       watchPollIntervalMs: 10,
       watchStabilityThresholdMs: 20,
@@ -290,6 +336,7 @@ describe('skill-filesystem watcher failures', () => {
     const fiber = await ctx.plugin(SkillFileSystem, {
       dshHome: join(home, '.dsh'),
       agentsHome: join(home, '.agents'),
+      claudeHome: join(home, '.claude'),
       watch: true,
       watchPollIntervalMs: 10,
       watchStabilityThresholdMs: 20,
@@ -318,6 +365,7 @@ describe('skill-filesystem watcher failures', () => {
     const fiber = await ctx.plugin(SkillFileSystem, {
       dshHome: join(home, '.dsh'),
       agentsHome: join(home, '.agents'),
+      claudeHome: join(home, '.claude'),
       watch: true,
       watchPollIntervalMs: 10,
       watchStabilityThresholdMs: 20,
@@ -355,6 +403,7 @@ describe('skill-filesystem watcher failures', () => {
       provider = new SkillFileSystem.FileSystemSkillProvider(ctx, control, {
         dshHome: join(home, '.dsh'),
         agentsHome: join(home, '.agents'),
+        claudeHome: join(home, '.claude'),
         watch: true,
         watchPollIntervalMs: 10,
         watchStabilityThresholdMs: 20,
@@ -392,6 +441,7 @@ describe('skill-filesystem watcher failures', () => {
       provider = new SkillFileSystem.FileSystemSkillProvider(ctx, control, {
         dshHome: join(home, '.dsh'),
         agentsHome: join(home, '.agents'),
+        claudeHome: join(home, '.claude'),
         watch: true,
         watchPollIntervalMs: 10,
         watchStabilityThresholdMs: 20,
@@ -423,6 +473,7 @@ describe('skill-filesystem watcher failures', () => {
       provider = new SkillFileSystem.FileSystemSkillProvider(ctx, control, {
         dshHome: join(home, '.dsh'),
         agentsHome: join(home, '.agents'),
+        claudeHome: join(home, '.claude'),
         watch: true,
         watchPollIntervalMs: 10,
         watchStabilityThresholdMs: 20,

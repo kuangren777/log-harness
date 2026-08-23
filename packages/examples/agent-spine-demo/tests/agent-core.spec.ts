@@ -65,8 +65,10 @@ async function composePrefix(ctx: Context, cwd: string): Promise<Message[]> {
 async function mount(config: agentCore.Config, withBash = false): Promise<Context> {
   const oldDshHome = process.env.DSH_HOME
   const oldAgentsHome = process.env.DSH_AGENTS_HOME
+  const oldClaudeHome = process.env.DSH_CLAUDE_HOME
   process.env.DSH_HOME = await mkdtemp(join(tmpdir(), 'dsh-agent-spine-demo-home-'))
   process.env.DSH_AGENTS_HOME = await mkdtemp(join(tmpdir(), 'dsh-agent-spine-demo-agents-'))
+  process.env.DSH_CLAUDE_HOME = await mkdtemp(join(tmpdir(), 'dsh-agent-spine-demo-claude-'))
   const ctx = new Context()
   if (withBash) {
     ctx.provide('shell', {
@@ -93,14 +95,21 @@ async function mount(config: agentCore.Config, withBash = false): Promise<Contex
     } else {
       process.env.DSH_AGENTS_HOME = oldAgentsHome
     }
+    if (oldClaudeHome === undefined) {
+      delete process.env.DSH_CLAUDE_HOME
+    } else {
+      process.env.DSH_CLAUDE_HOME = oldClaudeHome
+    }
   }
 }
 
 async function withIsolatedSkillHomes<T>(run: () => Promise<T>): Promise<T> {
   const oldDshHome = process.env.DSH_HOME
   const oldAgentsHome = process.env.DSH_AGENTS_HOME
+  const oldClaudeHome = process.env.DSH_CLAUDE_HOME
   process.env.DSH_HOME = await mkdtemp(join(tmpdir(), 'dsh-agent-spine-demo-home-'))
   process.env.DSH_AGENTS_HOME = await mkdtemp(join(tmpdir(), 'dsh-agent-spine-demo-agents-'))
+  process.env.DSH_CLAUDE_HOME = await mkdtemp(join(tmpdir(), 'dsh-agent-spine-demo-claude-'))
   try {
     return await run()
   } finally {
@@ -113,6 +122,11 @@ async function withIsolatedSkillHomes<T>(run: () => Promise<T>): Promise<T> {
       delete process.env.DSH_AGENTS_HOME
     } else {
       process.env.DSH_AGENTS_HOME = oldAgentsHome
+    }
+    if (oldClaudeHome === undefined) {
+      delete process.env.DSH_CLAUDE_HOME
+    } else {
+      process.env.DSH_CLAUDE_HOME = oldClaudeHome
     }
   }
 }

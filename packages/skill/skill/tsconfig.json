@@ -22,6 +22,9 @@
       "path": "../../llm/llm"
     },
     {
+      "path": "../../settings/settings"
+    },
+    {
       "path": "../../runtime-diagnostics/invariants"
     }
   ]

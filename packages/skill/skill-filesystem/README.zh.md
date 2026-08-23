@@ -18,6 +18,9 @@
 | `includeDefaultRoots` | `true` | 在 `customSkillDirs` 周围包含项目根和用户根；设为 false 时仅使用隔离的自定义根。 |
 | `dshHome` | `$DSH_HOME` 或 `~/.dsh` | 由 [`@deepseek-ai/dsh-home-paths`](../../util/home-paths/README.zh.md) 解析的 DeepSeek Harness 配置根目录；扫描该目录下的 `skills`。 |
 | `agentsHome` | `$DSH_AGENTS_HOME` 或 `~/.agents` | 为兼容 skill 扫描的共享 agent（智能体）配置根目录。 |
+| `claudeHome` | `$DSH_CLAUDE_HOME` 或 `~/.claude` | 为兼容 skill 扫描的 Claude 配置根目录。 |
+| `projectSkillDirs` | `['.dsh/skills', '.agents/skills', '.claude/skills']` | 在每个被遍历的项目目录中扫描的相对 skill 目录；靠前的条目优先级高于靠后的条目。每个条目必须是相对路径且不含 `..`。 |
+| `walkAncestors` | `true` | 遍历查找 cwd 直到遍历锚点的每一级祖先目录；设为 `false` 时只扫描项目根目录。 |
 | `customSkillDirs` | `[]` | 在项目根目录之后、用户根目录之前扫描的其他本地 skill 根目录。 |
 | `watch` | `true` | 监视宿主本地根，并在目录成员或 frontmatter 可能发生变化时使本地提供方失效。 |
 | `watchUsePolling` | `false` | 对现有 skill 根使用 Chokidar 轮询，而不是原生事件。 |
@@ -32,13 +35,18 @@
 
 | Rank | 来源 | 路径 |
 |---|---|---|
-| 100 | `project-dsh` | `<projectRoot>/.dsh/skills` |
-| 200 | `project-agents` | `<projectRoot>/.agents/skills` |
+| `100 + depth × 3` | `project-dsh` | `<walked>/.dsh/skills` |
+| `101 + depth × 3` | `project-agents` | `<walked>/.agents/skills` |
+| `102 + depth × 3` | `project-claude` | `<walked>/.claude/skills` |
 | 300 | `custom` | `Config.customSkillDirs` |
 | 400 | `user-dsh` | `<dshHome>/skills` |
 | 500 | `user-agents` | `<agentsHome>/skills` |
+| 550 | `user-claude` | `<claudeHome>/skills` |
+| 600 | `bundled` | `Config.bundledSkillDir` |
 
-项目根目录是包含 `.git` 的最近祖先目录；如果不存在，则使用当前 cwd。用户 DSH 根目录会跳过其 `.system` 子目录，因此归系统所有的目录不会被当作普通用户 skill。`includeDefaultRoots: false` 会省略项目根、用户根以及 `$DSH_BUNDLED_SKILL_DIR` 环境默认值，同时保留显式配置的自定义根与 bundled 根，因此可以挂载多个只看到自身根的唯一命名隔离提供方。该提供方提供项目和用户 skill；其他提供方可提供内置系统 skill。
+项目发现是分层的。遍历覆盖查找 cwd 及其直到锚点的每一级祖先目录：当 cwd 位于操作系统 home 目录内时，锚点是 home 目录；否则是包含 `.git` 的最近祖先目录；两者都不存在时只覆盖 cwd 自身。每个被遍历的目录都会贡献全部 `projectSkillDirs` 条目，rank 为 `100 + depth × projectSkillDirs.length + index`，其中 cwd 的 `depth` 为 0；因此同名 skill 由更近的目录胜出，同一目录内由更靠前的条目胜出。配置条目的来源标签是 `project-` 加上其首个路径段（去掉前导点）。`walkAncestors: false` 时只扫描项目根目录，即包含 `.git` 的最近祖先目录或 cwd。
+
+若某个被遍历目录的 skill 根同时也是用户根，则该目录交由用户根处理：当 home 目录是祖先目录时，`~/.dsh/skills` 保持 rank 400 及其 `.system` 跳过行为，而不会进入项目 rank 区间。用户 DSH 根目录会跳过该 `.system` 子目录，因此归系统所有的目录不会被当作普通用户 skill。`includeDefaultRoots: false` 会省略项目根、用户根以及 `$DSH_BUNDLED_SKILL_DIR` 环境默认值，同时保留显式配置的自定义根与 bundled 根，因此可以挂载多个只看到自身根的唯一命名隔离提供方。该提供方提供项目和用户 skill；其他提供方可提供内置系统 skill。
 
 当 `ctx.fs` 可用时，发现通过 `ctx.fs.listDir` 列出根，通过 `ctx.fs.readText` 读取 skill 文件，并通过文件系统服务探测 `.git`。完整 skill 加载会将查找中止信号转发给文件系统元数据和内容读取。如果没有文件系统服务，提供方回退到可中止的 Node 文件系统 I/O，使最小本地上下文仍能加载 skill。已确认缺失的路径属于有效空状态；遇到格式错误或非文本条目时，提供方会发出警告并跳过；意外的发现或读取失败会使注册表快照不完整，系统不会因此用看似发生删除的结果替换上一份可用模型目录。
 
@@ -69,7 +77,9 @@ watcher 触发的失效可促使上述消费方在现有请求历史中追加替
 ## 已知限制与暂缓事项
 
 - **发现深度为一层**：只识别 `<root>/<name>/SKILL.md` 和 `<root>/<name>.md`；忽略嵌套 skill 树和包 manifest（元数据清单）。
-- **项目范围为最近 `.git` 祖先**：没有该标记的工作区回退到提供的 cwd，不支持其他项目根标记或 monorepo 子项目选择。
+- **遍历锚点为 home 目录或最近 `.git` 祖先**：两者都没有的工作区只扫描提供的 cwd，不支持其他项目根标记或 monorepo 子项目选择。
+- **项目 rank 区间的上界低于 300**：需要 rank 300 或更高的遍历会盖过 `custom` 根，因此该 cwd 的发现直接失败，而不是压缩 rank；注册表会记录该提供方被跳过并报告目录不完整。在默认的三个目录下，这需要 67 个被遍历目录；设置 `walkAncestors: false` 或缩短 `projectSkillDirs` 可恢复发现。
+- **监视一个 cwd 的开销为 (depth + 1) × `projectSkillDirs` 个句柄**：同一 cwd 的所有被遍历根共用其锚点的 owner key，因此 `watchMaxProjects` 限制的仍是不同的 cwd 而非目录数量，驱逐其中一个会释放它的全部根。`walkAncestors: false` 可去掉祖先目录的句柄。
 - **格式错误的条目会随警告消失**：模型目录不会收到每个 skill 的诊断，无法区分缺失的 skill 与无效的 skill；意外 I/O 失败则会保留最后一份可用目录。
 - **缺失根观察每次轮询一个路径段**：启动时不存在的根会使用 `fs.watchFile` 按 `watchPollIntervalMs` 轮询，直至 Chokidar 可以附加；这以有界检测延迟换取跨 IDE、Git 和 shell 工作流的可靠创建检测。
 - **无正文修订协议**：已加载的正文是普通的已保留工具历史；后续文件编辑会影响后续调用，但既不会改写旧结果，也不会通知正文已发生变化。

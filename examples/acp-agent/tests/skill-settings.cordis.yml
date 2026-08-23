@@ -1,0 +1,12 @@
+# Exercise per-skill invocation policy from the user settings document through
+# the shipped ACP app and Loader entry path. The scenario workspace seeds both
+# the discovered skill and the `.dsh/settings.yaml` section that hides it from
+# the model while leaving the user-explicit `/name` gesture intact.
+- id: base
+  name: '@deepseek-ai/cordis-plugin-include'
+  config:
+    path: ../cordis.yml
+    patches:
+      - insert:
+          - id: settings
+            name: '@deepseek-ai/dsh-settings-file'

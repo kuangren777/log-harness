@@ -16,11 +16,12 @@ The registry is host+per-scope layered over [`@deepseek-ai/dsh-scope`](../../cor
 - `ctx.skills.snapshot({ cwd?, signal?, scope? })` Returns the invocation-neutral `{ skills, complete }` observation for the viewing scope's merged layers. `complete` is false when any provider rejects or explicitly reports incomplete discovery, or when a second catalog revision races the bounded retry; candidates supplied by that observation remain in this result, which is never cached.
 - `ctx.skills.list({ cwd?, signal?, scope? })` Borrows the readonly view options, then returns every winning summary for the current workspace, merged across the global layer and the viewing scope's chain and sorted by name. Consumers apply `isModelInvocable(skill)` or `isUserInvocable(skill)` at their own boundary.
 - `ctx.skills.get(name, { cwd?, signal?, scope? })` Uses the same readonly options and winning candidate for discovery and loading, rechecks cancellation after discovery or a cache hit, races provider loading against the signal, validates the loaded definition, then returns it regardless of invocation policy.
+- `ctx.skills.inventory({ cwd?, signal?, scope? })` Reports every discovered candidate grouped by origin — layer, source, rank, and root — nearest layer first and best rank first, including the shadowed losers `list()` hides. Each entry carries the authored policy, the effective policy, the user override that separates them, and whether it is `shadowed`. Discovery runs uncached, so an inventory read neither populates nor evicts the catalog cache.
 - `ctx.skills.register(skill): () => void` Registers a readonly runtime embedded skill into the calling context's layer, adding the all-invocable policy and `provider: "runtime"` when omitted. Same-name runtime registrations in one layer are first-wins: a duplicate logs a warning and gets a no-op disposer. Successful registrations return the exact Cordis disposer for ordered composite teardown.
 
 ### Events
 
-- `skills/change` is an unfiltered invalidation notification emitted after a provider or runtime contribution is registered or disposed and after an active provider's registration control invalidates. It carries no catalog or diff: each consumer refetches `snapshot()` with its own lookup options. Listener throws and rejected promises are logged and cannot veto the registry mutation or starve later listeners.
+- `skills/change` is an unfiltered invalidation notification emitted after a provider or runtime contribution is registered or disposed, after an active provider's registration control invalidates, and after a stored invocation override changes. It carries no catalog or diff: each consumer refetches `snapshot()` with its own lookup options. Listener throws and rejected promises are logged and cannot veto the registry mutation or starve later listeners. Its cordis `Events` declaration lives in the client-safe `./types` export, not in `index.ts`, because a browser consumer subscribing through `ctx.remote.$on` needs the signature in its own compilation face while the registry stays Host-only.
 
 ### Config
 
@@ -38,6 +39,26 @@ The registry is host+per-scope layered over [`@deepseek-ai/dsh-scope`](../../cor
 | `{ modelInvocable: true, userInvocable: false }` | included | excluded |
 | `{ modelInvocable: false, userInvocable: true }` | excluded | included |
 | `{ modelInvocable: false, userInvocable: false }` | excluded | excluded |
+
+### User settings overrides
+
+While a `ctx.settings` service is mounted, the registry owns the `skills` settings namespace (`SKILLS_SETTINGS_NAMESPACE`): a dictionary keyed by skill name whose entries carry the optional booleans `model` and `user`. The key is the skill name because layer merging already resolves one winner per name. A key that is not a valid skill name fails the write, and an already-stored one fails the registration. No settings service means no overrides and no failure.
+
+```yaml
+# ~/.dsh/settings.yaml
+skills:
+  deploy-runbook: { model: false, user: true }
+```
+
+Every read applies the section to the merged winner, so **settings override SKILL.md frontmatter** (`disable-model-invocation`, `user-invocable`). `applyPolicyOverride(authored, override)` resolves one policy: a present field replaces that surface, an absent one keeps what the contribution declared. `list()`, `snapshot()`, and `get()` all carry the effective policy, so a consumer enforcing `isModelInvocable` or `isUserInvocable` needs no override knowledge; `inventory()` reports the authored policy and the override beside it.
+
+| Stored override | Model catalog and `skill` tool | User command menu and `/name` gesture |
+|---|---|---|
+| `{ model: false }` | hidden; a call on the name is refused | listed and injected |
+| `{ user: false }` | listed and loadable | absent; `/name` stays ordinary prose |
+| `{ model: false, user: false }` | hidden | hidden |
+
+A committed change to the section invalidates the catalog cache and emits `skills/change`, as does an attach or detach that adds or removes overrides; an attach or detach carrying none moves nothing and stays silent. The [policy-override Agent Note](../../../.agents/notes/implemented/feature/2026-08-22-skill-policy-overrides.md) owns the ownership and keying rationale.
 
 ### Shared model-facing rendering
 
@@ -76,4 +97,5 @@ No direct prompt effect. The named consumer owns the durable initial catalog and
 - **Invalidation is provider-driven** — the registry has no TTL and cannot infer that an arbitrary remote source changed; each mutable provider must retain and call its registration-scoped `invalidate()` capability from its own observation mechanism.
 - **Providers are queried sequentially** — one slow cooperative provider delays every provider registered after it; cancellation stops the caller's wait but cannot terminate work an uncooperative provider keeps running.
 - **Incomplete observations are not retained** — rejected providers are omitted and explicitly supplied candidates remain available only to the current lookup; the registry owns neither a last-good catalog nor per-provider diagnostics.
-- **Duplicate resolution is first-wins** — later lower-priority candidates within a layer are logged and hidden, and a nearer layer shadows a farther one silently; there is no API to inspect all shadowed definitions.
+- **Duplicate resolution is first-wins** — later lower-priority candidates within a layer are logged and hidden, and a nearer layer shadows a farther one silently; `inventory()` reports the losers, but no consumer can load or address one.
+- **Overrides are keyed by name alone** — one settings entry cannot address a specific layer, source, or root, so it follows whichever contribution currently wins that name.

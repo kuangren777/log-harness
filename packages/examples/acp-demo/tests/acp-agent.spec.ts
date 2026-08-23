@@ -62,9 +62,11 @@ async function composePrefix(ctx: Context): Promise<Message[]> {
 async function withIsolatedSkillHomes<T>(run: () => Promise<T>): Promise<T> {
   const oldDshHome = process.env.DSH_HOME
   const oldAgentsHome = process.env.DSH_AGENTS_HOME
+  const oldClaudeHome = process.env.DSH_CLAUDE_HOME
   const home = await mkdtemp(join(tmpdir(), 'dsh-acp-demo-default-skills-'))
   process.env.DSH_HOME = join(home, '.dsh')
   process.env.DSH_AGENTS_HOME = join(home, '.agents')
+  process.env.DSH_CLAUDE_HOME = join(home, '.claude')
   try {
     return await run()
   } finally {
@@ -77,6 +79,11 @@ async function withIsolatedSkillHomes<T>(run: () => Promise<T>): Promise<T> {
       delete process.env.DSH_AGENTS_HOME
     } else {
       process.env.DSH_AGENTS_HOME = oldAgentsHome
+    }
+    if (oldClaudeHome === undefined) {
+      delete process.env.DSH_CLAUDE_HOME
+    } else {
+      process.env.DSH_CLAUDE_HOME = oldClaudeHome
     }
   }
 }

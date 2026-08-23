@@ -30,6 +30,7 @@ export type {} from '@deepseek-ai/dsh-credentials/types'
 export type {} from '@deepseek-ai/dsh-llm/types'
 export type {} from '@deepseek-ai/dsh-agent-presets/types'
 export type {} from '@deepseek-ai/dsh-settings/types'
+export type {} from '@deepseek-ai/dsh-skill/types'
 
 /**
  * The carrier's Client-facing types, re-exported so a business package names one
@@ -42,7 +43,9 @@ export type {
   MessageId, ModelCatalogFailure, ModelProviderGroup, ModelReasoningEffort, ModelSelection,
   MuxFrame, PromptContentPart, QuestionResponsePayload, QueueAction, RpcError, RpcId, RpcReceipt,
   RpcRequest, RpcResponse, RpcResult, SessionId, SessionModels, SessionSearchItem,
-  SessionSummary, SettingsNamespaceView, SettingsPathOpView, SkillEntry, StreamChunk,
+  SessionSummary, SettingsNamespaceView, SettingsPathOpView, SkillEntry, SkillInventory,
+  SkillInventoryEntry, SkillInventoryGroup, SkillInvocationSurfaces, SkillPolicyOverrideView,
+  StreamChunk,
   SubagentAddress, SubagentCatalog, JobView, ToolCallView, ToolEventView, ToolResultView,
   WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-connection/client'

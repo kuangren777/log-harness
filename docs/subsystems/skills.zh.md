@@ -2,7 +2,7 @@
 
 [English](skills.md) | 中文
 
-[skill（技能）能力族](../../packages/skill) 包含 Service Definition（[dsh-skill](../../packages/skill/skill)，`ctx.skills`）、本地 Service Provider（[dsh-skill-filesystem](../../packages/skill/skill-filesystem)）、可选的随包徽章提供方（[dsh-skill-badge](../../packages/skill/skill-badge)）和 Consumer（[dsh-tool-skill](../../packages/skill/tool-skill)）。注册表在其宿主层与各 scope 层之间合并各提供方的目录；提供方贡献本地或随包 skill；Consumer 拥有初始目录和替换目录，以及面向模型的 `skill` 工具。skill 是可选的指令而非会话事件，因此其词汇定义在此处而非 [core.md](core.zh.md)。
+[skill（技能）能力族](../../packages/skill) 包含 Service Definition（[dsh-skill](../../packages/skill/skill)，`ctx.skills`）、本地 Service Provider（[dsh-skill-filesystem](../../packages/skill/skill-filesystem)）、可选的随包徽章提供方（[dsh-skill-badge](../../packages/skill/skill-badge)）和 Consumer（[dsh-tool-skill](../../packages/skill/tool-skill)）。注册表在其宿主层与各 scope 层之间合并各提供方的目录；提供方贡献本地或随包 skill；Consumer 拥有初始目录和替换目录，以及面向模型的 `skill` 工具。skill 是可选的指令而非会话事件，因此其词汇定义在此处而非 [core.md](core.md)。
 
 源码：[`packages/skill/skill/src/index.ts`](../../packages/skill/skill/src/index.ts)、[`packages/skill/skill-filesystem/src/index.ts`](../../packages/skill/skill-filesystem/src/index.ts)、[`packages/skill/skill-badge/src/index.ts`](../../packages/skill/skill-badge/src/index.ts) 与 [`packages/skill/tool-skill/src/index.ts`](../../packages/skill/tool-skill/src/index.ts)。
 
@@ -10,7 +10,7 @@
 
 `ctx.skills` 组合本地、内嵌、远程或其他提供方。注册是同步的；远程初始化与发现属于 `list()` 的 await 阶段。提供方对象、选项与候选项以只读方式借用，语义字段会被校验。
 
-注册表采用宿主 + 按 scope 的分层结构，即[工具注册表](tools.zh.md)在 [dsh-scope](../../packages/core/scope) 之上确立的形态：注册会落入调用方上下文 scope 对应的层——宿主行与 repository 插件落入全局层，由 agent（智能体） preset 常驻组合挂载的插件落入该 preset 的层——提供方名称在每层内唯一，而非进程级唯一。读取时将全局层与观察 scope 的链合并：最近层的条目直接赢得重名 skill，下文的 rank 顺序只在单层内裁决重名。发现缓存以解析后的 scope 链为键，因此重设 scope 父级（空会话重组）无需注册表变更即可被下一次读取看到。
+注册表采用宿主 + 按 scope 的分层结构，即[工具注册表](tools.md)在 [dsh-scope](../../packages/core/scope) 之上确立的形态：注册会落入调用方上下文 scope 对应的层——宿主行与 repository 插件落入全局层，由 agent（智能体） preset 常驻组合挂载的插件落入该 preset 的层——提供方名称在每层内唯一，而非进程级唯一。读取时将全局层与观察 scope 的链合并：最近层的条目直接赢得重名 skill，下文的 rank 顺序只在单层内裁决重名。发现缓存以解析后的 scope 链为键，因此重设 scope 父级（空会话重组）无需注册表变更即可被下一次读取看到。
 
 在单层内，重名项依次按 rank、提供方顺序和本地顺序确定优先级；摘要按名称排序。提供方的 `list()` 被拒绝时，系统会记录日志，并从不完整观测中省略该提供方的结果；显式的不完整观测会提供可用候选项，但不会使结果变得可缓存；格式错误的候选项快速失败。每个提供方工厂都会接收一项注册作用域内的控制能力；仅当该精确注册仍处于活动状态时，其 `invalidate()` 才会清除已完成目录；注册失败或 dispose（资源释放）时，其信号会中止。若提供方代次在发现进行期间发生变化，该发现会重试一次；若再次变化，则返回最新候选项，并将结果标为不完整且不予缓存。提供方和运行时变更会发出不带过滤条件的 `skills/change` 失效事件；该事件不携带 diff，因此消费方会使用自身的查找选项重新获取 `snapshot()`。
 
@@ -67,14 +67,16 @@ interface SkillProviderControl {
 
 | Rank | Source | Root |
 |---|---|---|
-| 100 | `project-dsh` | `<projectRoot>/.dsh/skills` |
-| 200 | `project-agents` | `<projectRoot>/.agents/skills` |
+| `100 + depth × 3` | `project-dsh` | `<walked>/.dsh/skills` |
+| `101 + depth × 3` | `project-agents` | `<walked>/.agents/skills` |
+| `102 + depth × 3` | `project-claude` | `<walked>/.claude/skills` |
 | 300 | `custom` | `Config.customSkillDirs` |
 | 400 | `user-dsh` | `<dshHome>/skills` |
 | 500 | `user-agents` | `<agentsHome>/skills` |
+| 550 | `user-claude` | `<claudeHome>/skills` |
 | 600 | `bundled` | 配置了 `Config.bundledSkillDir` 时使用该目录 |
 
-项目根目录为包含 `.git` 的最近祖先目录；找不到时使用当前 cwd。当 `ctx.fs` 可用时，git-root 向上查找通过文件系统服务探测 `.git`，使远程或沙箱工作区不会回退到宿主文件系统边界。用户 DSH 根目录会跳过其 `.system` 子目录。本地提供方不会合成内置系统 skill；部署方通过已配置的 bundled 根目录或专用提供方提供随包 skill。
+项目发现基于祖先遍历分层：查找 cwd 及其直到锚点的每一级祖先目录都会贡献所配置的 `projectSkillDirs`，因此同名 skill 由更近的目录胜出。当 cwd 位于操作系统 home 目录内时，锚点是 home 目录；否则是包含 `.git` 的最近祖先目录；两者都不存在时只覆盖 cwd 自身。`Config.walkAncestors: false` 时只扫描项目根目录。项目 rank 区间必须保持在 300 以下，因此深到会触及 300 的遍历会让该次查找失败，而不是盖过 `custom` 根。当 `ctx.fs` 可用时，git-root 向上查找通过文件系统服务探测 `.git`，使远程或沙箱工作区不会回退到宿主文件系统边界。若某个被遍历目录的 skill 根同时也是用户根，则交由该用户根处理，从而让 `~/.dsh/skills` 保持 rank 400 及其 `.system` 跳过行为。本地提供方不会合成内置系统 skill；部署方通过已配置的 bundled 根目录或专用提供方提供随包 skill。
 
 `dsh-skill-badge` 在 `BUNDLED_SKILL_RANK` 注册一个不可变的 `bundled` 候选项，并通过 `resourceBase` 公开其随包资产目录。交付的 CLI（命令行界面）将该插件声明为禁用，因此启用其组合配置行即为显式选择加入。
 
@@ -86,7 +88,17 @@ skill 名称为 kebab-case（`^[a-z0-9]+(?:-[a-z0-9]+)*$`）。本地提供方�
 
 ```ts type-equiv
 /** Origin bucket for a skill contribution. The value is prompt-visible metadata, not precedence by itself. */
-type SkillSource = 'project-dsh' | 'project-agents' | 'runtime' | 'user-dsh' | 'user-agents' | 'custom' | 'bundled' | (string & {})
+type SkillSource =
+  | 'project-dsh'
+  | 'project-agents'
+  | 'project-claude'
+  | 'runtime'
+  | 'user-dsh'
+  | 'user-agents'
+  | 'user-claude'
+  | 'custom'
+  | 'bundled'
+  | (string & {})
 ```
 
 ## 摘要、候选项与完整定义
@@ -125,6 +137,8 @@ interface SkillSummary {
 
 `ctx.skills.list()` 保留全部四种策略组合。`isModelInvocable(skill)` 和 `isUserInvocable(skill)` 分别读取对应的必填字段。仅供模型调用的 skill 设置 `{ modelInvocable: true, userInvocable: false }`，仅供用户调用的 skill 设置 `{ modelInvocable: false, userInvocable: true }`，两个字段均设为 `false` 后，该 skill 只能由受信的 `ctx.skills.get()` 调用方获取。本地提供方读取名称完全匹配的 kebab-case frontmatter 键 `disable-model-invocation` 和 `user-invocable`，将省略的字段默认为 `true`，并为每个解析出的 skill 生成这个规范化策略。
 
+用户可以通过注册表拥有的 `skills` 设置命名空间逐 skill 覆盖这份作者声明的策略；每次读取都会把已存储的配置段应用到合并后的胜出者上，因此执行接口检查的消费方绝不会看到作者声明值。[`dsh-skill`](../../packages/skill/skill/README.md#user-settings-overrides) 负责定义其 schema、优先级与行为矩阵，而 `ctx.skills.inventory()` 会在覆盖旁一并报告两份策略。
+
 `SkillCatalogSnapshot` 用于区分已确定的不存在与提供方的瞬时失败或发现期间持续变化的目录。`skills` 包含该次观测中收集、排序且与调用策略无关的摘要；只有每个已注册提供方都在没有并发目录修订时完成发现，`complete` 才为 true。不完整快照不会缓存，因此每个消费方可以保留上一份经过自身过滤的可用目录并重试。
 
 ```ts type-equiv
@@ -148,6 +162,8 @@ interface SkillCandidate extends SkillSummary {
   readonly locator: unknown
   /** Absolute file path when the provider has one. */
   readonly path?: string
+  /** Absolute directory this candidate was discovered in, when the provider scans directories. */
+  readonly root?: string
   /** Parsed optional metadata object from provider-specific skill frontmatter. */
   readonly metadata?: Readonly<Record<string, unknown>>
 }
@@ -216,7 +232,7 @@ interface SkillViewOptions extends SkillLookupOptions {
 }
 ```
 
-注册表只拥有其发现缓存上限。本地提供方拥有文件系统根目录（`dshHome`、`agentsHome`、`customSkillDirs`，以及可选的 `bundledSkillDir`/`DSH_BUNDLED_SKILL_DIR`），以及 watcher 启用、轮询、稳定性、符号链接和项目容量控制。消费方拥有其目录描述上限。确切的默认值和校验规则见自动生成的[插件配置目录](../config-catalog.zh.md)。
+注册表只拥有其发现缓存上限。本地提供方拥有文件系统根目录（`dshHome`、`agentsHome`、`customSkillDirs`，以及可选的 `bundledSkillDir`/`DSH_BUNDLED_SKILL_DIR`），以及 watcher 启用、轮询、稳定性、符号链接和项目容量控制。消费方拥有其目录描述上限。确切的默认值和校验规则见自动生成的[插件配置目录](../config-catalog.md)。
 
 ```ts type-equiv
 /** Skill registry configuration. */
@@ -240,7 +256,7 @@ interface Config {
 
 ## Cordis API
 
-Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — this section is byte-identical in both language sides of the page. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
 <a id="ctxskills--skillregistry"></a>
 
@@ -302,9 +318,21 @@ async snapshot(options: SkillViewOptions = {}): Promise<SkillCatalogSnapshot>
  * @returns the full skill, including body content, or `undefined`.
  */
 async get(name: string, options: SkillViewOptions = {}): Promise<SkillDefinition | undefined>
+
+/**
+ * Report every discovered skill grouped by origin, including the losers the
+ * catalog hides: `snapshot()` and `list()` answer "what can be invoked", this
+ * answers "what exists and why is it not winning". Each entry carries the
+ * authored policy, the effective one, and the user override that separates
+ * them. Discovery runs uncached, so an inventory read never populates or
+ * evicts the catalog cache.
+ * @param options - view options; `scope` selects the viewing agent's layers, `cwd` selects project roots, and `signal` cancels discovery.
+ * @returns nearest-first origin groups plus discovery-completeness state.
+ */
+async inventory(options: SkillViewOptions = {}): Promise<SkillInventory>
 ```
 
-Source: [`packages/skill/skill/src/index.ts`](../../packages/skill/skill/src/index.ts)
+Source: [`packages/skill/skill/src/index.ts:467`](../../packages/skill/skill/src/index.ts)
 
 <a id="skills-events"></a>
 
@@ -327,5 +355,5 @@ A skill provider, runtime contribution, or provider-backed catalog may have chan
 'skills/change'(): void
 ```
 
-Source: [`packages/skill/skill/src/index.ts`](../../packages/skill/skill/src/index.ts)
+Source: [`packages/skill/skill/src/types.ts:18`](../../packages/skill/skill/src/types.ts)
 <!-- END GENERATED cordis-surface -->

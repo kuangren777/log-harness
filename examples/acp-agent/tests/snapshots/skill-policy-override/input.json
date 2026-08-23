@@ -1,0 +1,8 @@
+{
+  "steps": [
+    { "op": "initialize" },
+    { "op": "newSession" },
+    { "op": "prompt", "text": "Call the skill tool with name snapshot-skill, then reply with just DONE." },
+    { "op": "prompt", "text": "/snapshot-skill" }
+  ]
+}

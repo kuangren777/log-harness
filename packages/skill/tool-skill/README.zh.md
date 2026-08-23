@@ -14,6 +14,8 @@
 
 如果最初没有模型可调用 skill，则省略目录；如果该 agent（智能体）的工具视图排除了随附的 `skill` 工具，或解析出同名的作用域内遮蔽项，也会省略目录。身份比对针对本插件所注册的那个定义，而非按自身名字回查，因此本插件既可全局挂载，也可挂在单个 agent 的组装内——在后者中 `register()` 只注册到该 agent 的层中。可见性变更参与 digest 计算，使提示词指引、模型可见 schema 和可执行分派保持对齐。
 
+目录成员资格与工具派发都读取生效策略，因此用户存储的 `skills` 设置段（[优先级](../skill/README.md#user-settings-overrides)）会同时影响两者。对模型禁用某个 skill 会把它从目录中移除，并让 `skill` 工具拒绝它，而用户显式的 `/name` 手势仍会注入其正文；对用户禁用它则不影响目录条目与工具，只是让 `/name` 退回普通行文。开关翻转就是一次普通的目录变更：下一次 pre-step 会追加一条完整的替换目录。
+
 `catalogDescriptionMaxLength` 控制规范化后的目录描述，渲染时会对其执行 XML 转义。其默认值是 `500`，且必须是不小于 `3` 的整数，以便为截断省略号保留空间。[skill 目录热刷新 Agent Note](../../../.agents/notes/implemented/feature/2026-07-27-skill-catalog-hot-refresh.zh.md) 负责定义持久初始目录和替换目录的生命周期。
 
 ## 工具：`skill`
@@ -26,7 +28,7 @@
 
 资源指引只会根据 `resourceBase` 解析指令显式引用的路径或 URL；脚本、参考资料和资源文件按需加载，结果不会列举 skill 目录。本地提供方可以提供目录，而远程或嵌入式提供方可以提供 URL 或不透明加载指引。
 
-无法解析的名称会报告 skill 未知或已不可用。无效名称和 `invocation.modelInvocable` 为 `false` 的 skill 会产生不同的错误结果。`invocation.userInvocable` 不限制这个面向模型的接口。
+无法解析的名称会报告 skill 未知或已不可用。无效名称和 `invocation.modelInvocable` 为 `false` 的 skill 会产生不同的错误结果。`invocation.userInvocable` 不限制这个面向模型的接口。这里读取的是生效策略，因此用户在设置文档中存储的 `skills` 覆盖（[优先级](../skill/README.md#user-settings-overrides)）拒绝该名称的方式，与 `disable-model-invocation` frontmatter 完全一致。
 
 工具执行不会添加合成上下文消息。新加载的结果已作为工具结果记录，并在下一个模型步骤可用，无需重复正文。只有目录投影会添加替换摘要。
 
@@ -59,7 +61,7 @@ A user may also invoke a skill directly; its <skill_content> block then appears 
 
 #### KV Cache 影响
 
-初始持久目录追加在现有可重用前缀之后。动态变更作为该目录之后的仅追加历史，因此较早的可重用 token 保持不变，每条新追加的目录和后续轮次都会形成新的后缀。新建或恢复的实例如果 digest 发生变化，可能会从新追加的目录位置起影响缓存重用。
+初始持久目录追加在现有可重用前缀之后。动态变更作为该目录之后的仅追加历史，因此较早的可重用 token 保持不变，每条新追加的目录和后续轮次都会形成新的后缀。新建或恢复的实例如果 digest 发生变化，可能会从新追加的目录位置起影响缓存重用。翻转一个已存储的调用覆盖，代价是在下一次 pre-step 追加一条替换目录，绝不会重写此前那条。
 
 ### 工具 schema
 
@@ -149,7 +151,7 @@ Load referenced resources only as needed.
 
 #### 模型看到的内容
 
-已认领用户消息中任意位置、以空白为界、指名工作区目录中某个用户可调用 skill 的 `/name` token，会把该 skill 的完整 `<skill_content>` 渲染（与上文结果模板完全相同的形态）作为 `user` 角色的指令上下文注入，追加在该步骤所有其他注入之后——背景在前，模型要着手处理的材料在最后。只扫描直接的用户输入，检查在已加载定义上进行，未知名称和用户不可调用的名称保持为普通行文。这是 `disable-model-invocation` skill 唯一的入口，目录和 `skill` 工具永不暴露这类 skill；目录的结尾一句会告诉模型遵循注入块，而不是重新加载它。
+已认领用户消息中任意位置、以空白为界、指名工作区目录中某个用户可调用 skill 的 `/name` token，会把该 skill 的完整 `<skill_content>` 渲染（与上文结果模板完全相同的形态）作为 `user` 角色的指令上下文注入，追加在该步骤所有其他注入之后——背景在前，模型要着手处理的材料在最后。只扫描直接的用户输入，检查在已加载定义上进行——该定义携带生效策略，因此已存储的 `user: false` 覆盖会让手势失效——未知名称和用户不可调用的名称保持为普通行文。无论是 `disable-model-invocation` frontmatter 还是已存储的 `model: false` 覆盖，模型无法调用的 skill 都只有这一个入口，目录和 `skill` 工具永不暴露这类 skill；目录的结尾一句会告诉模型遵循注入块，而不是重新加载它。
 
 #### Token 影响
 

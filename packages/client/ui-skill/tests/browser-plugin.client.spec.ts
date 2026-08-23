@@ -282,6 +282,23 @@ describe('catalog cache', () => {
     expect(payloads[2]).toEqual({ sessionId: 's1' })
   })
 
+  it('skills/change clears every cached session and the next menu refetches', async () => {
+    const { list, payloads } = countingList()
+    const { ctx, source } = await bench(list)
+    await source.candidates(proj('s1'), req(''))
+    await source.candidates(proj('s2'), req(''))
+    expect(payloads).toHaveLength(2)
+    // The host invalidation carries no diff and names no session: a toggled
+    // override or a rescanned directory can move any project's winners, so
+    // every key drops and the next '/' pays one RPC per session again.
+    ctx.remote.$dispatch('skills/change', [])
+    await source.candidates(proj('s1'), req(''))
+    await source.candidates(proj('s2'), req(''))
+    expect(payloads).toHaveLength(4)
+    expect(payloads[2]).toEqual({ sessionId: 's1' })
+    expect(payloads[3]).toEqual({ sessionId: 's2' })
+  })
+
   it('connection/reset clears every cached session', async () => {
     const { list, payloads } = countingList()
     const { ctx, source } = await bench(list)

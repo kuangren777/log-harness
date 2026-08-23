@@ -4,7 +4,9 @@
  * This package is one implementation of the `ctx.skills` provider registry. It
  * discovers directory-bundle and flat Markdown skills from project, custom, and
  * user roots, parses YAML frontmatter, and loads bodies through `ctx.fs` when a
- * filesystem service is present.
+ * filesystem service is present. Project discovery is layered: each directory
+ * from `cwd` up to the walk anchor contributes the configured skill
+ * directories, and the nearest one wins a duplicate name.
  *
  * @module @deepseek-ai/dsh-skill-filesystem
  */
@@ -33,11 +35,12 @@ import {
   type SkillSource,
 } from '@deepseek-ai/dsh-skill'
 
-const PROJECT_DSH_RANK = 100
-const PROJECT_AGENTS_RANK = 200
+const PROJECT_RANK_BASE = 100
 const CUSTOM_RANK = 300
 const USER_DSH_RANK = 400
 const USER_AGENTS_RANK = 500
+const USER_CLAUDE_RANK = 550
+const DEFAULT_PROJECT_SKILL_DIRS = ['.dsh/skills', '.agents/skills', '.claude/skills']
 const DEFAULT_WATCH_STABILITY_THRESHOLD_MS = 200
 const DEFAULT_WATCH_POLL_INTERVAL_MS = 100
 const DEFAULT_WATCH_MAX_PROJECTS = 128
@@ -55,6 +58,12 @@ export interface Config {
   dshHome?: string
   /** Shared agent config root. Defaults to `$DSH_AGENTS_HOME` or `~/.agents`. */
   agentsHome?: string
+  /** Claude config root. Defaults to `$DSH_CLAUDE_HOME` or `~/.claude`. */
+  claudeHome?: string
+  /** Relative skill directories scanned in every walked project directory; earlier entries win a duplicate name. */
+  projectSkillDirs?: string[]
+  /** Whether project discovery also scans the ancestors of `cwd` up to the walk anchor. */
+  walkAncestors?: boolean
   /** Additional skill roots scanned after project roots and before user roots. */
   customSkillDirs?: string[]
   /** Whether host-local skill roots are watched for catalog changes. */
@@ -78,6 +87,9 @@ export const Config: Schema<Config> = z.object({
   includeDefaultRoots: z.boolean().default(true),
   dshHome: z.string(),
   agentsHome: z.string(),
+  claudeHome: z.string(),
+  projectSkillDirs: z.array(z.string()).default(DEFAULT_PROJECT_SKILL_DIRS),
+  walkAncestors: z.boolean().default(true),
   customSkillDirs: z.array(z.string()).default([]),
   watch: z.boolean().default(true),
   watchUsePolling: z.boolean().default(false),
@@ -93,8 +105,15 @@ interface SkillRoot {
   source: SkillSource
   rank: number
   skipSystem?: boolean
+  /** Watcher owner key shared by every root the same cwd walk produced: its walk anchor. */
   projectRoot?: string
   trustedHost?: boolean
+}
+
+/** One configured relative project skill directory and the source label its leading segment names. */
+interface ProjectSkillDir {
+  path: string
+  source: SkillSource
 }
 
 interface SkillRootEntry {
@@ -146,8 +165,9 @@ export function apply(ctx: Context, config: Config = {}): void {
 export class FileSystemSkillProvider implements SkillProvider {
   readonly name: string
   private readonly includeDefaultRoots: boolean
-  private readonly dshHome: string
-  private readonly agentsHome: string
+  private readonly projectSkillDirs: readonly ProjectSkillDir[]
+  private readonly walkAncestors: boolean
+  private readonly userRoots: readonly SkillRoot[]
   private readonly customSkillDirs: string[]
   private readonly watchManager: SkillWatchManager
   private readonly bundledSkillDir: string | undefined
@@ -160,8 +180,16 @@ export class FileSystemSkillProvider implements SkillProvider {
   ) {
     this.name = config.providerName ?? 'filesystem'
     this.includeDefaultRoots = config.includeDefaultRoots ?? true
-    this.dshHome = resolveDshHome(config.dshHome)
-    this.agentsHome = resolve(config.agentsHome ?? process.env.DSH_AGENTS_HOME ?? join(homedir(), '.agents'))
+    this.projectSkillDirs = resolveProjectSkillDirs(config.projectSkillDirs ?? DEFAULT_PROJECT_SKILL_DIRS)
+    this.walkAncestors = config.walkAncestors ?? true
+    const dshHome = resolveDshHome(config.dshHome)
+    const agentsHome = resolve(config.agentsHome ?? process.env.DSH_AGENTS_HOME ?? join(homedir(), '.agents'))
+    const claudeHome = resolve(config.claudeHome ?? process.env.DSH_CLAUDE_HOME ?? join(homedir(), '.claude'))
+    this.userRoots = [
+      { path: join(dshHome, 'skills'), source: 'user-dsh', rank: USER_DSH_RANK, skipSystem: true },
+      { path: join(agentsHome, 'skills'), source: 'user-agents', rank: USER_AGENTS_RANK },
+      { path: join(claudeHome, 'skills'), source: 'user-claude', rank: USER_CLAUDE_RANK },
+    ]
     this.customSkillDirs = (config.customSkillDirs ?? []).map(root => resolve(root))
     this.watchManager = new SkillWatchManager(ctx, control.invalidate, resolveWatchConfig(config))
     control.signal.addEventListener('abort', () => { void this.dispose() }, { once: true })
@@ -241,24 +269,114 @@ export class FileSystemSkillProvider implements SkillProvider {
   private async roots(cwd: string | undefined): Promise<SkillRoot[]> {
     const roots: SkillRoot[] = []
     if (this.includeDefaultRoots && cwd !== undefined) {
-      const projectRoot = await findProjectRoot(resolve(cwd), optionalFileSystem(this.ctx))
-      roots.push(
-        { path: join(projectRoot, '.dsh/skills'), source: 'project-dsh', rank: PROJECT_DSH_RANK, projectRoot },
-        { path: join(projectRoot, '.agents/skills'), source: 'project-agents', rank: PROJECT_AGENTS_RANK, projectRoot },
-      )
+      roots.push(...await this.projectRoots(resolve(cwd)))
     }
     roots.push(...this.customSkillDirs.map(path => ({ path, source: 'custom' as const, rank: CUSTOM_RANK })))
     if (this.includeDefaultRoots) {
-      roots.push(
-        { path: join(this.dshHome, 'skills'), source: 'user-dsh', rank: USER_DSH_RANK, skipSystem: true },
-        { path: join(this.agentsHome, 'skills'), source: 'user-agents', rank: USER_AGENTS_RANK },
-      )
+      roots.push(...this.userRoots)
     }
     if (this.bundledSkillDir !== undefined) {
       roots.push({ path: this.bundledSkillDir, source: 'bundled', rank: BUNDLED_SKILL_RANK, trustedHost: true })
     }
     return roots
   }
+
+  /**
+   * Resolve the project band for one cwd. Every walked directory contributes
+   * the configured `projectSkillDirs`; a nearer directory ranks ahead of a
+   * farther one, and a directory whose skill root is already a user root is
+   * left to that user root so it keeps its own rank and `.system` handling.
+   */
+  private async projectRoots(cwd: string): Promise<SkillRoot[]> {
+    const fs = optionalFileSystem(this.ctx)
+    const anchor = this.walkAncestors
+      ? await resolveWalkAnchor(cwd, resolve(homedir()), fs)
+      : await findProjectRoot(cwd, fs)
+    const directories = this.walkAncestors ? walkDirectories(cwd, anchor) : [anchor]
+    assertProjectRankBand(directories, this.projectSkillDirs.length)
+    const userRootPaths = new Set(this.userRoots.map(root => root.path))
+    const roots: SkillRoot[] = []
+    for (const [depth, directory] of directories.entries()) {
+      for (const [index, dir] of this.projectSkillDirs.entries()) {
+        const path = join(directory, dir.path)
+        if (userRootPaths.has(path)) continue
+        roots.push({
+          path,
+          source: dir.source,
+          rank: PROJECT_RANK_BASE + depth * this.projectSkillDirs.length + index,
+          projectRoot: anchor,
+        })
+      }
+    }
+    return roots
+  }
+}
+
+/**
+ * Resolve where an ancestor walk from `cwd` stops, inclusive. A cwd inside the
+ * operating-system home stops at the home directory; anywhere else stops at the
+ * nearest `.git` ancestor, and without one the walk covers `cwd` alone.
+ */
+async function resolveWalkAnchor(cwd: string, home: string, fs: FileSystem | undefined): Promise<string> {
+  if (cwd === home || cwd.startsWith(`${home}${sep}`)) return home
+  return await findProjectRoot(cwd, fs)
+}
+
+/** List `cwd` and each ancestor up to `anchor`, nearest first. */
+function walkDirectories(cwd: string, anchor: string): string[] {
+  const directories = [cwd]
+  let current = cwd
+  while (current !== anchor) {
+    const parent = dirname(current)
+    /* v8 ignore next -- resolveWalkAnchor returns cwd itself or one of its ancestors. */
+    if (parent === current) break
+    current = parent
+    directories.push(current)
+  }
+  return directories
+}
+
+/**
+ * Keep the whole project band below the custom-root rank so a deep walk can
+ * never outrank a configured custom root. The band is fixed rather than
+ * scaled: ranks are the provider's public precedence contract with the
+ * registry, and quietly compressing them would reorder unrelated sources.
+ */
+function assertProjectRankBand(directories: readonly string[], dirsPerDirectory: number): void {
+  const highest = PROJECT_RANK_BASE + directories.length * dirsPerDirectory - 1
+  if (highest < CUSTOM_RANK) return
+  throw new RangeError(
+    `skill-filesystem: walking ${directories.length} directories from ${directories[0]} with `
+    + `${dirsPerDirectory} projectSkillDirs needs rank ${highest}, which reaches the custom-root rank `
+    + `${CUSTOM_RANK}; shorten projectSkillDirs or set walkAncestors: false`,
+  )
+}
+
+/**
+ * Pair each configured project skill directory with its source label, the
+ * leading path segment without its leading dots: `.dsh/skills` is
+ * `project-dsh` and `.claude/skills` is `project-claude`.
+ */
+function resolveProjectSkillDirs(dirs: readonly string[]): ProjectSkillDir[] {
+  if (dirs.length === 0) {
+    throw new TypeError('skill-filesystem: projectSkillDirs must list at least one relative directory')
+  }
+  return dirs.map(dir => ({ path: dir, source: `project-${assertProjectSkillDir('projectSkillDirs', dir)}` }))
+}
+
+/**
+ * Reject a configured project skill directory that could escape its project
+ * directory or carry no source label.
+ * @returns the entry's source label.
+ */
+function assertProjectSkillDir(field: string, value: string): string {
+  const label = value.replace(/[/\\][\s\S]*$/, '').replace(/^\.+/, '')
+  if (label.length === 0 || isAbsolute(value) || value.split(/[/\\]/).includes('..')) {
+    throw new TypeError(
+      `skill-filesystem: ${field} entry "${value}" must be a relative directory inside the project directory`,
+    )
+  }
+  return label
 }
 
 type SkillWatchEvent = 'add' | 'addDir' | 'change' | 'unlink' | 'unlinkDir'
@@ -740,6 +858,7 @@ async function discoverRoot(root: SkillRoot, ctx: Context, provider: string): Pr
       locator,
       resourceBase: { kind: 'directory', path: locator.directory },
       path: locator.path,
+      root: root.path,
       ...parsed.metadata !== undefined ? { metadata: parsed.metadata } : {},
     })
   }

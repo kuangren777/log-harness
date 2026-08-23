@@ -16,11 +16,12 @@
 - `ctx.skills.snapshot({ cwd?, signal?, scope? })` 返回观察 scope 各层合并后、与调用策略无关的 `{ skills, complete }` 观测。任一提供方调用被拒绝或显式报告发现不完整，或有界重试期间又发生目录修订时，`complete` 为 false；该次观测提供的候选项仍保留在此结果中，但该结果绝不缓存。
 - `ctx.skills.list({ cwd?, signal?, scope? })` 借用只读视图选项，然后返回当前工作区中的全部胜出摘要；这些摘要在全局层与观察 scope 链之间合并，并按名称排序。消费方在自身边界调用 `isModelInvocable(skill)` 或 `isUserInvocable(skill)`。
 - `ctx.skills.get(name, { cwd?, signal?, scope? })` 在发现和加载中使用同一组只读选项和胜出候选项；在发现或缓存命中后重新检查取消，让提供方加载与信号竞速，验证已加载定义，然后无论调用策略如何都将其返回。
+- `ctx.skills.inventory({ cwd?, signal?, scope? })` 按来源分组报告全部已发现候选项——层、source、rank 与根目录——最近的层在前、rank 更优者在前，并包含 `list()` 隐藏的被遮蔽落选项。每个条目携带作者声明的策略、生效策略、把两者分开的用户覆盖，以及自身是否 `shadowed`。发现过程不走缓存，因此一次 inventory 读取既不会填充也不会驱逐目录缓存。
 - `ctx.skills.register(skill): () => void` 将只读运行时嵌入式 skill 注册进调用方上下文所在层，省略时添加允许模型和用户调用的策略以及 `provider: "runtime"`。同层同名运行时注册使用先到先得：重复项会记录警告，并获得无操作 disposer。成功注册会返回精确的 Cordis disposer，以供有序组合拆卸。
 
 ### 事件
 
-- `skills/change` 是一条不带过滤条件的失效通知，在提供方或运行时贡献注册或释放后，以及活动提供方的注册控制触发失效后发出。它不携带目录或 diff；每个消费方都使用自身的查找选项重新获取 `snapshot()`。监听器抛错或 Promise 拒绝会被记录，既不能否决注册表变更，也不能阻止后续监听器执行。
+- `skills/change` 是一条不带过滤条件的失效通知，在提供方或运行时贡献注册或释放后、活动提供方的注册控制触发失效后，以及已存储的调用覆盖发生变化后发出。它不携带目录或 diff；每个消费方都使用自身的查找选项重新获取 `snapshot()`。监听器抛错或 Promise 拒绝会被记录，既不能否决注册表变更，也不能阻止后续监听器执行。它的 cordis `Events` 声明住在 client-safe 的 `./types` 出口而非 `index.ts`：通过 `ctx.remote.$on` 订阅的浏览器消费方需要在自己的编译面里拿到该签名，而注册表本身仍然仅限 Host。
 
 ### 配置
 
@@ -38,6 +39,26 @@
 | `{ modelInvocable: true, userInvocable: false }` | 包含 | 排除 |
 | `{ modelInvocable: false, userInvocable: true }` | 排除 | 包含 |
 | `{ modelInvocable: false, userInvocable: false }` | 排除 | 排除 |
+
+### 用户设置覆盖
+
+只要挂载了 `ctx.settings` 服务，注册表就拥有 `skills` 设置命名空间（`SKILLS_SETTINGS_NAMESPACE`）：一个以 skill 名称为键的字典，条目携带可选布尔字段 `model` 与 `user`。之所以用 skill 名称作键，是因为层合并已经为每个名称裁决出唯一胜出者。不是合法 skill 名称的键会让写入失败，已存储的这类键会让注册本身失败。没有挂载设置服务就没有覆盖，也不会失败。
+
+```yaml
+# ~/.dsh/settings.yaml
+skills:
+  deploy-runbook: { model: false, user: true }
+```
+
+每次读取都会把该配置段应用到合并后的胜出者上，因此**设置优先于 SKILL.md frontmatter**（`disable-model-invocation`、`user-invocable`）。`applyPolicyOverride(authored, override)` 解析出一份策略：出现的字段替换对应接口，缺省的字段沿用贡献自身声明的值。`list()`、`snapshot()` 与 `get()` 都携带生效策略，因此执行 `isModelInvocable` 或 `isUserInvocable` 的消费方无需了解覆盖机制；`inventory()` 会在其旁一并报告作者声明的策略与该覆盖。
+
+| 已存储的覆盖 | 模型目录与 `skill` 工具 | 用户命令菜单与 `/name` 手势 |
+|---|---|---|
+| `{ model: false }` | 隐藏；对该名称的调用被拒绝 | 列出并注入 |
+| `{ user: false }` | 列出且可加载 | 不出现；`/name` 保持为普通文本 |
+| `{ model: false, user: false }` | 隐藏 | 隐藏 |
+
+该配置段的一次提交变更会使目录缓存失效并发出 `skills/change`；新增或移除覆盖的挂载与卸载同样如此；不携带任何覆盖的挂载与卸载不改变任何东西，因此保持静默。[策略覆盖 Agent Note](../../../.agents/notes/implemented/feature/2026-08-22-skill-policy-overrides.md) 负责阐述归属与键选择的理由。
 
 ### 共享的面向模型渲染
 
@@ -76,4 +97,5 @@
 - **失效由提供方驱动**：注册表没有 TTL，无法推断任意远程来源是否已发生变化；每个可变提供方都必须保留其注册作用域内的 `invalidate()` 能力，并由自身的观测机制调用它。
 - **提供方依次查询**：一个响应取消但速度缓慢的提供方会延迟之后注册的所有提供方；取消会停止调用方等待，但无法终止不响应取消的提供方持续运行的工作。
 - **不保留不完整观测**：被拒绝的提供方会被省略，显式提供的候选项也仅在当前查找中可用；注册表既不负责上一份可用目录，也不负责逐提供方诊断。
-- **重名项的裁决采用先到先得**：系统会记录并隐藏层内较晚出现的低优先级候选项，较近的层会静默遮蔽较远的层；不提供检查全部被遮蔽定义的 API。
+- **重名项的裁决采用先到先得**：系统会记录并隐藏层内较晚出现的低优先级候选项，较近的层会静默遮蔽较远的层；`inventory()` 会报告这些落选项，但没有消费方能加载或指名其中之一。
+- **覆盖仅以名称为键**：一条设置条目无法指定具体的层、source 或根目录，因此它跟随当前在该名称上胜出的那个贡献。

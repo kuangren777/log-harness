@@ -222,6 +222,32 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async list(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { skills: [{ name: 'commit-helper', description: 'Git commits', modelInvocable: true }] } } }
       },
+      async inventory(request) {
+        return {
+          rpcId: request.rpcId,
+          result: {
+            ok: true,
+            value: {
+              groups: [{
+                source: 'project-dsh',
+                rank: 0,
+                root: '/repo/.dsh/skills',
+                layer: 'scope' as const,
+                skills: [{
+                  name: 'commit-helper',
+                  description: 'Git commits',
+                  path: '/repo/.dsh/skills/commit-helper/SKILL.md',
+                  authored: { modelInvocable: true, userInvocable: true },
+                  effective: { modelInvocable: false, userInvocable: true },
+                  override: { model: false },
+                  shadowed: false,
+                }],
+              }],
+              complete: true,
+            },
+          },
+        }
+      },
     },
     goals: {
       async create(request) {
@@ -428,6 +454,35 @@ describe('unary round trip (handler ⇄ client, no network)', () => {
     const c = client()
     const skills = await c.skills.list({ sessionId: 's' as never })
     expect(skills.result).toEqual({ ok: true, value: { skills: [{ name: 'commit-helper', description: 'Git commits', modelInvocable: true }] } })
+  })
+
+  it('round-trips skill.inventory, including the nested policy and override rows', async () => {
+    const c = client()
+    const inventory = await c.skills.inventory({ sessionId: 's' as never })
+    // The value schema is what proves the nesting survives: a group carries
+    // its discovery root and its entries carry both policies plus the
+    // override that separates them.
+    expect(inventory.result).toEqual({
+      ok: true,
+      value: {
+        groups: [{
+          source: 'project-dsh',
+          rank: 0,
+          root: '/repo/.dsh/skills',
+          layer: 'scope',
+          skills: [{
+            name: 'commit-helper',
+            description: 'Git commits',
+            path: '/repo/.dsh/skills/commit-helper/SKILL.md',
+            authored: { modelInvocable: true, userInvocable: true },
+            effective: { modelInvocable: false, userInvocable: true },
+            override: { model: false },
+            shadowed: false,
+          }],
+        }],
+        complete: true,
+      },
+    })
   })
 
   it('lets host.pickDirectory finish after the 30-second default unary deadline', async () => {

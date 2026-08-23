@@ -14,8 +14,14 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { assertNever } from '@deepseek-ai/dsh-llm'
 import { NamedEntries, ScopedLayers, scopeChainOf, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { ScopeKey, ScopeLayer } from '@deepseek-ai/dsh-scope'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import type Schema from '@deepseek-ai/schemastery'
+
+// Re-exported, not merely imported: the `skills/change` declaration lives in
+// the client-safe face, and a bare type-only import is elided from the emitted
+// declaration, leaving artifact-plane consumers without the event.
+export type * from './types.ts'
 
 const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const DEFAULT_COLLECT_CACHE_ENTRIES = 128
@@ -36,7 +42,17 @@ export function isSkillName(name: string): boolean {
 }
 
 /** Origin bucket for a skill contribution. The value is prompt-visible metadata, not precedence by itself. */
-export type SkillSource = 'project-dsh' | 'project-agents' | 'runtime' | 'user-dsh' | 'user-agents' | 'custom' | 'bundled' | (string & {})
+export type SkillSource =
+  | 'project-dsh'
+  | 'project-agents'
+  | 'project-claude'
+  | 'runtime'
+  | 'user-dsh'
+  | 'user-agents'
+  | 'user-claude'
+  | 'custom'
+  | 'bundled'
+  | (string & {})
 
 /** Optional provider-specific base used by loaded skill bodies to resolve relative resources. */
 export type SkillResourceBase =
@@ -50,6 +66,64 @@ export interface SkillInvocationPolicy {
   readonly modelInvocable: boolean
   /** Whether human-facing command catalogs and loaders include this skill. */
   readonly userInvocable: boolean
+}
+
+/** User-settings namespace owning per-skill invocation overrides. */
+export const SKILLS_SETTINGS_NAMESPACE = settingsNamespace('skills')
+
+/**
+ * One skill's user override of its authored invocation policy. An absent field
+ * keeps what the skill itself declared; a present field replaces it outright.
+ */
+export interface SkillPolicyOverride {
+  /** Replacement for {@link SkillInvocationPolicy.modelInvocable}. */
+  readonly model?: boolean
+  /** Replacement for {@link SkillInvocationPolicy.userInvocable}. */
+  readonly user?: boolean
+}
+
+/**
+ * The `skills` settings section: overrides keyed by skill name. The name is the
+ * key because layer merging already resolves one winner per name, so a single
+ * entry addresses whichever contribution the viewer actually sees.
+ */
+export type SkillPolicyOverrides = Readonly<Record<string, SkillPolicyOverride>>
+
+/** Schema resolving the `skills` settings section; an absent section resolves to no overrides. */
+export const SkillPolicyOverridesSchema: Schema<SkillPolicyOverrides> = z.dict(z.object({
+  model: z.boolean(),
+  user: z.boolean(),
+})).default({})
+
+/**
+ * Reject an override section addressing something that cannot be a skill. The
+ * schema cannot express the key grammar, and a misspelled key would otherwise
+ * be stored as an override that can never match a skill.
+ * @param overrides - the resolved section, schema-valid by construction.
+ */
+export function validateSkillPolicyOverrides(overrides: SkillPolicyOverrides): void {
+  for (const name of Object.keys(overrides)) {
+    if (!isSkillName(name)) {
+      throw new Error(`settings "${SKILLS_SETTINGS_NAMESPACE}" key "${name}" is not a valid skill name`)
+    }
+  }
+}
+
+/**
+ * Resolve the effective invocation policy: the user override wins each surface
+ * it names, and the authored policy stands everywhere else.
+ * @param authored - the policy the provider or runtime contribution declared.
+ * @param override - the user's override for this skill name, when one exists.
+ * @returns the policy every consumer-facing surface enforces.
+ */
+export function applyPolicyOverride(
+  authored: SkillInvocationPolicy,
+  override: SkillPolicyOverride | undefined,
+): SkillInvocationPolicy {
+  return {
+    modelInvocable: override?.model ?? authored.modelInvocable,
+    userInvocable: override?.user ?? authored.userInvocable,
+  }
 }
 
 /** Invocation-neutral skill metadata returned by `ctx.skills.list()`. */
@@ -78,6 +152,8 @@ export interface SkillCandidate extends SkillSummary {
   readonly locator: unknown
   /** Absolute file path when the provider has one. */
   readonly path?: string
+  /** Absolute directory this candidate was discovered in, when the provider scans directories. */
+  readonly root?: string
   /** Parsed optional metadata object from provider-specific skill frontmatter. */
   readonly metadata?: Readonly<Record<string, unknown>>
 }
@@ -236,6 +312,48 @@ export interface SkillCatalogSnapshot {
   readonly complete: boolean
 }
 
+/** One discovered skill as the inventory reports it, winner or shadowed loser. */
+export interface SkillInventoryEntry {
+  /** Kebab-case identifier used to address the skill. */
+  readonly name: string
+  /** Short routing description as the contribution declared it. */
+  readonly description: string
+  /** Optional extra routing guidance. */
+  readonly whenToUse?: string
+  /** Absolute file path when the provider has one. */
+  readonly path?: string
+  /** Policy the contribution itself declared. */
+  readonly authored: SkillInvocationPolicy
+  /** Policy consumers enforce, after the user override. */
+  readonly effective: SkillInvocationPolicy
+  /** The user override that produced `effective`, when one exists for this name. */
+  readonly override?: SkillPolicyOverride
+  /** Whether a nearer layer or a better rank already claimed this name. */
+  readonly shadowed: boolean
+}
+
+/** Discovered skills sharing one origin, in nearest-first, best-rank-first order. */
+export interface SkillInventoryGroup {
+  /** Origin bucket shared by every entry in this group. */
+  readonly source: SkillSource
+  /** Precedence rank shared by every entry in this group. */
+  readonly rank: number
+  /** Absolute directory the group was discovered in, when the provider scans directories. */
+  readonly root?: string
+  /** Whether the group came from the host-wide layer or the viewing scope's chain. */
+  readonly layer: 'global' | 'scope'
+  /** Entries in discovery order within this origin. */
+  readonly skills: readonly SkillInventoryEntry[]
+}
+
+/** Every discovered skill including shadowed losers, unlike the winner-only catalog. */
+export interface SkillInventory {
+  /** Origin groups, nearest layer first and best rank first. */
+  readonly groups: readonly SkillInventoryGroup[]
+  /** Whether every registered provider completed discovery, as in {@link SkillCatalogSnapshot}. */
+  readonly complete: boolean
+}
+
 /** Provider candidates plus whether the current discovery is authoritative. */
 export interface SkillProviderObservation {
   /** Candidates available from the current provider discovery. */
@@ -285,21 +403,13 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     skills: SkillRegistry
   }
-
-  interface Events {
-    /**
-     * A skill provider, runtime contribution, or provider-backed catalog may
-     * have changed. This is an unfiltered invalidation notification; consumers
-     * refetch the catalog for their own lookup options. Listener failures are
-     * contained and cannot veto the registry mutation.
-     * @mode emit
-     */
-    'skills/change'(): void
-  }
 }
 
 interface IndexedCandidate {
+  /** The provider's own candidate object, borrowed unmodified; `candidate.invocation` is the authored policy. */
   candidate: SkillCandidate
+  /** Policy consumers enforce: the authored one after the user override, resolved once per merge. */
+  invocation: SkillInvocationPolicy
   provider: SkillProvider
   providerOrder: number
   localOrder: number
@@ -370,11 +480,31 @@ export class SkillRegistry extends Service {
   /** Stable identities for cache keys; scope keys are opaque identity-compared objects. */
   private readonly scopeIds = new WeakMap<ScopeKey, number>()
   private nextScopeId = 1
+  /** Authoritative override source: the settings scope while one is attached, no overrides otherwise. */
+  private policyOverrides: () => SkillPolicyOverrides = () => NO_POLICY_OVERRIDES
 
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'skills')
     this.collectCacheMaxEntries = config.collectCacheMaxEntries ?? DEFAULT_COLLECT_CACHE_ENTRIES
     assertPositiveInteger('collectCacheMaxEntries', this.collectCacheMaxEntries)
+    // The registry owns the policy decision, so it owns the namespace: no
+    // settings service ever mounted means the authored policy stands and none
+    // of this runs. Merged catalogs carry the effective policy, so a committed
+    // change invalidates them wholesale; an attach or detach carrying no
+    // override moves nothing and stays silent.
+    this.ctx.inject(['settings'], (sctx) => {
+      const scope = sctx.settings.register(SKILLS_SETTINGS_NAMESPACE, SkillPolicyOverridesSchema, {
+        validate: validateSkillPolicyOverrides,
+      })
+      this.policyOverrides = () => scope.get()
+      this.invalidateIfOverridden(scope.get())
+      scope.watch(() => { this.invalidateCache() })
+      sctx.effect(() => () => {
+        const previous = this.policyOverrides()
+        this.policyOverrides = () => NO_POLICY_OVERRIDES
+        this.invalidateIfOverridden(previous)
+      })
+    })
   }
 
   /**
@@ -483,7 +613,7 @@ export class SkillRegistry extends Service {
     const collected = await this.collect(options)
     return {
       skills: [...collected.entries.values()]
-        .map(entry => toSummary(entry.candidate))
+        .map(entry => toSummary(entry.candidate, entry.invocation))
         .sort(compareSkillSummary),
       complete: collected.cacheable,
     }
@@ -514,7 +644,75 @@ export class SkillRegistry extends Service {
       this.invalidateEntry(match)
       return undefined
     }
-    return definition
+    // The loaded definition carries the authored policy the provider parsed, so
+    // the override applies here too: a consumer enforcing its surface on the
+    // definition must see the same policy the catalog advertised.
+    const override = this.policyOverrides()[name]
+    if (override === undefined) return definition
+    return { ...definition, invocation: applyPolicyOverride(definition.invocation, override) }
+  }
+
+  /**
+   * Report every discovered skill grouped by origin, including the losers the
+   * catalog hides: `snapshot()` and `list()` answer "what can be invoked", this
+   * answers "what exists and why is it not winning". Each entry carries the
+   * authored policy, the effective one, and the user override that separates
+   * them. Discovery runs uncached, so an inventory read never populates or
+   * evicts the catalog cache.
+   * @param options - view options; `scope` selects the viewing agent's layers, `cwd` selects project roots, and `signal` cancels discovery.
+   * @returns nearest-first origin groups plus discovery-completeness state.
+   */
+  async inventory(options: SkillViewOptions = {}): Promise<SkillInventory> {
+    throwIfAborted(options.signal)
+    const overrides = this.policyOverrides()
+    // Reverse of the merge order: merging lets the nearest layer overwrite, and
+    // reporting instead reaches the nearest layer first so a name is claimed
+    // exactly once, by its winner.
+    const layers = [this.layers.global, ...this.layers.chainLayers(options.scope)].reverse()
+    const claimed = new Set<string>()
+    const groups = new Map<string, SkillInventoryEntry[]>()
+    const order: SkillInventoryGroup[] = []
+    let complete = true
+    for (const layer of layers) {
+      const collected = await this.listLayerCandidates(layer, options)
+      if (!collected.cacheable) complete = false
+      collected.entries.sort(compareIndexedCandidates)
+      for (const entry of collected.entries) {
+        const candidate = entry.candidate
+        const shadowed = claimed.has(candidate.name)
+        claimed.add(candidate.name)
+        const override = overrides[candidate.name]
+        const key = JSON.stringify([
+          layer === this.layers.global ? 'global' : 'scope',
+          candidate.source,
+          candidate.rank,
+          candidate.root ?? null,
+        ])
+        let skills = groups.get(key)
+        if (skills === undefined) {
+          skills = []
+          groups.set(key, skills)
+          order.push({
+            source: candidate.source,
+            rank: candidate.rank,
+            ...candidate.root !== undefined ? { root: candidate.root } : {},
+            layer: layer === this.layers.global ? 'global' : 'scope',
+            skills,
+          })
+        }
+        skills.push({
+          name: candidate.name,
+          description: candidate.description,
+          ...candidate.whenToUse !== undefined ? { whenToUse: candidate.whenToUse } : {},
+          ...candidate.path !== undefined ? { path: candidate.path } : {},
+          authored: candidate.invocation,
+          effective: applyPolicyOverride(candidate.invocation, override),
+          ...override !== undefined ? { override } : {},
+          shadowed,
+        })
+      }
+    }
+    return { groups: order, complete }
   }
 
   private async collect(options: SkillViewOptions): Promise<CollectResult> {
@@ -562,6 +760,14 @@ export class SkillRegistry extends Service {
       if (!collected.cacheable) cacheable = false
       for (const entry of collected.entries) merged.set(entry.candidate.name, entry)
     }
+    // Overrides apply to the winner, after shadowing: one settings key names a
+    // skill, and merging has already decided which contribution that is.
+    const overrides = this.policyOverrides()
+    for (const [name, entry] of merged) {
+      const override = overrides[name]
+      if (override === undefined) continue
+      merged.set(name, { ...entry, invocation: applyPolicyOverride(entry.candidate.invocation, override) })
+    }
     return { entries: merged, cacheable }
   }
 
@@ -590,6 +796,7 @@ export class SkillRegistry extends Service {
     for (const skill of [...layer.runtime.values()].sort((a, b) => compareCodePoints(a.name, b.name))) {
       candidates.push({
         candidate: runtimeCandidate(skill),
+        invocation: skill.invocation,
         provider: RUNTIME_SKILL_PROVIDER,
         providerOrder: -1,
         localOrder: runtimeOrder,
@@ -612,11 +819,16 @@ export class SkillRegistry extends Service {
       if (!observation.complete) cacheable = false
       for (const candidate of observation.candidates) {
         validateCandidate(candidate, provider.name)
-        candidates.push({ candidate, provider, providerOrder: order, localOrder, layer })
+        candidates.push({ candidate, invocation: candidate.invocation, provider, providerOrder: order, localOrder, layer })
         localOrder += 1
       }
     }
     return { entries: candidates, cacheable }
+  }
+
+  /** Invalidate only when the override section named something, so a settings service carrying none attaches and detaches silently. */
+  private invalidateIfOverridden(overrides: SkillPolicyOverrides): void {
+    if (Object.keys(overrides).length > 0) this.invalidateCache()
   }
 
   private invalidateCache(): void {
@@ -659,6 +871,9 @@ export class SkillRegistry extends Service {
     }
   }
 }
+
+/** The resolved section a registry with no settings service reads. */
+const NO_POLICY_OVERRIDES: SkillPolicyOverrides = Object.freeze({})
 
 function normalizeProviderObservation(output: unknown, providerName: string): SkillProviderObservation {
   if (Array.isArray(output)) {
@@ -767,8 +982,9 @@ function validateDefinition(skill: SkillDefinition): void {
   if (path !== undefined && typeof path !== 'string') throw new TypeError(`loaded skill "${name}" path must be a string`)
 }
 
-function toSummary(skill: SkillDefinition | SkillCandidate): SkillSummary {
-  const { name, description, whenToUse, invocation, source, provider, resourceBase } = skill
+/** Project one contribution as a summary carrying the policy consumers enforce. */
+function toSummary(skill: SkillDefinition | SkillCandidate, invocation: SkillInvocationPolicy): SkillSummary {
+  const { name, description, whenToUse, source, provider, resourceBase } = skill
   return {
     name,
     description,

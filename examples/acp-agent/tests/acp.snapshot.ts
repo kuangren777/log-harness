@@ -85,6 +85,7 @@ const PRODUCT_SUBAGENT_RESULT_DIAGNOSTIC_CONFIG = fileURLToPath(
   new URL('../subagent-result-diagnostic.cordis.yml', import.meta.url),
 )
 const FS_DIFF_BOUND_CONFIG = fileURLToPath(new URL('./fs-diff-bound.cordis.yml', import.meta.url))
+const SKILL_SETTINGS_CONFIG = fileURLToPath(new URL('./skill-settings.cordis.yml', import.meta.url))
 const SNAPSHOTS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'snapshots')
 const PACKED_CHUNKS_SOURCE = 'hook-cc-pretool-deny'
 
@@ -92,6 +93,24 @@ async function prepareEditingCordisSkillWorkspace(cwd: string): Promise<void> {
   const target = join(cwd, '.dsh', 'skills', 'editing-cordis-compositions', 'SKILL.md')
   await mkdir(dirname(target), { recursive: true })
   await copyFile(EDITING_CORDIS_SKILL, target)
+}
+
+/**
+ * Seed the policy-override scenario: one user-root skill plus the settings
+ * document that hides it from the model. `.dsh` is the harness home for this
+ * run, so the same directory carries the discovered skill and the user
+ * settings the file provider reads.
+ */
+async function prepareSkillPolicyOverrideWorkspace(cwd: string): Promise<void> {
+  const home = join(cwd, '.dsh')
+  await mkdir(join(home, 'skills', 'snapshot-skill'), { recursive: true })
+  await Promise.all([
+    writeFile(
+      join(home, 'skills', 'snapshot-skill', 'SKILL.md'),
+      '---\nname: snapshot-skill\ndescription: Snapshot demo skill kept out of the model catalog by user settings\n---\n\nReply with exactly PINEAPPLE and nothing else.\n',
+    ),
+    writeFile(join(home, 'settings.yaml'), 'skills:\n  snapshot-skill:\n    model: false\n'),
+  ])
 }
 
 async function prepareDelimiterPathWorkspace(cwd: string): Promise<void> {
@@ -346,6 +365,25 @@ const SCENARIOS: Scenario[] = [
     systemPromptSource: 'text-turn',
     toolSchemasSource: 'text-turn',
     prepareWorkspace: prepareEditingCordisSkillWorkspace,
+  },
+  // Per-skill invocation policy from the user settings document: the seeded
+  // `skills` section hides `snapshot-skill` from the model, so the catalog
+  // never advertises it and the `skill` tool refuses it, while the second turn's
+  // `/snapshot-skill` gesture still injects its body.
+  // The tool sequence matches text-turn, but this transcript was recorded
+  // against `deepseek-v4-pro` while text-turn's replays `deepseek-v4-flash`,
+  // and the persona names the routed model — so the scenario pins its own
+  // class and reuses the `deepseek-v4-pro` prompt beside text-turn's schemas.
+  {
+    name: 'skill-policy-override',
+    hasModelTurn: true,
+    recorded: true,
+    pinsHeader: true,
+    headerClass: 'skill-policy',
+    systemPromptSource: 'product-subagent-codex',
+    toolSchemasSource: 'text-turn',
+    configPath: SKILL_SETTINGS_CONFIG,
+    prepareWorkspace: prepareSkillPolicyOverrideWorkspace,
   },
   { name: 'lsp-definition', hasModelTurn: true, recorded: false, pinsHeader: true, headerClass: 'lsp', configPath: LSP_CONFIG },
   // web_fetch markdown rendering end to end: the overlay's loopback fixture

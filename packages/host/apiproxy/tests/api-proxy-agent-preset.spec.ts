@@ -672,6 +672,177 @@ describe('skills over the layered host registry', () => {
   })
 })
 
+/**
+ * skill.inventory is the policy editor's read: it keeps the losers the catalog
+ * drops and the authored/effective split an override toggle edits. The gateway
+ * only projects what the registry reports, so these cases pin the projection
+ * and the session resolution it shares with skill.list.
+ */
+describe('skill.inventory', () => {
+  /** One inventory-serving registry double, recording the view options it was asked for. */
+  function inventoryRegistry(inventory: unknown) {
+    const seen: Array<{ cwd?: unknown; scope?: unknown }> = []
+    const registry = {
+      list: () => Promise.resolve([]),
+      inventory: (options: { cwd?: unknown; scope?: unknown }) => {
+        seen.push(options)
+        return Promise.resolve(inventory)
+      },
+    }
+    return { registry, seen }
+  }
+
+  it('refuses a session the host is not serving', async () => {
+    const { api } = await harness(['standard'])
+
+    const response = await api.skills.inventory(request({ sessionId: SessionId('missing') }))
+
+    expect(response.result.ok).toBe(false)
+    const failure = response.result as { ok: false; error: { code: string; details: unknown } }
+    expect(failure.error.code).toBe('session-not-found')
+    expect(failure.error.details).toEqual({ sessionId: 'missing' })
+  })
+
+  it('passes the header cwd and the live agent scope, and echoes the registry grouping verbatim', async () => {
+    const { api, ctx } = await harness(['standard'])
+    const groups = [
+      {
+        source: 'project-dsh',
+        rank: 0,
+        root: '/workspace/live/.dsh/skills',
+        layer: 'scope' as const,
+        skills: [{
+          name: 'commit-helper',
+          description: 'nearest wins',
+          whenToUse: 'when committing',
+          path: '/workspace/live/.dsh/skills/commit-helper/SKILL.md',
+          authored: { modelInvocable: true, userInvocable: true },
+          effective: { modelInvocable: false, userInvocable: true },
+          override: { model: false },
+          shadowed: false,
+        }],
+      },
+      {
+        source: 'user-dsh',
+        rank: 10,
+        layer: 'global' as const,
+        skills: [{
+          name: 'commit-helper',
+          description: 'the copy the project shadows',
+          authored: { modelInvocable: true, userInvocable: true },
+          effective: { modelInvocable: true, userInvocable: true },
+          shadowed: true,
+        }],
+      },
+    ]
+    const { registry, seen } = inventoryRegistry({ groups, complete: true })
+    ctx.provide('skills', registry as never)
+    await api.sessions.create(request({ sessionId: SessionId('i1'), agentPreset: 'standard' }))
+
+    const response = await api.skills.inventory(request({ sessionId: SessionId('i1') }))
+
+    // Nearest-first order, the shadowed loser, the override, and the
+    // path/root pair all survive: the wire is the registry's own report.
+    expect(response.result).toEqual({ ok: true, value: { groups, complete: true } })
+    // Same addressing as skill.list: the header's project and the live agent.
+    const cwd = ctx.sessions.get(SessionId('i1'))?.header.cwd
+    expect(seen).toEqual([{ cwd, scope: ctx.agents.get(SessionId('i1')) }])
+  })
+
+  it('omits the absent optional fields rather than sending them as undefined', async () => {
+    const { api, ctx } = await harness(['standard'])
+    const { registry } = inventoryRegistry({
+      groups: [{
+        source: 'runtime',
+        rank: 250,
+        layer: 'global' as const,
+        skills: [{
+          name: 'borrowed',
+          description: 'a runtime contribution has no file',
+          authored: { modelInvocable: true, userInvocable: false },
+          effective: { modelInvocable: true, userInvocable: false },
+          shadowed: false,
+        }],
+      }],
+      complete: false,
+    })
+    ctx.provide('skills', registry as never)
+    await api.sessions.create(request({ sessionId: SessionId('i2'), agentPreset: 'standard' }))
+
+    const response = await api.skills.inventory(request({ sessionId: SessionId('i2') }))
+
+    expect(response.result.ok).toBe(true)
+    if (!response.result.ok) throw new Error('unreachable')
+    const [group] = response.result.value.groups
+    expect(Object.hasOwn(group!, 'root')).toBe(false)
+    expect(Object.hasOwn(group!.skills[0]!, 'path')).toBe(false)
+    expect(Object.hasOwn(group!.skills[0]!, 'whenToUse')).toBe(false)
+    expect(Object.hasOwn(group!.skills[0]!, 'override')).toBe(false)
+    // An incomplete discovery is reported, not hidden: the editor decides
+    // whether to retry rather than treating a partial view as the whole one.
+    expect(response.result.value.complete).toBe(false)
+  })
+
+  it('serves the inventory from the session\'s own registry when its preset mounts one', async () => {
+    const { api } = await harness(['standard'])
+    await api.sessions.create(request({ sessionId: SessionId('i3'), agentPreset: 'standard' }))
+    services.set('i3', {
+      skills: {
+        inventory: () => Promise.resolve({
+          groups: [{
+            source: 'bundled',
+            rank: 600,
+            layer: 'scope' as const,
+            skills: [{
+              name: 'preset-owned',
+              description: 'ships inside the preset directory',
+              authored: { modelInvocable: true, userInvocable: true },
+              effective: { modelInvocable: true, userInvocable: true },
+              shadowed: false,
+            }],
+          }],
+          complete: true,
+        }),
+      },
+    })
+
+    const response = await api.skills.inventory(request({ sessionId: SessionId('i3') }))
+
+    expect(response.result).toMatchObject({
+      ok: true,
+      value: { groups: [{ skills: [{ name: 'preset-owned' }] }] },
+    })
+    services.delete('i3')
+  })
+
+  it('says so when no composition mounts a skill registry at all', async () => {
+    const { api } = await harness(['standard'])
+    await api.sessions.create(request({ sessionId: SessionId('i4'), agentPreset: 'standard' }))
+
+    const response = await api.skills.inventory(request({ sessionId: SessionId('i4') }))
+
+    expect(response.result.ok).toBe(false)
+    const failure = response.result as { ok: false; error: { message: string } }
+    expect(failure.error.message).toContain('neither this session')
+  })
+
+  it('reports a rejected discovery as an internal failure instead of an empty inventory', async () => {
+    const { api, ctx } = await harness(['standard'])
+    ctx.provide('skills', {
+      list: () => Promise.resolve([]),
+      inventory: () => Promise.reject(new Error('provider exploded')),
+    } as never)
+    await api.sessions.create(request({ sessionId: SessionId('i5'), agentPreset: 'standard' }))
+
+    const response = await api.skills.inventory(request({ sessionId: SessionId('i5') }))
+
+    expect(response.result.ok).toBe(false)
+    const failure = response.result as { ok: false; error: { code: string; message: string } }
+    expect(failure.error.code).toBe('internal')
+    expect(failure.error.message).toContain('skill inventory failed')
+  })
+})
+
 describe('session.history presenter scope', () => {
   it('asks the roster for the RECORDED preset\'s standing key on a cold read', async () => {
     const { api } = await harness(['standard', 'minimal'])

@@ -26,7 +26,7 @@ Host 拥有 `agent-preset/selected`、`commands/change`、`credentials/reference
 
 五条事件全部走这条路径，专用帧与 Client 别名都已删除。模型消费方直接订阅 `llm/adapters-updated` 和 `settings/document-updated`；preset 消费方订阅 `agent-preset/selected`。真正需要投影或去重的数据仍保留专用帧。
 
-`skills/change`、`tools/change`、`system-prompt/change` 是同形状的纯失效事件但目前**没有任何消费者**，按「每个抽象都要有当前 owner 与需求」不进名单，只作为扩展位记录在此。
+`tools/change`、`system-prompt/change` 是同形状的纯失效事件但目前**没有任何消费者**，按「每个抽象都要有当前 owner 与需求」不进名单，只作为扩展位记录在此。`skills/change` 原本也在这一组，直到浏览器端的 skill 策略界面给了它消费者，它才进入名单（见 [skill 策略覆盖](../feature/2026-08-22-skill-policy-overrides.md)）。
 
 ### 消费端契约（dsh-typert-protocol）
 
@@ -88,7 +88,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 }
 ```
 
-于是**加一个事件只改这一行数组**：类型投影、`$on` 的键面、host 的转发循环全部从它派生。`ctx.remote.$on('slots/changed', …)`（client 本地事件）或 `$on('skills/change', …)`（名单没开）都是**编译错误**。
+于是**加一个事件只改这一行数组**：类型投影、`$on` 的键面、host 的转发循环全部从它派生。`ctx.remote.$on('slots/changed', …)`（client 本地事件）或 `$on('tools/change', …)`（名单没开）都是**编译错误**。
 
 host 半再加一处形状断言，把 host 事件词汇的约束落到同一份名单上：
 
@@ -158,7 +158,7 @@ zod 侧 `args: z.array(z.unknown())`：帧本身来自 `JSON.parse`，元素必�
 钉住该行为的东西：
 
 - 一个真组合测试：host 每 emit 一次，真实 host 流就出一帧 `host/remote-event`，`event` 为 host 原名、`args` 与实参逐元素相等。
-- 类型层负例拒绝三类候选：不是事件的名字、绑 Scope 的事件（`goal/changed`）、返回值非 `void` 的事件。`$on('slots/changed', …)`（client 本地事件）与 `$on('skills/change', …)`（已声明但未选中）都编译失败——因此 `$on` 的键面恰好等于名单。
+- 类型层负例拒绝三类候选：不是事件的名字、绑 Scope 的事件（`goal/changed`）、返回值非 `void` 的事件。`$on('slots/changed', …)`（client 本地事件）与 `$on('tools/change', …)`（已声明但未选中）都编译失败——因此 `$on` 的键面恰好等于名单。
 - 消费端 `$on('settings/document-updated', …)` 把 `ns` 解析为 `SettingsNamespace`：brand 穿过 wire 存活。
 - `$on` 的 disposer 归属调用方 fiber；同一个函数对象订阅两次时两条注册各自独立退订——按 listener 身份做键的表会把它们合并，所以订阅按注册项寻址。
 - 投递同时收容抛出的 listener 与拒绝所返回 promise 的 listener：声明返回值是 `void`，没人 await 异步 listener，其拒绝否则会完全逃出这层收容。投递遍历快照，因此派发中订阅或退订都不会改变本帧的接收者集合。

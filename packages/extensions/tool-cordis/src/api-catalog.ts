@@ -1708,6 +1708,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'name', description: 'kebab-case skill name.' }, { name: 'options', description: 'view options; `scope` selects the viewing agent\'s layers, `cwd` selects workspace-sensitive skills, and `signal` cancels work.' }],
         returns: 'the full skill, including body content, or `undefined`.',
       },
+      {
+        signature: 'async inventory(options: SkillViewOptions = {}): Promise<SkillInventory>',
+        description: 'Report every discovered skill grouped by origin, including the losers the catalog hides: `snapshot()` and `list()` answer "what can be invoked", this answers "what exists and why is it not winning". Each entry carries the authored policy, the effective one, and the user override that separates them. Discovery runs uncached, so an inventory read never populates or evicts the catalog cache.',
+        parameters: [{ name: 'options', description: 'view options; `scope` selects the viewing agent\'s layers, `cwd` selects project roots, and `signal` cancels discovery.' }],
+        returns: 'nearest-first origin groups plus discovery-completeness state.',
+      },
     ],
   },
   {
@@ -4371,7 +4377,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SkillCandidate',
-    declaration: 'export interface SkillCandidate extends SkillSummary {\n    readonly rank: number;\n    readonly locator: unknown;\n    readonly path?: string;\n    readonly metadata?: Readonly<Record<string, unknown>>;\n}',
+    declaration: 'export interface SkillCandidate extends SkillSummary {\n    readonly rank: number;\n    readonly locator: unknown;\n    readonly path?: string;\n    readonly root?: string;\n    readonly metadata?: Readonly<Record<string, unknown>>;\n}',
   },
   {
     name: 'SkillCatalogSnapshot',
@@ -4411,7 +4417,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SkillSource',
-    declaration: 'export type SkillSource = \'project-dsh\' | \'project-agents\' | \'runtime\' | \'user-dsh\' | \'user-agents\' | \'custom\' | \'bundled\' | (string & {});',
+    declaration: 'export type SkillSource = \'project-dsh\' | \'project-agents\' | \'project-claude\' | \'runtime\' | \'user-dsh\' | \'user-agents\' | \'user-claude\' | \'custom\' | \'bundled\' | (string & {});',
   },
   {
     name: 'SkillSummary',

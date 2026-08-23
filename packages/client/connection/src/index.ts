@@ -107,6 +107,14 @@ const PRIVILEGED_METHODS = new Set([
   'agentPreset.remove',
   'host.pickDirectory',
   'host.openPath',
+  // The inventory is the configuration plane's read of the skill catalog: it
+  // projects the stored `skills` settings section (each entry's authored vs
+  // effective policy and the override between them) plus the absolute host
+  // paths skills were discovered at. Its only writer, `settings.mutate`, is
+  // pinned below, and the composer's menu is served by `skill.list`, which
+  // carries neither paths nor overrides — so an unprivileged client loses
+  // nothing it uses.
+  'skill.inventory',
   'settings.describe',
   'settings.openDocument',
   'settings.update',

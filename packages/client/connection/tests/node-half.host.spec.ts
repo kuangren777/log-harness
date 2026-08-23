@@ -183,6 +183,9 @@ describe('connection node half', () => {
       // reconnaissance, and copy/remove/openDocument manage the roster and
       // drive the host desktop.
       'agentPreset.read', 'agentPreset.copy', 'agentPreset.openDocument', 'agentPreset.remove',
+      // The configuration plane's read of the skill catalog: stored overrides
+      // and absolute discovery paths. `skill.list` is not here.
+      'skill.inventory',
     ]) {
       const allowed = fakeResponse()
       await routes[0]!.handler(
@@ -484,6 +487,7 @@ describe('connection node half over a real HTTP server', () => {
         // URL the caller picked: an anonymous LAN caller must not reach it.
         'llm.discoverModels',
         'agentPreset.read', 'agentPreset.copy', 'agentPreset.openDocument', 'agentPreset.remove',
+        'skill.inventory',
       ]) {
         // LOCAL FORK CHANGE: a DECLARED authority now passes the fence (404 is
         // the empty proxy's carrier answer); an UNDECLARED one is still 403.
@@ -498,7 +502,9 @@ describe('connection node half over a real HTTP server', () => {
       // reachable too: `session.create` already takes an `agentPreset`, and the
       // deployment's own default already carries bash, so pinning the switch
       // would be a fence beside an open gate.
-      for (const method of ['llm.providers', 'llm.models', 'agentPreset.list', 'agentPreset.select']) {
+      // `skill.list` joins them: the composer's menu needs it, and it carries
+      // no discovery path and no stored override.
+      for (const method of ['llm.providers', 'llm.models', 'agentPreset.list', 'agentPreset.select', 'skill.list']) {
         expect([method, await call(port, method, 'harness.example')]).toEqual([method, 404])
       }
       // Loopback reaches everything, configuration included.

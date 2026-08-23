@@ -18,6 +18,9 @@ Requires `ctx.skills` (`inject: ['skills']`).
 | `includeDefaultRoots` | `true` | Include project and user roots around `customSkillDirs`; set false for an isolated custom-root provider. |
 | `dshHome` | `$DSH_HOME` or `~/.dsh` | DeepSeek Harness config root resolved by [`@deepseek-ai/dsh-home-paths`](../../util/home-paths/README.md); scans `skills` under this directory. |
 | `agentsHome` | `$DSH_AGENTS_HOME` or `~/.agents` | Shared agent config root scanned for compatible skills. |
+| `claudeHome` | `$DSH_CLAUDE_HOME` or `~/.claude` | Claude config root scanned for compatible skills. |
+| `projectSkillDirs` | `['.dsh/skills', '.agents/skills', '.claude/skills']` | Relative skill directories scanned in every walked project directory; an earlier entry outranks a later one. Each entry must be relative and free of `..`. |
+| `walkAncestors` | `true` | Scan every ancestor of the lookup cwd up to the walk anchor; `false` scans the project root alone. |
 | `customSkillDirs` | `[]` | Additional local skill roots scanned after project roots and before user roots. |
 | `watch` | `true` | Watch host-local roots and invalidate the local provider when catalog membership or frontmatter may have changed. |
 | `watchUsePolling` | `false` | Use Chokidar polling instead of native events for existing skill roots. |
@@ -32,13 +35,18 @@ Default roots are resolved in this provider's rank order:
 
 | Rank | Source | Path |
 |---|---|---|
-| 100 | `project-dsh` | `<projectRoot>/.dsh/skills` |
-| 200 | `project-agents` | `<projectRoot>/.agents/skills` |
+| `100 + depth × 3` | `project-dsh` | `<walked>/.dsh/skills` |
+| `101 + depth × 3` | `project-agents` | `<walked>/.agents/skills` |
+| `102 + depth × 3` | `project-claude` | `<walked>/.claude/skills` |
 | 300 | `custom` | `Config.customSkillDirs` |
 | 400 | `user-dsh` | `<dshHome>/skills` |
 | 500 | `user-agents` | `<agentsHome>/skills` |
+| 550 | `user-claude` | `<claudeHome>/skills` |
+| 600 | `bundled` | `Config.bundledSkillDir` |
 
-The project root is the nearest ancestor containing `.git`; without one, the current cwd is used. The user DSH root skips its `.system` child so system-owned directories are not treated as normal user skills. `includeDefaultRoots: false` omits the project and user rows and the `$DSH_BUNDLED_SKILL_DIR` environment default while retaining explicitly configured custom and bundled roots, allowing several uniquely named isolated providers to see only their own roots. This provider supplies project and user skills; another provider may supply built-in system skills.
+Project discovery is layered. The walk covers the lookup cwd and every ancestor up to its anchor: the operating-system home directory when the cwd is inside it, otherwise the nearest ancestor containing `.git`, and the cwd alone when neither applies. Each walked directory contributes every `projectSkillDirs` entry at `100 + depth × projectSkillDirs.length + index`, where `depth` is 0 for the cwd, so a nearer directory wins a duplicate skill name and, within one directory, an earlier entry wins. A configured entry's source label is `project-` followed by its leading path segment without leading dots. `walkAncestors: false` scans the project root alone, which is the nearest `.git` ancestor or the cwd.
+
+A walked directory whose skill root is also a user root is left to that user root: with the home directory as an ancestor, `~/.dsh/skills` keeps rank 400 and its `.system` skip instead of entering the project band. The user DSH root skips that `.system` child so system-owned directories are not treated as normal user skills. `includeDefaultRoots: false` omits the project and user rows and the `$DSH_BUNDLED_SKILL_DIR` environment default while retaining explicitly configured custom and bundled roots, allowing several uniquely named isolated providers to see only their own roots. This provider supplies project and user skills; another provider may supply built-in system skills.
 
 When `ctx.fs` is available, discovery lists roots through `ctx.fs.listDir`, reads skill files through `ctx.fs.readText`, and probes `.git` through the filesystem service. Full skill loads forward the lookup abort signal to filesystem metadata and content reads. Without a filesystem service, the provider falls back to abortable Node filesystem I/O so minimal local contexts can still load skills. Confirmed missing paths are valid empty state, malformed or non-text entries warn and skip, and unexpected discovery/read failures make the registry snapshot incomplete rather than replacing a last-good model catalog with a misleading deletion.
 
@@ -69,7 +77,9 @@ Watcher invalidation can cause the named consumer to append a replacement catalo
 ## Known Limitations and Deferred Work
 
 - **Discovery is one level deep** — only `<root>/<name>/SKILL.md` and `<root>/<name>.md` are recognized; nested skill trees and package manifests are ignored.
-- **Project scope is the nearest `.git` ancestor** — workspaces without that marker fall back to the supplied cwd, with no alternate project-root marker or monorepo subproject selection.
+- **The walk anchor is the home directory or the nearest `.git` ancestor** — workspaces with neither scan the supplied cwd alone, and there is no alternate project-root marker or monorepo subproject selection.
+- **The project band ends below rank 300** — a walk needing rank 300 or above would outrank `custom` roots, so discovery fails for that cwd instead of compressing ranks; the registry logs the provider as skipped and reports an incomplete catalog. With the default three directories this needs 67 walked directories; `walkAncestors: false` or a shorter `projectSkillDirs` restores discovery.
+- **Watching one cwd costs (depth + 1) × `projectSkillDirs` handles** — every walked root of one cwd shares its anchor's owner key, so `watchMaxProjects` still bounds distinct cwds rather than directories, and evicting one releases all of its roots. `walkAncestors: false` removes the ancestor handles.
 - **Malformed entries disappear with a warning** — the model catalog receives no per-skill diagnostic and cannot distinguish an absent skill from an invalid one; unexpected I/O failures preserve the last-good catalog instead.
 - **Missing-root observation polls one path segment** — roots absent at startup use `fs.watchFile` at `watchPollIntervalMs` until Chokidar can attach, trading bounded detection latency for reliable creation detection across IDE, Git, and shell workflows.
 - **No body revision protocol** — a loaded body is ordinary retained tool history; later file edits affect later calls but neither rewrite old results nor announce that the body changed.

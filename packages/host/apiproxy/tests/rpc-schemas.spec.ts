@@ -28,7 +28,10 @@ import {
   workspaceListRequestSchema, workspaceListValueSchema,
   workspaceRenameRequestSchema, workspaceRenameValueSchema, workspaceViewSchema,
 } from '../src/api/workspace.schema.ts'
-import { skillEntrySchema, skillListRequestSchema, skillListValueSchema } from '../src/api/skills.schema.ts'
+import {
+  skillEntrySchema, skillInventoryEntrySchema, skillInventoryGroupSchema,
+  skillInventoryRequestSchema, skillInventoryValueSchema, skillListRequestSchema, skillListValueSchema,
+} from '../src/api/skills.schema.ts'
 import {
   agentPresetEntrySchema, agentPresetListValueSchema, agentPresetOpenDocumentValueSchema,
 } from '../src/api/agent-presets.schema.ts'
@@ -427,6 +430,55 @@ describe('skills domain schemas', () => {
     expect(() => skillEntrySchema.parse({ name: '', description: 'd', modelInvocable: true })).toThrow()
     // modelInvocable is required wire data: an entry without it fails.
     expect(() => skillEntrySchema.parse({ name: 'n', description: 'd' })).toThrow()
+  })
+
+  it('validates the inventory request/value pair', () => {
+    expect(skillInventoryRequestSchema.parse({ sessionId: 's1' })).toEqual({ sessionId: 's1' })
+    // Session-addressed only, exactly like the catalog read beside it.
+    expect(() => skillInventoryRequestSchema.parse({})).toThrow()
+    expect(skillInventoryValueSchema.parse({ groups: [], complete: false }))
+      .toEqual({ groups: [], complete: false })
+    const value = skillInventoryValueSchema.parse({
+      groups: [{
+        source: 'project-dsh',
+        rank: 0,
+        root: '/repo/.dsh/skills',
+        layer: 'scope',
+        skills: [
+          {
+            name: 'commit-helper',
+            description: 'Git commits',
+            whenToUse: 'when committing',
+            path: '/repo/.dsh/skills/commit-helper/SKILL.md',
+            authored: { modelInvocable: true, userInvocable: true },
+            effective: { modelInvocable: false, userInvocable: true },
+            override: { model: false },
+            shadowed: false,
+          },
+          {
+            name: 'bare',
+            description: 'No guidance',
+            authored: { modelInvocable: true, userInvocable: true },
+            effective: { modelInvocable: true, userInvocable: true },
+            shadowed: true,
+          },
+        ],
+      }],
+      complete: true,
+    })
+    expect(value.groups[0]?.skills[0]?.override).toEqual({ model: false })
+    // A provider with no file and no override omits both; shadowing is still reported.
+    expect(value.groups[0]?.skills[1]?.path).toBeUndefined()
+    expect(value.groups[0]?.skills[1]?.override).toBeUndefined()
+    expect(value.groups[0]?.skills[1]?.shadowed).toBe(true)
+    // The layer is a closed pair: the host has no third layer to name.
+    expect(() => skillInventoryGroupSchema.parse({
+      source: 'runtime', rank: 250, layer: 'session', skills: [],
+    })).toThrow()
+    // Both policies are required wire data: an entry missing one fails.
+    expect(() => skillInventoryEntrySchema.parse({
+      name: 'n', description: 'd', authored: { modelInvocable: true, userInvocable: true }, shadowed: false,
+    })).toThrow()
   })
 })
 

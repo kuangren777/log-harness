@@ -2882,6 +2882,59 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           ],
         })
       },
+      // The same two skills the catalog serves, plus the shadowed project copy
+      // and the stored override the catalog cannot show: a fixed inventory is
+      // what makes the policy editor's grouping, shadowing, and override
+      // markers renderable without a host.
+      inventory: (request) => {
+        const missing = requireSession(request)
+        if (missing !== undefined) return missing
+        return ok(request, {
+          groups: [
+            {
+              source: 'project-dsh',
+              rank: 0,
+              root: '/fixture/project/.dsh/skills',
+              layer: 'scope' as const,
+              skills: [{
+                name: 'fixture-demo',
+                description: 'fixture 技能样本',
+                whenToUse: '仅供 UI 目录渲染验收',
+                path: '/fixture/project/.dsh/skills/fixture-demo/SKILL.md',
+                authored: { modelInvocable: true, userInvocable: true },
+                effective: { modelInvocable: true, userInvocable: true },
+                shadowed: false,
+              }],
+            },
+            {
+              source: 'user-dsh',
+              rank: 10,
+              root: '/fixture/home/.dsh/skills',
+              layer: 'global' as const,
+              skills: [
+                {
+                  name: 'fixture-user-only',
+                  description: 'fixture 仅用户技能样本',
+                  path: '/fixture/home/.dsh/skills/fixture-user-only/SKILL.md',
+                  authored: { modelInvocable: true, userInvocable: true },
+                  effective: { modelInvocable: false, userInvocable: true },
+                  override: { model: false },
+                  shadowed: false,
+                },
+                {
+                  name: 'fixture-demo',
+                  description: 'fixture 技能样本（被项目层覆盖）',
+                  path: '/fixture/home/.dsh/skills/fixture-demo/SKILL.md',
+                  authored: { modelInvocable: true, userInvocable: true },
+                  effective: { modelInvocable: true, userInvocable: true },
+                  shadowed: true,
+                },
+              ],
+            },
+          ],
+          complete: true,
+        })
+      },
     },
     goals: {
       // Compatibility face only: old API Proxy payloads and acknowledgements
@@ -3204,6 +3257,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'workspace.insertSessionBefore': return this.api.workspace.insertSessionBefore(request)
       case 'workspace.archiveSession': return this.api.workspace.archiveSession(request)
       case 'skill.list': return this.api.skills.list(request)
+      case 'skill.inventory': return this.api.skills.inventory(request)
       case 'agentPreset.list': return this.api.agentPresets.list(request)
       case 'agentPreset.select': return this.api.agentPresets.select(request)
       case 'agentPreset.read': return this.api.agentPresets.read(request)

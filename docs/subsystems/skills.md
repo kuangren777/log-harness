@@ -67,14 +67,16 @@ The shipped local provider scans roots in rank order:
 
 | Rank | Source | Root |
 |---|---|---|
-| 100 | `project-dsh` | `<projectRoot>/.dsh/skills` |
-| 200 | `project-agents` | `<projectRoot>/.agents/skills` |
+| `100 + depth × 3` | `project-dsh` | `<walked>/.dsh/skills` |
+| `101 + depth × 3` | `project-agents` | `<walked>/.agents/skills` |
+| `102 + depth × 3` | `project-claude` | `<walked>/.claude/skills` |
 | 300 | `custom` | `Config.customSkillDirs` |
 | 400 | `user-dsh` | `<dshHome>/skills` |
 | 500 | `user-agents` | `<agentsHome>/skills` |
+| 550 | `user-claude` | `<claudeHome>/skills` |
 | 600 | `bundled` | `Config.bundledSkillDir` when configured |
 
-The project root is the nearest ancestor containing `.git`; without one, the current cwd is used. When `ctx.fs` is available, the git-root walk probes `.git` through the filesystem service so remote or sandboxed workspaces do not fall back to the host filesystem boundary. The user DSH root skips its `.system` child. The local provider does not synthesize built-in system skills; deployments supply packaged skills through configured bundled roots or dedicated providers.
+Project discovery is layered over an ancestor walk: the lookup cwd and every ancestor up to its anchor contribute the configured `projectSkillDirs`, so a nearer directory wins a duplicate skill name. The anchor is the operating-system home directory when the cwd is inside it, otherwise the nearest ancestor containing `.git`, and the cwd alone when neither applies; `Config.walkAncestors: false` scans the project root alone. The project band must stay below rank 300, so a walk deep enough to reach it fails that lookup instead of outranking `custom` roots. When `ctx.fs` is available, the git-root walk probes `.git` through the filesystem service so remote or sandboxed workspaces do not fall back to the host filesystem boundary. A walked directory whose skill root is also a user root is left to that user root, which keeps rank 400 for `~/.dsh/skills` and its `.system` skip. The local provider does not synthesize built-in system skills; deployments supply packaged skills through configured bundled roots or dedicated providers.
 
 `dsh-skill-badge` registers one immutable `bundled` candidate at `BUNDLED_SKILL_RANK` and exposes its packaged asset directory through `resourceBase`. The shipped CLI declares the plugin disabled, so enabling its composition row is an explicit opt-in.
 
@@ -86,7 +88,17 @@ Skill names are kebab-case (`^[a-z0-9]+(?:-[a-z0-9]+)*$`). The local provider ac
 
 ```ts type-equiv
 /** Origin bucket for a skill contribution. The value is prompt-visible metadata, not precedence by itself. */
-type SkillSource = 'project-dsh' | 'project-agents' | 'runtime' | 'user-dsh' | 'user-agents' | 'custom' | 'bundled' | (string & {})
+type SkillSource =
+  | 'project-dsh'
+  | 'project-agents'
+  | 'project-claude'
+  | 'runtime'
+  | 'user-dsh'
+  | 'user-agents'
+  | 'user-claude'
+  | 'custom'
+  | 'bundled'
+  | (string & {})
 ```
 
 ## Summaries, candidates, and complete definitions
@@ -125,6 +137,8 @@ interface SkillSummary {
 
 `ctx.skills.list()` preserves all four policy combinations. `isModelInvocable(skill)` and `isUserInvocable(skill)` read the corresponding required field. A model-only skill sets `{ modelInvocable: true, userInvocable: false }`, a user-only skill sets `{ modelInvocable: false, userInvocable: true }`, and setting both fields to `false` keeps the skill available only through trusted `ctx.skills.get()` callers. The local provider reads the exact kebab-case frontmatter keys `disable-model-invocation` and `user-invocable`, defaults omitted fields to `true`, and projects every parsed skill into this normalized policy.
 
+A user overrides that authored policy per skill from the `skills` settings namespace the registry owns; every read applies the stored section to the merged winner, so a consumer enforcing its surface never sees the authored value. [`dsh-skill`](../../packages/skill/skill/README.md#user-settings-overrides) owns the schema, precedence, and behavior matrix, and `ctx.skills.inventory()` reports both policies beside the override.
+
 `SkillCatalogSnapshot` distinguishes authoritative absence from transient provider failure or a catalog that kept changing during discovery. `skills` contains the sorted invocation-neutral summaries collected in that observation; `complete` is true only when every registered provider completed without a concurrent catalog revision. Incomplete snapshots are not cached, allowing each consumer to retain its last-good filtered catalog and retry.
 
 ```ts type-equiv
@@ -148,6 +162,8 @@ interface SkillCandidate extends SkillSummary {
   readonly locator: unknown
   /** Absolute file path when the provider has one. */
   readonly path?: string
+  /** Absolute directory this candidate was discovered in, when the provider scans directories. */
+  readonly root?: string
   /** Parsed optional metadata object from provider-specific skill frontmatter. */
   readonly metadata?: Readonly<Record<string, unknown>>
 }
@@ -240,7 +256,7 @@ The model-facing `skill({ name })` tool validates the kebab-case name, finds the
 
 ## Cordis API
 
-Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — this section is byte-identical in both language sides of the page. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
 <a id="ctxskills--skillregistry"></a>
 
@@ -302,9 +318,21 @@ async snapshot(options: SkillViewOptions = {}): Promise<SkillCatalogSnapshot>
  * @returns the full skill, including body content, or `undefined`.
  */
 async get(name: string, options: SkillViewOptions = {}): Promise<SkillDefinition | undefined>
+
+/**
+ * Report every discovered skill grouped by origin, including the losers the
+ * catalog hides: `snapshot()` and `list()` answer "what can be invoked", this
+ * answers "what exists and why is it not winning". Each entry carries the
+ * authored policy, the effective one, and the user override that separates
+ * them. Discovery runs uncached, so an inventory read never populates or
+ * evicts the catalog cache.
+ * @param options - view options; `scope` selects the viewing agent's layers, `cwd` selects project roots, and `signal` cancels discovery.
+ * @returns nearest-first origin groups plus discovery-completeness state.
+ */
+async inventory(options: SkillViewOptions = {}): Promise<SkillInventory>
 ```
 
-Source: [`packages/skill/skill/src/index.ts`](../../packages/skill/skill/src/index.ts)
+Source: [`packages/skill/skill/src/index.ts:467`](../../packages/skill/skill/src/index.ts)
 
 <a id="skills-events"></a>
 
@@ -327,5 +355,5 @@ A skill provider, runtime contribution, or provider-backed catalog may have chan
 'skills/change'(): void
 ```
 
-Source: [`packages/skill/skill/src/index.ts`](../../packages/skill/skill/src/index.ts)
+Source: [`packages/skill/skill/src/types.ts:18`](../../packages/skill/skill/src/types.ts)
 <!-- END GENERATED cordis-surface -->

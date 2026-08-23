@@ -252,8 +252,16 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
       DSH_SNAPSHOT_FILE: opts.fixtureFile,
       DSH_SNAPSHOT_SESSIONS_ROOT: sessionsRoot,
       DSH_SNAPSHOT_SPILL_ROOT: spillRoot,
+      // Every user-level root is pinned inside the generated cwd, so a scenario
+      // never reads the developer's own configuration. The operating-system home
+      // is pinned with them: layered skill discovery walks the cwd's ancestors up
+      // to the home directory, and a scenario whose workspaceParent is the real
+      // home would otherwise discover that home's skill roots.
+      HOME: cwd,
+      USERPROFILE: cwd,
       DSH_HOME: join(cwd, '.dsh'),
       DSH_AGENTS_HOME: join(cwd, '.agents'),
+      DSH_CLAUDE_HOME: join(cwd, '.claude'),
       ...opts.overrideFile !== undefined ? { DSH_SNAPSHOT_OVERRIDE: opts.overrideFile } : {},
       ...opts.childFiles !== undefined && opts.childFiles.length > 0
         ? { DSH_SNAPSHOT_CHILD_FILES: opts.childFiles.join(delimiter) }

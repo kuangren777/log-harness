@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import type { Fiber } from '@deepseek-ai/cordis'
 import { bindScopeParent, createScope, scopeOf } from '@deepseek-ai/dsh-scope'
+import { SettingsProvider } from '@deepseek-ai/dsh-settings'
+import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import SkillRegistry, {
   isModelInvocable,
   isUserInvocable,
   renderSkillContent,
+  validateSkillPolicyOverrides,
+  SKILLS_SETTINGS_NAMESPACE,
   type SkillCandidate,
   type SkillDefinition,
   type SkillInvocationPolicy,
@@ -144,7 +149,13 @@ describe('SkillRegistry registry', () => {
     const effectContext = new Context()
     const effectService = new SkillRegistry(effectContext)
     const effectFailure = new Error('effect registration failed')
-    vi.spyOn(effectContext, 'effect').mockImplementation(() => { throw effectFailure })
+    // Only the provider registration fails: the service also installs its own
+    // settings-namespace wiring through this context's effects.
+    const realEffect = effectContext.effect.bind(effectContext)
+    vi.spyOn(effectContext, 'effect').mockImplementation(((...args: Parameters<Context['effect']>) => {
+      if (args[1] === 'skills.registerProvider()') throw effectFailure
+      return realEffect(...args)
+    }) as Context['effect'])
     let effectSignal: AbortSignal | undefined
     expect(() => effectService.registerProvider((control) => {
       effectSignal = control.signal
@@ -1267,5 +1278,240 @@ describe('SkillRegistry scoped layers', () => {
     control?.invalidate()
     expect(await ctx.skills.list({ scope })).toEqual([])
     await preset.dispose()
+  })
+})
+
+/** The smallest real provider: one in-memory document, always writable. */
+class MemorySettings extends SettingsProvider {
+  doc: Record<string, unknown> = {}
+
+  get writable(): boolean {
+    return true
+  }
+
+  protected load(): Promise<Record<string, unknown>> {
+    return Promise.resolve(structuredClone(this.doc))
+  }
+
+  protected persist(ns: SettingsNamespace, section: Record<string, unknown>): Promise<void> {
+    this.doc = { ...this.doc, [ns]: structuredClone(section) }
+    return Promise.resolve()
+  }
+}
+
+function policySkill(name: string, invocation: SkillInvocationPolicy, rank = 100): SkillCandidate {
+  return { ...memorySkill(name, `${name} description`, rank), invocation }
+}
+
+/** Registry plus an attached settings service, mounted in the product's order. */
+async function bootWithSettings(candidates: SkillCandidate[]): Promise<{
+  ctx: Context
+  settings: Fiber
+  changes: ReturnType<typeof vi.fn>
+}> {
+  const ctx = new Context()
+  await ctx.plugin(SkillRegistry)
+  registerProvider(ctx, new MemoryProvider(candidates))
+  const settings = ctx.plugin(MemorySettings)
+  await settings.await()
+  const changes = vi.fn()
+  ctx.on('skills/change', changes)
+  return { ctx, settings, changes }
+}
+
+const BOTH_INVOCABLE: SkillInvocationPolicy = { modelInvocable: true, userInvocable: true }
+
+describe('SkillRegistry policy overrides', () => {
+  it('keeps the authored policy when no settings service is mounted', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SkillRegistry)
+    registerProvider(ctx, new MemoryProvider([policySkill('authored-only', { modelInvocable: true, userInvocable: false })]))
+
+    const [summary] = await ctx.skills.list()
+
+    expect(summary?.invocation).toEqual({ modelInvocable: true, userInvocable: false })
+    expect((await ctx.skills.get('authored-only'))?.invocation).toEqual({ modelInvocable: true, userInvocable: false })
+    expect(await ctx.skills.inventory()).toEqual({
+      complete: true,
+      groups: [{
+        source: 'memory',
+        rank: 100,
+        layer: 'global',
+        skills: [{
+          name: 'authored-only',
+          description: 'authored-only description',
+          authored: { modelInvocable: true, userInvocable: false },
+          effective: { modelInvocable: true, userInvocable: false },
+          shadowed: false,
+        }],
+      }],
+    })
+  })
+
+  it('withholds a model-disabled skill from both the summary and the loaded definition', async () => {
+    const bench = await bootWithSettings([policySkill('model-off', BOTH_INVOCABLE)])
+
+    await bench.ctx.settings.update(SKILLS_SETTINGS_NAMESPACE, { 'model-off': { model: false } })
+
+    const [summary] = await bench.ctx.skills.list()
+    expect(summary === undefined ? undefined : isModelInvocable(summary)).toBe(false)
+    expect(summary === undefined ? undefined : isUserInvocable(summary)).toBe(true)
+    const definition = await bench.ctx.skills.get('model-off')
+    expect(definition === undefined ? undefined : isModelInvocable(definition)).toBe(false)
+    expect(definition === undefined ? undefined : isUserInvocable(definition)).toBe(true)
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('withholds a user-disabled skill from both the summary and the loaded definition', async () => {
+    const bench = await bootWithSettings([policySkill('user-off', BOTH_INVOCABLE)])
+
+    await bench.ctx.settings.update(SKILLS_SETTINGS_NAMESPACE, { 'user-off': { user: false } })
+
+    const [summary] = await bench.ctx.skills.list()
+    expect(summary === undefined ? undefined : isUserInvocable(summary)).toBe(false)
+    expect(summary === undefined ? undefined : isModelInvocable(summary)).toBe(true)
+    const definition = await bench.ctx.skills.get('user-off')
+    expect(definition === undefined ? undefined : isUserInvocable(definition)).toBe(false)
+    expect(definition === undefined ? undefined : isModelInvocable(definition)).toBe(true)
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('notifies observers on a committed change and serves the next list from it', async () => {
+    const bench = await bootWithSettings([policySkill('toggled', BOTH_INVOCABLE)])
+    expect((await bench.ctx.skills.list())[0]?.invocation).toEqual(BOTH_INVOCABLE)
+    expect(bench.changes).not.toHaveBeenCalled()
+
+    await bench.ctx.settings.update(SKILLS_SETTINGS_NAMESPACE, { toggled: { model: false, user: false } })
+
+    expect(bench.changes).toHaveBeenCalled()
+    expect((await bench.ctx.skills.list())[0]?.invocation).toEqual({ modelInvocable: false, userInvocable: false })
+
+    await bench.ctx.settings.update(SKILLS_SETTINGS_NAMESPACE, { toggled: { model: true } })
+
+    expect((await bench.ctx.skills.list())[0]?.invocation).toEqual({ modelInvocable: true, userInvocable: false })
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('refuses an override key that cannot name a skill', async () => {
+    const bench = await bootWithSettings([policySkill('addressable', BOTH_INVOCABLE)])
+
+    await expect(bench.ctx.settings.update(SKILLS_SETTINGS_NAMESPACE, { 'Bad Name': { model: false } }))
+      .rejects.toThrow('settings "skills" key "Bad Name" is not a valid skill name')
+
+    expect(() => { validateSkillPolicyOverrides({ addressable: { model: false } }) }).not.toThrow()
+    expect((await bench.ctx.skills.list())[0]?.invocation).toEqual(BOTH_INVOCABLE)
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('restores the authored policy when the settings service goes away', async () => {
+    const bench = await bootWithSettings([policySkill('restored', BOTH_INVOCABLE)])
+    await bench.ctx.settings.update(SKILLS_SETTINGS_NAMESPACE, { restored: { model: false } })
+    expect((await bench.ctx.skills.list())[0]?.invocation).toEqual({ modelInvocable: false, userInvocable: true })
+    const notified = bench.changes.mock.calls.length
+
+    await bench.settings.dispose()
+
+    expect(bench.changes.mock.calls.length).toBeGreaterThan(notified)
+    expect((await bench.ctx.skills.list())[0]?.invocation).toEqual(BOTH_INVOCABLE)
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('attaches and detaches a settings service carrying no override silently', async () => {
+    const bench = await bootWithSettings([policySkill('untouched', BOTH_INVOCABLE)])
+    expect(bench.changes).not.toHaveBeenCalled()
+
+    await bench.settings.dispose()
+
+    expect(bench.changes).not.toHaveBeenCalled()
+    expect((await bench.ctx.skills.list())[0]?.invocation).toEqual(BOTH_INVOCABLE)
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('reports shadowed contributions, origins, and the override that moved a policy', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SkillRegistry)
+    const globalProvider = new MemoryProvider([
+      {
+        ...policySkill('shared', { modelInvocable: true, userInvocable: false }, 400),
+        source: 'user-dsh',
+        root: '/home/user/.dsh/skills',
+        path: '/home/user/.dsh/skills/shared/SKILL.md',
+        whenToUse: 'When the user layer wins.',
+      },
+      { ...policySkill('user-only', BOTH_INVOCABLE, 400), source: 'user-dsh', root: '/home/user/.dsh/skills' },
+    ])
+    registerProvider(ctx, globalProvider)
+    const settings = ctx.plugin(MemorySettings)
+    await settings.await()
+    await ctx.settings.update(SKILLS_SETTINGS_NAMESPACE, { shared: { user: true } })
+    const preset = createScope(ctx, { preset: 'inventory' })
+    scopedSkills(preset.ctx).registerProvider(() => new MemoryProvider([
+      { ...policySkill('shared', BOTH_INVOCABLE, 100), source: 'preset' },
+    ]))
+
+    const inventory = await ctx.skills.inventory({ scope: scopeOf(preset.ctx) })
+
+    expect(inventory).toEqual({
+      complete: true,
+      groups: [
+        {
+          source: 'preset',
+          rank: 100,
+          layer: 'scope',
+          skills: [{
+            name: 'shared',
+            description: 'shared description',
+            authored: BOTH_INVOCABLE,
+            effective: BOTH_INVOCABLE,
+            override: { user: true },
+            shadowed: false,
+          }],
+        },
+        {
+          source: 'user-dsh',
+          rank: 400,
+          root: '/home/user/.dsh/skills',
+          layer: 'global',
+          skills: [
+            {
+              name: 'shared',
+              description: 'shared description',
+              whenToUse: 'When the user layer wins.',
+              path: '/home/user/.dsh/skills/shared/SKILL.md',
+              authored: { modelInvocable: true, userInvocable: false },
+              effective: { modelInvocable: true, userInvocable: true },
+              override: { user: true },
+              shadowed: true,
+            },
+            {
+              name: 'user-only',
+              description: 'user-only description',
+              authored: BOTH_INVOCABLE,
+              effective: BOTH_INVOCABLE,
+              shadowed: false,
+            },
+          ],
+        },
+      ],
+    })
+    await preset.dispose()
+    await ctx.fiber.dispose()
+  })
+
+  it('reports incomplete discovery and refuses an already-cancelled inventory', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SkillRegistry)
+    registerProvider(ctx, {
+      name: 'memory',
+      list: () => Promise.resolve({
+        candidates: [policySkill('partial', BOTH_INVOCABLE)],
+        complete: false,
+      }),
+      get: () => Promise.resolve(undefined),
+    })
+
+    expect(await ctx.skills.inventory()).toMatchObject({ complete: false })
+    const aborted = AbortSignal.abort(new Error('inventory cancelled'))
+    await expect(ctx.skills.inventory({ signal: aborted })).rejects.toThrow('inventory cancelled')
   })
 })

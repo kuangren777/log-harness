@@ -9,7 +9,9 @@ import { Session, SessionId, type SessionEvent, type UserMessage } from '@deepse
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import AgentRegistry, { agentEvents, Inbox, type Agent, type PreStepDecision } from '@deepseek-ai/dsh-agent'
-import SkillRegistry from '@deepseek-ai/dsh-skill'
+import { SettingsProvider } from '@deepseek-ai/dsh-settings'
+import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
+import SkillRegistry, { SKILLS_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-skill'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import * as toolSkill from '@deepseek-ai/dsh-tool-skill'
 
@@ -31,7 +33,7 @@ async function setup(home: string, config: toolSkill.Config = {}): Promise<Conte
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SkillRegistry)
-  await ctx.plugin(SkillFileSystem, { dshHome: join(home, '.dsh'), agentsHome: join(home, '.agents'), watch: false })
+  await ctx.plugin(SkillFileSystem, { dshHome: join(home, '.dsh'), agentsHome: join(home, '.agents'), claudeHome: join(home, '.claude'), watch: false })
   await ctx.plugin(toolSkill, config)
   return ctx
 }
@@ -164,7 +166,7 @@ describe('dsh-tool-skill', () => {
     await ctx.plugin(AgentRegistry)
     const home = await tempDir('tool-schema')
     await ctx.plugin(SkillRegistry)
-    await ctx.plugin(SkillFileSystem, { dshHome: join(home, '.dsh'), agentsHome: join(home, '.agents'), watch: false })
+    await ctx.plugin(SkillFileSystem, { dshHome: join(home, '.dsh'), agentsHome: join(home, '.agents'), claudeHome: join(home, '.claude'), watch: false })
     ctx.skills.register({ name: 'lifecycle-skill', description: 'Lifecycle', source: 'runtime', content: 'body' })
 
     const fiber = await ctx.plugin(toolSkill)
@@ -752,7 +754,7 @@ describe('dsh-tool-skill', () => {
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SkillRegistry)
-    await ctx.plugin(SkillFileSystem, { dshHome: join(home, '.dsh'), agentsHome: join(home, '.agents'), watch: false })
+    await ctx.plugin(SkillFileSystem, { dshHome: join(home, '.dsh'), agentsHome: join(home, '.agents'), claudeHome: join(home, '.claude'), watch: false })
 
     await expect(ctx.plugin(toolSkill, { catalogDescriptionMaxLength: 2 })).rejects.toThrow('greater than or equal to 3')
   })
@@ -1081,5 +1083,105 @@ describe('user-explicit invocation injection', () => {
       .filter(message => (message.source as { kind?: string }).kind === 'skill-invocation')
       .map(message => (message.source as { name: string }).name)
     expect(invoked).toEqual(['shared-skill'])
+  })
+})
+
+describe('settings policy overrides', () => {
+  /** The smallest real provider: one in-memory document, always writable. */
+  class MemorySettings extends SettingsProvider {
+    doc: Record<string, unknown> = {}
+
+    get writable(): boolean {
+      return true
+    }
+
+    protected load(): Promise<Record<string, unknown>> {
+      return Promise.resolve(structuredClone(this.doc))
+    }
+
+    protected persist(ns: SettingsNamespace, section: Record<string, unknown>): Promise<void> {
+      this.doc = { ...this.doc, [ns]: structuredClone(section) }
+      return Promise.resolve()
+    }
+  }
+
+  async function overrideHarness(): Promise<{ ctx: Context; agent: Agent; home: string }> {
+    const home = await tempDir('tool-override')
+    await writeSkill(join(home, '.dsh/skills'), 'toggle-demo', 'Toggle demo', 'Toggle instructions.')
+    const ctx = await setup(home)
+    const settings = ctx.plugin(MemorySettings)
+    await settings.await()
+    return { ctx, agent: agentForCwd(home), home }
+  }
+
+  it('republishes the catalog after a stored override hides a skill from the model', async () => {
+    const { ctx, agent } = await overrideHarness()
+    await composePrefixForAgent(ctx, agent)
+    expect(catalogMessages(agent.session)).toHaveLength(1)
+
+    await ctx.settings.update(SKILLS_SETTINGS_NAMESPACE, { 'toggle-demo': { model: false } })
+    openMessageTurn(agent.session, 2)
+    await composePrefixForAgent(ctx, agent)
+
+    const published = catalogMessages(agent.session)
+    expect(published).toHaveLength(2)
+    const replacement = published[1]
+    expect(replacement?.data.source).toMatchObject({ kind: 'skill-catalog', update: true, entries: [] })
+    const block = replacement?.data.content[0]
+    if (block?.type !== 'text') throw new Error('expected text catalog message')
+    expect(block.text).toContain('No skills are currently available through the `skill` tool.')
+    expect(block.text).not.toContain('toggle-demo')
+  })
+
+  it('refuses the skill tool for a stored model-disabled skill and still injects it for the user', async () => {
+    const { ctx, agent } = await overrideHarness()
+    await ctx.settings.update(SKILLS_SETTINGS_NAMESPACE, { 'toggle-demo': { model: false } })
+
+    const denied = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: CallId('override-1'),
+      name: 'skill',
+      arguments: { name: 'toggle-demo' },
+    })
+
+    expect(denied.isError).toBe(true)
+    const deniedBlock = denied.content[0]
+    if (deniedBlock?.type !== 'text') throw new Error('expected text tool result')
+    expect(deniedBlock.text).toContain('is not available for model invocation')
+    expect(deniedBlock.text).not.toContain('Toggle instructions.')
+
+    const decision = await proposeStep(ctx, agent, [createUserMessage({
+      content: [{ type: 'text', text: '/toggle-demo please' }],
+      source: { kind: 'user' },
+    })])
+    if (decision.kind !== 'enter') throw new Error('expected enter')
+    const injection = decision.messages.at(-1)
+    expect(injection?.source).toMatchObject({ kind: 'skill-invocation', name: 'toggle-demo' })
+    const injectedBlock = injection?.content[0]
+    if (injectedBlock?.type !== 'text') throw new Error('expected text injection')
+    expect(injectedBlock.text).toContain('Toggle instructions.')
+  })
+
+  it('keeps a stored user-disabled skill in the catalog and out of the invocation path', async () => {
+    const { ctx, agent } = await overrideHarness()
+    await ctx.settings.update(SKILLS_SETTINGS_NAMESPACE, { 'toggle-demo': { user: false } })
+
+    const decision = await proposeStep(ctx, agent, [createUserMessage({
+      content: [{ type: 'text', text: '/toggle-demo please' }],
+      source: { kind: 'user' },
+    })])
+
+    if (decision.kind !== 'enter') throw new Error('expected enter')
+    expect(decision.messages.some(message =>
+      (message.source as { kind?: string }).kind === 'skill-invocation')).toBe(false)
+    expect(decision.messages.some(message =>
+      (message.source as { kind?: string }).kind === 'skill-catalog')).toBe(true)
+    const loaded = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: CallId('override-2'),
+      name: 'skill',
+      arguments: { name: 'toggle-demo' },
+    })
+    expect(loaded.isError).toBe(false)
   })
 })

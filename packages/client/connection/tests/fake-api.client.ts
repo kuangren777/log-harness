@@ -3,7 +3,8 @@
 // deferred-controlled timing). Streams are hand pumps: pushMux/pushHost.
 import type {
   HostFrame, IApiClient, ModelSelection, MuxFrame,
-  RpcRequest, RpcResponse, SessionId, SessionModels, SessionSearchItem, SkillEntry, WorkspaceId,
+  RpcRequest, RpcResponse, SessionId, SessionModels, SessionSearchItem, SkillEntry, SkillInventory,
+  WorkspaceId,
 } from '../src/client/api.ts'
 import { RpcId } from '../src/client/api.ts'
 
@@ -175,6 +176,9 @@ export class FakeApiClient implements IApiClient {
   onSkillList: (payload: unknown) => Promise<RpcResponse<{ skills: SkillEntry[] }>>
     = () => Promise.resolve(ok({ skills: [] }))
 
+  onSkillInventory: (payload: unknown) => Promise<RpcResponse<SkillInventory>>
+    = () => Promise.resolve(ok({ groups: [], complete: true }))
+
 
   readonly agentPresets: IApiClient['agentPresets'] = {
     list: (payload: unknown) => this.record('agentPreset.list', payload, Promise.resolve(ok({ presets: [], authorable: false, hasDocument: false }))),
@@ -194,6 +198,7 @@ export class FakeApiClient implements IApiClient {
 
   readonly skills: IApiClient['skills'] = {
     list: (payload: unknown) => this.record('skill.list', payload, this.onSkillList(payload)),
+    inventory: (payload: unknown) => this.record('skill.inventory', payload, this.onSkillInventory(payload)),
   }
 
   readonly goals: IApiClient['goals'] = {

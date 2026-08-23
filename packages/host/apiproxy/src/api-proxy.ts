@@ -1743,6 +1743,48 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     return goals
   }
 
+  /**
+   * Resolve one session address to everything a skill read needs, without
+   * creating or resuming an Agent: the canonical project cwd from the
+   * host-resident session header, the registry that session's composition
+   * serves, and the layer scope its catalog is viewed through.
+   *
+   * The host registry is layered per scope and serves every session, but a
+   * composition may realm-mount its own instead; that instance is invisible to
+   * host contexts, so it is addressed through the live agent. Same stance as
+   * the commands domain: a missing service means no composition mounts
+   * dsh-skill, not an empty catalog. `ctx.get` also keeps this independent of
+   * the gateway plugin's inject list (an undeclared `ctx.skills` property read
+   * fails the reflect proxy).
+   * @param sessionId - the session whose project and composition decide the view.
+   * @returns the registry, project cwd, and view scope, or the wire error to answer with.
+   */
+  async function skillViewFor(sessionId: SessionId): Promise<
+    { registry: NonNullable<ReturnType<typeof ctx.get<'skills'>>>; cwd: string; scope: ScopeKey | undefined }
+    | { error: RpcError }
+  > {
+    const session = ctx.sessions.get(sessionId)
+    if (session === undefined) {
+      return { error: { code: 'session-not-found', message: `session "${sessionId}" not found (not attached)`, details: { sessionId } } }
+    }
+    if (session.header.cwd === undefined) {
+      // Every served session records its project at create time; a
+      // cwd-less header is a pre-project legacy log (not served).
+      return { error: { code: 'internal', message: `session "${sessionId}" has no project cwd`, details: {} } }
+    }
+    const live = ctx.agents.get(sessionId)
+    const presets = ctx.get('agentPresets')
+    const scoped = live === undefined ? undefined : presets?.serviceFor(live, 'skills')
+    const registry = scoped ?? ctx.get('skills')
+    if (registry === undefined) {
+      return { error: { code: 'internal', message: 'skill registry is absent: neither this session\'s agent preset nor the host composition mounts @deepseek-ai/dsh-skill', details: {} } }
+    }
+    // The scope presenters resolve in — the live agent, else the recorded
+    // preset's standing key, else the global layer — so a cold session's
+    // '/' popup lists the catalog its composition actually serves.
+    return { registry, cwd: session.header.cwd, scope: await presenterScopeFor(sessionId, session) }
+  }
+
   /** Map one goal-domain rejection to the wire error (stable GoalError codes ride in details). */
   function goalError(request: RpcRequest<unknown>, error: unknown): RpcResponse<never> {
     const details = error instanceof GoalError ? { goalCode: error.code } : {}
@@ -3104,46 +3146,13 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     },
 
     skills: {
-      // Skill lookup never creates or resumes an agent: the session address
-      // resolves to a canonical cwd from the host-resident session header, and
-      // the view scope is the live agent or the preset's standing key.
+      // Skill reads never create or resume an agent: the session address
+      // resolves to a canonical cwd and a view scope through skillViewFor.
       async list(request) {
-        const { sessionId } = request.payload
-        const session = ctx.sessions.get(sessionId)
-        if (session === undefined) {
-          return err(request, {
-            code: 'session-not-found',
-            message: `session "${sessionId}" not found (not attached)`,
-            details: { sessionId },
-          })
-        }
-        if (session.header.cwd === undefined) {
-          // Every served session records its project at create time; a
-          // cwd-less header is a pre-project legacy log (not served).
-          return err(request, { code: 'internal', message: `session "${sessionId}" has no project cwd`, details: {} })
-        }
-        const cwd = session.header.cwd
-        // The host registry is layered per scope and serves every session. A
-        // composition may still realm-mount its own registry instead; that
-        // instance is invisible to host contexts, so address it through the
-        // live agent (`agents.get` keeps the no-side-effect stance above).
-        const live = ctx.agents.get(sessionId)
-        const presets = ctx.get('agentPresets')
-        const scoped = live === undefined ? undefined : presets?.serviceFor(live, 'skills')
-        // Same stance as the commands domain: a missing service means no
-        // composition mounts dsh-skill, not an empty catalog. `ctx.get` also
-        // keeps this handler independent of the gateway plugin's inject list
-        // (an undeclared `ctx.skills` property read fails the reflect proxy).
-        const skillRegistry = scoped ?? ctx.get('skills')
-        if (skillRegistry === undefined) {
-          return err(request, { code: 'internal', message: 'skill registry is absent: neither this session\'s agent preset nor the host composition mounts @deepseek-ai/dsh-skill', details: {} })
-        }
-        // The scope presenters resolve in — the live agent, else the recorded
-        // preset's standing key, else the global layer — so a cold session's
-        // '/' popup lists the catalog its composition actually serves.
-        const scope = await presenterScopeFor(sessionId, session)
+        const view = await skillViewFor(request.payload.sessionId)
+        if ('error' in view) return err(request, view.error)
         try {
-          const skills = (await skillRegistry.list({ cwd, scope })).filter(isUserInvocable)
+          const skills = (await view.registry.list({ cwd: view.cwd, scope: view.scope })).filter(isUserInvocable)
           return ok(request, {
             skills: skills.map(skill => ({
               name: skill.name,
@@ -3154,6 +3163,38 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         } catch (error: unknown) {
           return err(request, { code: 'internal', message: `skill listing failed: ${String(error)}`, details: {} })
+        }
+      },
+
+      // The inventory is the policy editor's read: it keeps the losers `list`
+      // drops and the authored/effective split an override toggle edits, and
+      // it never populates the catalog cache the composer's menu reads.
+      async inventory(request) {
+        const view = await skillViewFor(request.payload.sessionId)
+        if ('error' in view) return err(request, view.error)
+        try {
+          const inventory = await view.registry.inventory({ cwd: view.cwd, scope: view.scope })
+          return ok(request, {
+            groups: inventory.groups.map(group => ({
+              source: group.source,
+              rank: group.rank,
+              ...group.root === undefined ? {} : { root: group.root },
+              layer: group.layer,
+              skills: group.skills.map(skill => ({
+                name: skill.name,
+                description: skill.description,
+                ...skill.whenToUse === undefined ? {} : { whenToUse: skill.whenToUse },
+                ...skill.path === undefined ? {} : { path: skill.path },
+                authored: skill.authored,
+                effective: skill.effective,
+                ...skill.override === undefined ? {} : { override: skill.override },
+                shadowed: skill.shadowed,
+              })),
+            })),
+            complete: inventory.complete,
+          })
+        } catch (error: unknown) {
+          return err(request, { code: 'internal', message: `skill inventory failed: ${String(error)}`, details: {} })
         }
       },
     },

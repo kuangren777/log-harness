@@ -19,7 +19,8 @@
  * snapshot locally, so one session costs one RPC. The scope-birth warm hook
  * prewarms the session's key; a preset switch drops that one key (the
  * catalog is the preset's, and a blank session may switch after the warm);
- * connection/reset clears everything — the host
+ * the forwarded `skills/change` and connection/reset each clear everything —
+ * that invalidation names no session, and the host
  * catalog may differ across generations. A shared in-flight fetch
  * deliberately outlives any single menu interaction: closing the menu must
  * not kill the prewarm other consumers will hit, so it carries its own
@@ -180,6 +181,10 @@ export function apply(ctx: ClientContext): void {
   // A preset decides which skill providers an agent reads, so a switched
   // session's cached catalog belongs to the composition it no longer runs.
   ctx.remote.$on('agent-preset/selected', invalidate)
+  // The host registry's invalidation carries no diff and names no session, so
+  // every cached catalog is suspect: a toggled override or a rescanned
+  // directory can move any project's winners. The next '/' refetches.
+  ctx.remote.$on('skills/change', clearAll)
   ctx.on('connection/reset', clearAll)
   ctx.effect(() => {
     const unregister = inputTriggers.registerSource(source)

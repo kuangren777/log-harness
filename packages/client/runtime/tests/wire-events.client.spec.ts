@@ -34,10 +34,11 @@ function forwardedEventContracts(ctx: Context): void {
   ctx.remote.$on('agent-preset/selected', (sessionId, agentPreset) => {
     void sessionId; void agentPreset
   })
+  ctx.remote.$on('skills/change', () => {})
   // @ts-expect-error -- client-local event outside the allowlist
   ctx.remote.$on('slots/changed', () => {})
   // @ts-expect-error -- declared host event the allowlist does not select
-  ctx.remote.$on('skills/change', () => {})
+  ctx.remote.$on('tools/change', () => {})
 }
 void forwardedEventContracts
 

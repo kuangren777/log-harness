@@ -14,6 +14,8 @@ Every catalog message carries the `skill-catalog` source: a `catalog`-form conte
 
 The catalog is omitted when no model-invocable skills are initially available, and also when that agent's tool view restricts away the shipped `skill` tool or resolves a same-name scoped shadow instead. Identity is compared against the definition this plugin registered rather than a lookup of its own name, so the plugin works mounted globally or inside one agent's composition, where `register()` files into that agent's layer alone. Visibility changes participate in the digest, keeping prompt guidance, model-visible schema, and executable dispatch aligned.
 
+Catalog membership and tool dispatch read the effective policy, so a user's stored `skills` settings section ([precedence](../skill/README.md#user-settings-overrides)) moves both. Disabling a skill for the model removes it from the catalog and makes the `skill` tool refuse it while the user-explicit `/name` gesture still injects its body; disabling it for the user leaves the catalog entry and the tool untouched and turns `/name` back into ordinary prose. A toggle flip is an ordinary catalog change: the next pre-step appends one complete replacement catalog.
+
 `catalogDescriptionMaxLength` controls normalized catalog descriptions; rendering XML-escapes them. Its default is `500` and values must be integers of at least `3`, which reserves room for a truncation ellipsis. The [skill catalog hot-refresh Agent Note](../../../.agents/notes/implemented/feature/2026-07-27-skill-catalog-hot-refresh.md) owns the durable initial catalog and replacement lifecycle.
 
 ## Tool: `skill`
@@ -26,7 +28,7 @@ Execution uses the calling agent's `session.header.cwd` so workspace-sensitive p
 
 Resource guidance resolves only paths or URLs explicitly referenced by the instructions against `resourceBase`; scripts, references, and assets load on demand, and the result does not enumerate a skill directory. Local providers may supply a directory, while remote or embedded providers may supply a URL or opaque loading guidance.
 
-An unresolved name reports that the skill is unknown or no longer available. Invalid names and skills whose `invocation.modelInvocable` is `false` produce distinct error results. `invocation.userInvocable` does not restrict this model-facing tool.
+An unresolved name reports that the skill is unknown or no longer available. Invalid names and skills whose `invocation.modelInvocable` is `false` produce distinct error results. `invocation.userInvocable` does not restrict this model-facing tool. The policy read here is the effective one, so a user's stored `skills` override in the settings document ([precedence](../skill/README.md#user-settings-overrides)) refuses the name exactly as `disable-model-invocation` frontmatter does.
 
 Tool execution does not add a synthetic context message. Its freshly loaded result is already recorded as the tool result and becomes available to the next model step without duplicating the body. Only the catalog projection adds replacement summaries.
 
@@ -59,7 +61,7 @@ Repeated input cost scales with skill count and `catalogDescriptionMaxLength`; n
 
 #### KV Cache effect
 
-The initial durable catalog is appended after the existing reusable prefix. Dynamic changes are append-only history after that catalog, so earlier reusable tokens stay intact while each newly appended catalog and later turns form a new suffix. A new or resumed instance with a changed digest may affect cache reuse from the newly appended catalog position.
+The initial durable catalog is appended after the existing reusable prefix. Dynamic changes are append-only history after that catalog, so earlier reusable tokens stay intact while each newly appended catalog and later turns form a new suffix. A new or resumed instance with a changed digest may affect cache reuse from the newly appended catalog position. Flipping a stored invocation override costs one appended replacement catalog on the next pre-step, never a rewrite of the earlier one.
 
 ### Tool schema
 
@@ -149,7 +151,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-A whitespace-bounded `/name` token anywhere in a claimed user message, naming a user-invocable skill in the workspace catalog, injects that skill's full `<skill_content>` rendering (the exact result-template shape above) as a `user`-role instructions context appended after every other injection of that step — background first, the material to act on last. Only direct user input is scanned, the check runs on the loaded definition, and unknown or user-disabled names stay ordinary prose. This is the sole entry point for `disable-model-invocation` skills, which the catalog and the `skill` tool never expose; the catalog's closing sentence tells the model to follow the injected block instead of re-loading it.
+A whitespace-bounded `/name` token anywhere in a claimed user message, naming a user-invocable skill in the workspace catalog, injects that skill's full `<skill_content>` rendering (the exact result-template shape above) as a `user`-role instructions context appended after every other injection of that step — background first, the material to act on last. Only direct user input is scanned, the check runs on the loaded definition — carrying the effective policy, so a stored `user: false` override silences the gesture — and unknown or user-disabled names stay ordinary prose. This is the sole entry point for skills the model cannot invoke, whether by `disable-model-invocation` frontmatter or a stored `model: false` override, which the catalog and the `skill` tool never expose; the catalog's closing sentence tells the model to follow the injected block instead of re-loading it.
 
 #### Token effect
 
