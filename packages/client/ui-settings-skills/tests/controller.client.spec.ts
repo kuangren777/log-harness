@@ -216,6 +216,39 @@ describe('SkillsSectionController', () => {
     b.controller.dispose()
   })
 
+  it('keeps the loaded list mounted while a later read is in flight', async () => {
+    const b = bench({ answers: [inventory(), inventory({ complete: false })] })
+    await b.controller.refresh()
+    const pending = b.controller.refresh()
+    // A re-read never returns to the progress placeholder once rows exist:
+    // the previous inventory stays until the answer replaces it in place.
+    expect(b.controller.store.getSnapshot()).toMatchObject({ status: 'ready', inventory: { complete: true } })
+    await pending
+    expect(b.controller.store.getSnapshot()).toMatchObject({ status: 'ready', inventory: { complete: false } })
+    b.controller.dispose()
+  })
+
+  it('projects a toggle onto its row before the write settles, and a reset back to the authored policy', async () => {
+    const b = bench()
+    await b.controller.refresh()
+    const row = (name: string) => {
+      for (const group of b.controller.store.getSnapshot().inventory!.groups) {
+        const entry = group.skills.find(skill => skill.name === name && !skill.shadowed)
+        if (entry !== undefined) return entry
+      }
+      throw new Error(`no winning row ${name}`)
+    }
+    b.controller.setModel('beta', false)
+    expect(row('beta').effective.modelInvocable).toBe(false)
+    expect(row('beta').override).toEqual({ model: false })
+    expect(row('beta').effective.userInvocable).toBe(row('beta').authored.userInvocable)
+    b.controller.reset('alpha')
+    expect(row('alpha').override).toBeUndefined()
+    expect(row('alpha').effective).toEqual(row('alpha').authored)
+    await vi.waitFor(() => { expect(b.settings.unsets).toEqual(['alpha']) })
+    b.controller.dispose()
+  })
+
   it('lets the latest read win over an older one still in flight', async () => {
     const b = bench({ answers: [inventory(), inventory({ complete: false })] })
     const stale = b.controller.refresh()

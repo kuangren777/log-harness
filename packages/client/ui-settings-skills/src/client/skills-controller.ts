@@ -141,8 +141,11 @@ export class SkillsSectionController {
       return
     }
     const cwd = byId[current]?.cwd
+    // Only the first read shows the progress placeholder: a later read keeps
+    // the loaded list mounted so a toggle does not unmount the rows and move
+    // the scroll position; the answer replaces the rows in place.
     this.store.update((draft) => {
-      draft.status = 'loading'
+      if (draft.inventory === undefined) draft.status = 'loading'
       draft.cwd = cwd
       draft.error = undefined
     })
@@ -189,6 +192,7 @@ export class SkillsSectionController {
    * @param name - skill name addressed by the row.
    */
   reset(name: string): void {
+    this.project(name, undefined)
     this.settle(this.scope.unset(name))
   }
 
@@ -220,7 +224,40 @@ export class SkillsSectionController {
    * the other decision.
    */
   private override(name: string, patch: SkillPolicyOverrideView): void {
-    this.settle(this.scope.set(name, { ...this.storedOverride(name), ...patch }))
+    const next = { ...this.storedOverride(name), ...patch }
+    this.project(name, next)
+    this.settle(this.scope.set(name, next))
+  }
+
+  /**
+   * Apply an override to the winning row immediately, before the Host's own
+   * resolution arrives: the toggle reflects the click at once and the later
+   * re-read only confirms it.
+   * @param name - skill name.
+   * @param override - the stored entry after the write, or undefined after a reset.
+   */
+  private project(name: string, override: SkillPolicyOverrideView | undefined): void {
+    this.store.update((draft) => {
+      if (draft.inventory === undefined) return
+      draft.inventory = {
+        ...draft.inventory,
+        groups: draft.inventory.groups.map(group => ({
+          ...group,
+          skills: group.skills.map((entry) => {
+            if (entry.name !== name || entry.shadowed) return entry
+            const { override: _stored, ...rest } = entry
+            return {
+              ...rest,
+              ...(override === undefined ? {} : { override }),
+              effective: {
+                modelInvocable: override?.model ?? entry.authored.modelInvocable,
+                userInvocable: override?.user ?? entry.authored.userInvocable,
+              },
+            }
+          }),
+        })),
+      }
+    })
   }
 
   /** The stored override behind the winning row for this name, or none. */
