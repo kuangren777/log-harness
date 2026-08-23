@@ -68,6 +68,20 @@ A method that spans accounts narrows its own answer instead of refusing: `sessio
 
 Every entry point that does not authenticate resolves to `LOCAL_PRINCIPAL`, which passes every policy unconditionally, so a deployment without an auth provider behaves exactly as it did before the table existed. Who a request is comes from [`dsh-auth-gate`](../../auth/auth-gate/README.md); the two server-to-browser streams cannot be secured by refusing a connection, so `frame-visibility.ts` drops or narrows each frame on its way out instead.
 
+## Permission rules inside an admitted call
+
+The policy row decides whether a call runs. What it then answers is narrowed by the caller's [permission rules](../../auth/auth/README.md#permission-rules), resolved once per request from `ctx.auth.rulesFor` — `local` and administrators carry none and bypass every check below.
+
+- `skill` — `skill.list` drops a refused skill from the composer's menu, and `skill.inventory` drops it from its origin group while keeping the group, so nothing about a refused skill (its description, its host path) survives the projection. The model-facing catalog is filtered separately, in [`dsh-tool-skill`](../../skill/tool-skill/README.md).
+- `model` — `llm.models` and `session.models` advertise only the `provider/model` routes the caller may use, and a provider whose every model is refused disappears with its group. A per-provider LISTING failure still rides `failures`: that is a fact about the deployment, not about who is asking. `session.selectModel` answers `forbidden` for a refused route before it resolves anything; the turn's own refusal lives at `agent/request` in the gate.
+- `settings-section` — `settings.describe` returns only the namespaces the caller may reach, and `settings.update`/`replace`/`mutate` answer `forbidden` before the seam is touched, so a refused namespace cannot be probed for existence or validation behavior. `settings.openDocument` needs every registered namespace, because the document is all of them in one editable file.
+
+## Administration plane (`auth.admin.*`)
+
+Nine `admin` rows over the auth seam: `users.list`/`create`/`disable`, `groups.list`/`create`/`delete`/`rename`, `members.set`, and `rules.set`. They are the plane that decides what every other row admits, so `owner` is not even offered for them. `groups.list` returns each group with its membership and its rules, because an administration surface renders the three together and three round trips could disagree. `users.disable` takes a boolean rather than being one-way: a mistaken block must not become a database repair. No response carries a password, a hash, or a token; a password crosses only inward, on `users.create`.
+
+`members.set` replaces a membership wholesale, computes the newly added accounts against what the store held BEFORE the write, and — after the write is durable — asks the mounted gate to mail each of them. A repeat save with the same roster mails nobody. A delivery failure is logged and leaves the save standing, because the membership is the commit and the notice is a courtesy. Every write also appends an `auth.admin.*` audit row naming the acting administrator. A seam refusal (duplicate address or group name, builtin group, unknown id, rate limit) answers `auth-rejected` carrying the seam's own `AuthErrorCode`.
+
 ## Carrier layer (`/client` + root)
 
 `AbstractApiClient` holds every protocol invariant — rpcId minting, envelope wrap/unwrap, zod parsing, SSE frame decoding, unary timeout, microtask-batched envelope observation (`subscribeEnvelopes`) — while platform subclasses supply only the `doFetch` transport aspect. `InProcessApiClient` over `toFetchHandler(api)` remains the isomorphic point for callers and carrier tests that need the full wire serialization/validation path without a network. Product `dsh --profile headless` is a direct core entry point and does not mount this package.

@@ -242,7 +242,7 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
       await bridge(
         req,
         res,
-        fetchHandlerFor(admission.principal, admission.gate, req.socket?.remoteAddress),
+        fetchHandlerFor(admission.principal, admission.gate, req.socket.remoteAddress),
         maxRequestBodyBytes,
       )
     },

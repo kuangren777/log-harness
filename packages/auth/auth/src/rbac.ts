@@ -61,6 +61,21 @@ export function evaluate(
 }
 
 /**
+ * Whether any rule the principal's groups carry addresses one domain, which is
+ * what makes that domain governed for them.
+ *
+ * Governance is per domain and opt-in, and this predicate is the switch. It
+ * reads the same rule list {@link evaluate} does, so the two cannot disagree
+ * about which rules are in scope.
+ * @param rules - every rule the principal's groups carry, in any order.
+ * @param domain - the namespace being addressed.
+ * @returns whether at least one rule addresses the domain.
+ */
+export function governs(rules: readonly PermissionRule[], domain: PermissionDomain): boolean {
+  return rules.some(rule => rule.domain === domain)
+}
+
+/**
  * Decide one name for one principal — the entry point a Consumer calls.
  *
  * Two principals bypass {@link evaluate} entirely: `local`, which is the
@@ -74,6 +89,15 @@ export function evaluate(
  * A deny rule therefore cannot lock an administrator out. That is deliberate:
  * an administrator can edit the rules, so a lockout would only be a slower
  * path back to the same access.
+ *
+ * A domain no rule addresses is UNGOVERNED and grants everything in it. Only
+ * {@link evaluate}'s default-deny is bypassed, and only for a domain the
+ * administrator has said nothing about: once one rule names the domain, every
+ * name in it is decided by the rules alone, so an allowlist is still an
+ * allowlist. Without this step an account would have to be granted every skill,
+ * tool, model route, and settings namespace it uses before a group could
+ * revoke a single one, and a freshly created group — which carries no rules —
+ * would take the whole product away from its members instead of nothing.
  * @param principal - the acting principal.
  * @param rules - every rule the principal's groups carry; ignored for a bypassing principal.
  * @param domain - the namespace being addressed.
@@ -87,5 +111,6 @@ export function permits(
   name: string,
 ): boolean {
   if (principal.kind === 'local' || principal.admin) return true
+  if (!governs(rules, domain)) return true
   return evaluate(rules, domain, name)
 }

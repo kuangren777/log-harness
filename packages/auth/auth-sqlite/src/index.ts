@@ -137,6 +137,18 @@ export class SqliteAuthService extends AuthService {
     return this.store.setPassword(userId, password)
   }
 
+  listUsers(): Promise<readonly UserRecord[]> {
+    return this.store.listUsers()
+  }
+
+  setUserDisabled(userId: UserId, disabled: boolean): Promise<void> {
+    return this.store.setUserDisabled(userId, disabled)
+  }
+
+  principalOf(userId: UserId): Promise<Principal | undefined> {
+    return this.store.principalOf(userId)
+  }
+
   verifyLogin(email: string, password: string, ip?: string): Promise<LoginOutcome> {
     return this.store.verifyLogin(email, password, ip)
   }

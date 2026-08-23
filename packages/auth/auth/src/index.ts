@@ -27,6 +27,7 @@ import type {
   IssuedOneTimeToken,
   LoginOutcome,
   OneTimeTokenKind,
+  PermissionDomain,
   PermissionRule,
   Principal,
   UserRecord,
@@ -52,7 +53,9 @@ export {
   SCRYPT_PARALLELIZATION,
   SCRYPT_SALT_BYTES,
 } from './password.ts'
-export { evaluate, matchesPattern, permits } from './rbac.ts'
+import { permits } from './rbac.ts'
+
+export { evaluate, governs, matchesPattern, permits } from './rbac.ts'
 export {
   digestOf,
   digestOfCode,
@@ -126,6 +129,46 @@ export abstract class AuthService extends Service {
    * @returns the account, or `undefined` when no account has that address.
    */
   abstract getUserByEmail(email: string): Promise<UserRecord | undefined>
+
+  /**
+   * Every account, without password hashes — the administration roster.
+   * There is no filter or page: the deployments this seam serves administer a
+   * team, and a roster small enough to render is small enough to return.
+   * @returns the accounts, oldest first.
+   */
+  abstract listUsers(): Promise<readonly UserRecord[]>
+
+  /**
+   * Disable or restore one account. A disabled account fails
+   * {@link verifyLogin} and stops authenticating, but its rows stay, so its
+   * sessions, ownership, and audit history survive the block. Restoring is
+   * the same operation with `false`: the alternative would make a mistaken
+   * disable a database repair.
+   *
+   * Live login sessions are NOT revoked here. Revocation is
+   * {@link revokeAllSessions}, and a caller that means to end an account's
+   * access now calls both; keeping them separate is what lets an
+   * administrator disable an account without deciding its sessions' fate in
+   * the same click.
+   * @param userId - the account to update.
+   * @param disabled - whether the account is blocked from authenticating.
+   * @throws AuthError `unknown-subject` when no such account exists.
+   */
+  abstract setUserDisabled(userId: UserId, disabled: boolean): Promise<void>
+
+  /**
+   * Resolve one account to its principal, without a credential.
+   *
+   * {@link authenticateToken} answers the same question for a request that
+   * presents a token. This answers it for a Consumer that already knows the
+   * account — the owner of an agent session — and therefore has no token to
+   * present. Rule evaluation needs the whole principal, not just the id: the
+   * administrator bypass in {@link permits} reads `admin`, and a Consumer that
+   * reconstructed it from a group list would be free to get it wrong.
+   * @param userId - the account to resolve.
+   * @returns the principal, or `undefined` when the account is unknown or disabled.
+   */
+  abstract principalOf(userId: UserId): Promise<Principal | undefined>
 
   /**
    * Replace an account's password. Existing login sessions are unaffected;
@@ -370,6 +413,58 @@ export abstract class AuthService extends Service {
    * @returns the records.
    */
   abstract readAudit(limit: number): Promise<readonly AuditRecord[]>
+}
+
+/**
+ * Decide one name in one domain on behalf of some principal, with the rules
+ * that principal carries already resolved. Consumers that check many names —
+ * a skill catalog, a tool restriction — hold one of these instead of querying
+ * per name.
+ * @param domain - the namespace being addressed.
+ * @param name - the name being checked.
+ * @returns whether access is granted.
+ */
+export type PermissionCheck = (domain: PermissionDomain, name: string) => boolean
+
+/**
+ * The check for an object no rule set governs: a deployment with no auth
+ * provider, or a durable object recorded before one was mounted.
+ */
+export const PERMITS_EVERYTHING: PermissionCheck = () => true
+
+/**
+ * The check for an owner that exists but cannot act: a deleted or disabled
+ * account. Refusing everything is the only safe reading — the owner is known
+ * to be governed, and the rules that would govern them are unavailable.
+ */
+export const PERMITS_NOTHING: PermissionCheck = () => false
+
+/**
+ * The permission check that governs one agent session, resolved from its
+ * recorded owner.
+ *
+ * This is the non-request path into rule evaluation. A gateway request carries
+ * its {@link Principal}; a session running its own turns does not, and the
+ * account it belongs to is the ownership row {@link AuthService.ownerOfSession}
+ * holds. Both the model-facing skill catalog and the per-agent tool
+ * restriction ask this question, so resolving it once here keeps them from
+ * answering it two different ways.
+ *
+ * A session with no recorded owner is UNGOVERNED and grants everything: it was
+ * created before the deployment mounted authentication, and taking its
+ * capabilities away would break a conversation nobody chose to restrict. An
+ * owner that no longer resolves grants nothing.
+ * @param auth - the mounted auth provider.
+ * @param sessionId - the agent session whose owner decides.
+ * @returns the check to apply to that session's names.
+ */
+export async function checkForSessionOwner(auth: AuthService, sessionId: SessionId): Promise<PermissionCheck> {
+  const owner = await auth.ownerOfSession(sessionId)
+  if (owner === undefined) return PERMITS_EVERYTHING
+  const principal = await auth.principalOf(owner)
+  if (principal === undefined) return PERMITS_NOTHING
+  const rules = await auth.rulesFor(owner)
+  return (domain, name) => permits(principal, rules, domain, name)
 }
 
 export default AuthService

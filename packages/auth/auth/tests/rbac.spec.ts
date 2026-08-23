@@ -3,13 +3,19 @@ import {
   ADMIN_GROUP_ID,
   GroupId,
   LOCAL_PRINCIPAL,
+  PERMITS_EVERYTHING,
+  PERMITS_NOTHING,
   UserId,
+  checkForSessionOwner,
   evaluate,
+  governs,
   matchesPattern,
   permits,
+  type AuthService,
   type PermissionRule,
   type Principal,
 } from '../src/index.ts'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 const allow = (pattern: string): PermissionRule => ({ domain: 'tool', pattern, effect: 'allow' })
 const deny = (pattern: string): PermissionRule => ({ domain: 'tool', pattern, effect: 'deny' })
@@ -90,6 +96,80 @@ describe('principal bypass', () => {
   it('evaluates rules for an ordinary user', () => {
     expect(permits(member, [allow('bash')], 'tool', 'bash')).toBe(true)
     expect(permits(member, [allow('bash'), deny('bash')], 'tool', 'bash')).toBe(false)
-    expect(permits(member, [], 'tool', 'bash')).toBe(false)
+    expect(permits(member, [allow('bash')], 'tool', 'grep')).toBe(false)
+  })
+})
+
+describe('domain-scoped governance', () => {
+  it('reports a domain governed only once a rule addresses it', () => {
+    expect(governs([], 'tool')).toBe(false)
+    expect(governs([allow('bash')], 'tool')).toBe(true)
+    expect(governs([allow('bash')], 'skill')).toBe(false)
+    expect(governs([{ domain: 'skill', pattern: 'x', effect: 'deny' }], 'skill')).toBe(true)
+  })
+
+  it('grants every name in a domain no rule addresses, so a rule-less group takes nothing away', () => {
+    expect(permits(member, [], 'tool', 'bash')).toBe(true)
+    expect(permits(member, [], 'skill', 'anything')).toBe(true)
+    expect(permits(member, [], 'model', 'deepseek/deepseek-chat')).toBe(true)
+    expect(permits(member, [], 'settings-section', 'llm')).toBe(true)
+  })
+
+  it('governs only the domains named, leaving the others open', () => {
+    const rules = [allow('bash')]
+    expect(permits(member, rules, 'tool', 'grep')).toBe(false)
+    expect(permits(member, rules, 'skill', 'grep')).toBe(true)
+  })
+
+  it('keeps an allowlist exact once its domain is governed', () => {
+    expect(permits(member, [allow('bash')], 'tool', 'bash')).toBe(true)
+    expect(permits(member, [deny('bash')], 'tool', 'grep')).toBe(false)
+  })
+})
+
+describe('the check one agent session\'s owner decides', () => {
+  const SESSION = 'session-1' as SessionId
+
+  /** An auth double answering only the three reads this helper makes. */
+  function auth(options: {
+    owner?: UserId
+    principal?: Principal
+    rules?: PermissionRule[]
+  }): AuthService {
+    return {
+      ownerOfSession: () => Promise.resolve(options.owner),
+      principalOf: () => Promise.resolve(options.principal),
+      rulesFor: () => Promise.resolve(options.rules ?? []),
+    } as unknown as AuthService
+  }
+
+  it('grants everything for a session recorded before authentication existed', async () => {
+    const check = await checkForSessionOwner(auth({}), SESSION)
+    expect(check).toBe(PERMITS_EVERYTHING)
+    expect(check('tool', 'bash')).toBe(true)
+  })
+
+  it('grants nothing for an owner the provider can no longer resolve', async () => {
+    const check = await checkForSessionOwner(auth({ owner: UserId('u-gone') }), SESSION)
+    expect(check).toBe(PERMITS_NOTHING)
+    expect(check('tool', 'bash')).toBe(false)
+  })
+
+  it('evaluates the owner\'s rules, one domain at a time', async () => {
+    const check = await checkForSessionOwner(
+      auth({ owner: UserId('u-1'), principal: member, rules: [allow('bash')] }),
+      SESSION,
+    )
+    expect(check('tool', 'bash')).toBe(true)
+    expect(check('tool', 'grep')).toBe(false)
+    expect(check('skill', 'anything')).toBe(true)
+  })
+
+  it('grants an administrator owner everything a deny rule refuses', async () => {
+    const check = await checkForSessionOwner(
+      auth({ owner: UserId('u-1'), principal: admin, rules: [deny('*')] }),
+      SESSION,
+    )
+    expect(check('tool', 'bash')).toBe(true)
   })
 })

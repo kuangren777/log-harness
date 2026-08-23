@@ -287,17 +287,20 @@ export interface SessionsApi {
   Promise<RpcResponse<{ events: HistoryEntry[]; hasMore: boolean; projections?: SessionProjectionsBlock }>>
 
   /**
-   * Reads a fresh advisory model directory for an ordinary session. Provider
+   * Reads a fresh advisory model directory for an ordinary session, narrowed
+   * to the `provider/model` routes the request's principal may use. Provider
    * lookups run independently; subagents reject with `agent-busy`.
    */
-  models(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<SessionModels>>
+  models(request: AuthorizedRequest<{ sessionId: SessionId }>): Promise<RpcResponse<SessionModels>>
 
   /**
    * Selects the complete model selection for this session. Exact model metadata
    * validates an optional reasoning effort, while catalog membership remains
-   * advisory. Session-backed subagents reject with `agent-busy`.
+   * advisory. A route the `model` rules refuse the principal is `forbidden`,
+   * and the same decision is remade at the request the selection routes.
+   * Session-backed subagents reject with `agent-busy`.
    */
-  selectModel(request: RpcRequest<{
+  selectModel(request: AuthorizedRequest<{
     sessionId: SessionId
     provider: string
     model: string

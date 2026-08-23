@@ -42,6 +42,13 @@ import {
 } from '../api/workspace.schema.ts'
 import { skillInventoryValueSchema, skillListValueSchema } from '../api/skills.schema.ts'
 import {
+  authAdminGroupsCreateValueSchema, authAdminGroupsDeleteValueSchema,
+  authAdminGroupsListValueSchema, authAdminGroupsRenameValueSchema,
+  authAdminMembersSetValueSchema, authAdminRulesSetValueSchema,
+  authAdminUsersCreateValueSchema, authAdminUsersDisableValueSchema,
+  authAdminUsersListValueSchema,
+} from '../api/auth-admin.schema.ts'
+import {
   agentPresetCopyValueSchema, agentPresetListValueSchema, agentPresetOpenDocumentValueSchema,
   agentPresetReadValueSchema, agentPresetRemoveValueSchema, agentPresetSelectValueSchema,
 } from '../api/agent-presets.schema.ts'
@@ -157,6 +164,17 @@ export interface IApiClient {
     set(payload: RequestPayload<'credentials.set'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'credentials.set'>>>
     unset(payload: RequestPayload<'credentials.unset'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'credentials.unset'>>>
   }
+  authAdmin: {
+    listUsers(payload: RequestPayload<'auth.admin.users.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'auth.admin.users.list'>>>
+    createUser(payload: RequestPayload<'auth.admin.users.create'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'auth.admin.users.create'>>>
+    disableUser(payload: RequestPayload<'auth.admin.users.disable'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'auth.admin.users.disable'>>>
+    listGroups(payload: RequestPayload<'auth.admin.groups.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'auth.admin.groups.list'>>>
+    createGroup(payload: RequestPayload<'auth.admin.groups.create'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'auth.admin.groups.create'>>>
+    deleteGroup(payload: RequestPayload<'auth.admin.groups.delete'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'auth.admin.groups.delete'>>>
+    renameGroup(payload: RequestPayload<'auth.admin.groups.rename'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'auth.admin.groups.rename'>>>
+    setMembers(payload: RequestPayload<'auth.admin.members.set'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'auth.admin.members.set'>>>
+    setRules(payload: RequestPayload<'auth.admin.rules.set'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'auth.admin.rules.set'>>>
+  }
   llm: {
     providers(payload: RequestPayload<'llm.providers'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'llm.providers'>>>
     models(payload: RequestPayload<'llm.models'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'llm.models'>>>
@@ -224,6 +242,15 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'llm.providers': llmProvidersValueSchema,
   'llm.models': llmModelsValueSchema,
   'llm.discoverModels': llmDiscoverModelsValueSchema,
+  'auth.admin.users.list': authAdminUsersListValueSchema,
+  'auth.admin.users.create': authAdminUsersCreateValueSchema,
+  'auth.admin.users.disable': authAdminUsersDisableValueSchema,
+  'auth.admin.groups.list': authAdminGroupsListValueSchema,
+  'auth.admin.groups.create': authAdminGroupsCreateValueSchema,
+  'auth.admin.groups.delete': authAdminGroupsDeleteValueSchema,
+  'auth.admin.groups.rename': authAdminGroupsRenameValueSchema,
+  'auth.admin.members.set': authAdminMembersSetValueSchema,
+  'auth.admin.rules.set': authAdminRulesSetValueSchema,
 }
 
 /** Default timeout for bounded unary calls (rpc-compare 2026-07-19: a hung host must not leave callers pending forever). */
@@ -495,6 +522,18 @@ export abstract class AbstractApiClient implements IApiClient {
     describe: (payload, signal) => this.callUnary('credentials.describe', payload, signal),
     set: (payload, signal) => this.callUnary('credentials.set', payload, signal),
     unset: (payload, signal) => this.callUnary('credentials.unset', payload, signal),
+  }
+
+  readonly authAdmin: IApiClient['authAdmin'] = {
+    listUsers: (payload, signal) => this.callUnary('auth.admin.users.list', payload, signal),
+    createUser: (payload, signal) => this.callUnary('auth.admin.users.create', payload, signal),
+    disableUser: (payload, signal) => this.callUnary('auth.admin.users.disable', payload, signal),
+    listGroups: (payload, signal) => this.callUnary('auth.admin.groups.list', payload, signal),
+    createGroup: (payload, signal) => this.callUnary('auth.admin.groups.create', payload, signal),
+    deleteGroup: (payload, signal) => this.callUnary('auth.admin.groups.delete', payload, signal),
+    renameGroup: (payload, signal) => this.callUnary('auth.admin.groups.rename', payload, signal),
+    setMembers: (payload, signal) => this.callUnary('auth.admin.members.set', payload, signal),
+    setRules: (payload, signal) => this.callUnary('auth.admin.rules.set', payload, signal),
   }
 
   readonly llm: IApiClient['llm'] = {

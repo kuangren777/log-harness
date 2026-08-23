@@ -226,6 +226,56 @@ export class AuthStore {
   }
 
   /**
+   * Every account, oldest first.
+   * @returns the accounts, without password hashes.
+   */
+  async listUsers(): Promise<readonly UserRecord[]> {
+    const db = await this.ready
+    const rows = db.prepare(
+      'SELECT id, email, email_verified_at, disabled_at, created_at FROM users ORDER BY created_at, id',
+    ).all() as unknown as UserColumns[]
+    return rows.map(toUserRecord)
+  }
+
+  /**
+   * Disable or restore one account. Idempotent, and a repeat disable keeps the
+   * first timestamp: `disabled_at` is when the block started.
+   * @param userId - the account to update.
+   * @param disabled - whether the account is blocked from authenticating.
+   * @throws AuthError `unknown-subject` when no such account exists.
+   */
+  async setUserDisabled(userId: UserId, disabled: boolean): Promise<void> {
+    const db = await this.ready
+    this.requireUser(db, userId)
+    const now = this.options.now()
+    const result = db.prepare(
+      disabled
+        ? 'UPDATE users SET disabled_at = ? WHERE id = ? AND disabled_at IS NULL'
+        : 'UPDATE users SET disabled_at = NULL WHERE id = ? AND disabled_at IS NOT NULL',
+    ).run(...disabled ? [now, userId] : [userId])
+    if (result.changes === 0) return
+    this.writeAudit(
+      db,
+      { event: disabled ? 'auth.user-disabled' : 'auth.user-restored', subject: userId },
+      now,
+    )
+  }
+
+  /**
+   * Resolve one account to its principal without a credential.
+   * @param userId - the account to resolve.
+   * @returns the principal, or `undefined` when the account is unknown or disabled.
+   */
+  async principalOf(userId: UserId): Promise<Principal | undefined> {
+    const db = await this.ready
+    const row = db.prepare('SELECT email, disabled_at FROM users WHERE id = ?')
+      .get(userId) as { email: string; disabled_at: number | null } | undefined
+    if (row === undefined || row.disabled_at !== null) return undefined
+    const groups = this.groupsOf(db, userId)
+    return { kind: 'user', userId, email: row.email, groups, admin: groups.includes(ADMIN_GROUP_ID) }
+  }
+
+  /**
    * Replace an account's password.
    * @param userId - the account to update.
    * @param password - the new plaintext password.

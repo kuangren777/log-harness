@@ -6,7 +6,7 @@
  * how a form learns a write-only field exists and whether it is configured.
  */
 
-import type { RpcRequest, RpcResponse } from './rpc.ts'
+import type { AuthorizedRequest, RpcResponse } from './rpc.ts'
 
 /** One schema-declared secret slot inside a redacted namespace value. */
 export interface SettingsSecretView {
@@ -52,13 +52,16 @@ export type SettingsPathOpView =
 /** Settings-domain unary methods (the map keys settings.* of RpcMethodMap). */
 export interface SettingsApi {
   /**
-   * Describe every registered namespace: redacted layered values plus the
-   * serialized schema a client renders its form from. `hasDocument` reports
-   * whether a file-backed provider owns a local document without exposing its
-   * Host path. This method is loopback-only; `writable: false` (read-only
-   * provider) tells the client to disable every write control.
+   * Describe every registered namespace the request's principal may reach:
+   * redacted layered values plus the serialized schema a client renders its
+   * form from. A namespace the `settings-section` rules refuse is absent, so
+   * the form never offers a control whose write would be refused.
+   * `hasDocument` reports whether a file-backed provider owns a local document
+   * without exposing its Host path. This method is loopback-only;
+   * `writable: false` (read-only provider) tells the client to disable every
+   * write control.
    */
-  describe(request: RpcRequest<{}>): Promise<RpcResponse<{
+  describe(request: AuthorizedRequest<{}>): Promise<RpcResponse<{
     writable: boolean
     hasDocument: boolean
     namespaces: SettingsNamespaceView[]
@@ -69,9 +72,13 @@ export interface SettingsApi {
    * hand it to the platform text-document opener. macOS forces a text editor;
    * Linux and Windows use the desktop file association. The request carries
    * no path, so the browser cannot choose an arbitrary Host filesystem target.
+   *
+   * The document holds every namespace in one editable file, so the handoff is
+   * an unrestricted write over all of them and is `forbidden` unless the
+   * principal may write every registered namespace.
    */
   openDocument(
-    request: RpcRequest<{}>, signal: AbortSignal,
+    request: AuthorizedRequest<{}>, signal: AbortSignal,
   ): Promise<RpcResponse<{ opened: true }>>
 
   /**
@@ -81,7 +88,7 @@ export interface SettingsApi {
    * merge preserves the stored value. Responds with the namespace's new
    * redacted view; a schema or storage rejection is `settings-rejected`.
    */
-  update(request: RpcRequest<{ ns: string; patch: object; expectedRevision?: number }>): Promise<RpcResponse<SettingsNamespaceView>>
+  update(request: AuthorizedRequest<{ ns: string; patch: object; expectedRevision?: number }>): Promise<RpcResponse<SettingsNamespaceView>>
 
   /**
    * Replace one namespace's user section wholesale — the removal/reset path a
@@ -90,7 +97,9 @@ export interface SettingsApi {
    * fold the descriptor's `user` layer (and re-supply any secret it wants to
    * keep) or accept the reset.
    */
-  replace(request: RpcRequest<{ ns: string; section: object; expectedRevision?: number }>): Promise<RpcResponse<SettingsNamespaceView>>
+  replace(
+    request: AuthorizedRequest<{ ns: string; section: object; expectedRevision?: number }>,
+  ): Promise<RpcResponse<SettingsNamespaceView>>
 
   /**
    * Apply path-addressed edits to one namespace's user section, resolved
@@ -101,6 +110,6 @@ export interface SettingsApi {
    * deliberate wholesale reset.
    */
   mutate(
-    request: RpcRequest<{ ns: string; ops: SettingsPathOpView[]; expectedRevision?: number }>,
+    request: AuthorizedRequest<{ ns: string; ops: SettingsPathOpView[]; expectedRevision?: number }>,
   ): Promise<RpcResponse<SettingsNamespaceView>>
 }

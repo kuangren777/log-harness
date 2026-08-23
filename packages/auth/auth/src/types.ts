@@ -6,6 +6,12 @@
 
 import type { AuthSessionId, GroupId, OneTimeTokenId, UserId } from './brand.ts'
 
+// Re-exported so a browser-safe wire layer can name the ids and error codes
+// this vocabulary uses without importing the package root, whose password and
+// token helpers pull in `node:crypto`.
+export type { AuthSessionId, GroupId, OneTimeTokenId, UserId } from './brand.ts'
+export type { AuthErrorCode } from './error.ts'
+
 /**
  * Who is acting. Two kinds, because a deployment either has accounts or does not.
  *

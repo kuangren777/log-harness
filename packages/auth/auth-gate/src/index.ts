@@ -16,11 +16,13 @@ import type { ConnectionRpcCaller, ConnectionRpcReply } from '@deepseek-ai/dsh-c
 import type { OwnershipLookup, RequestGate, RequestHeaders } from '@deepseek-ai/dsh-host-apiproxy'
 import type { RpcResult } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { clearedCookie, joinCredential, sessionCookie } from './cookie.ts'
+import { installAgentEnforcement } from './enforcement.ts'
 import { authenticatedRequest, AUTH_ENDPOINTS, type GateContext } from './endpoints.ts'
 import { groupAddedMessage } from './messages.ts'
 import { resolveSettings, type Config, type GateSettings } from './settings.ts'
 
 export { clearedCookie, joinCredential, readCookie, sessionCookie, splitCredential } from './cookie.ts'
+export { installAgentEnforcement, ModelRouteForbidden } from './enforcement.ts'
 export {
   authenticatedRequest, AUTH_ENDPOINTS, SESSION_ISSUED_EVENT, SIGN_IN_HISTORY_LIMIT,
   type AuthenticatedRequest, type EndpointHandler, type GateContext,
@@ -89,6 +91,7 @@ export class AuthGateService extends Service implements RequestGate {
         this.dispatch(endpoint, payload, caller), { authority: 'trusted-host' }),
       'auth-gate: /auth rpc channel',
     )
+    installAgentEnforcement(ctx)
   }
 
   /** Ownership resolution backed by the same provider that authenticates requests. */

@@ -67,6 +67,13 @@ describe('mounted service', () => {
     await auth.setPassword(bob, 'pw2')
     expect(await auth.verifyLogin('bob@example.test', 'pw2')).toEqual({ ok: true, userId: bob })
 
+    expect((await auth.listUsers()).map(user => user.userId)).toEqual([ada, bob])
+    expect(await auth.principalOf(ada)).toMatchObject({ kind: 'user', userId: ada, admin: false })
+    await auth.setUserDisabled(bob, true)
+    expect(await auth.principalOf(bob)).toBeUndefined()
+    await auth.setUserDisabled(bob, false)
+    expect(await auth.principalOf(bob)).toMatchObject({ userId: bob })
+
     const session = await auth.issueAuthSession(ada, { ip: '10.0.0.1' })
     expect(await auth.authenticateToken(session.token)).toMatchObject({ userId: ada })
     await auth.revokeSession(session.authSessionId)

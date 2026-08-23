@@ -110,7 +110,8 @@ function recordingApi(calls: string[]): ApiProxy {
     sessions: domain('session'), subagents: domain('subagent'), host: domain('host'),
     workspace: domain('workspace'), skills: domain('skill'), agentPresets: domain('agentPreset'),
     goals: domain('goal'), settings: domain('settings'), credentials: domain('credentials'),
-    llm: domain('llm'), events: domain('events'), downloads: domain('downloads'),
+    llm: domain('llm'), authAdmin: domain('auth.admin'),
+    events: domain('events'), downloads: domain('downloads'),
     respond: () => Promise.resolve({ accepted: true as const }),
   } as unknown as ApiProxy
 }
@@ -159,6 +160,13 @@ const PAYLOADS: { [K in keyof RpcMethodMap]?: object } = {
   'credentials.set': { ref: 'r', value: 'v' },
   'credentials.unset': { ref: 'r' },
   'llm.discoverModels': { settingsNs: 'n' },
+  'auth.admin.users.create': { email: 'new@example.test', password: 'pw' },
+  'auth.admin.users.disable': { userId: 'u-1', disabled: true },
+  'auth.admin.groups.create': { name: 'reviewers' },
+  'auth.admin.groups.delete': { groupId: 'g-1' },
+  'auth.admin.groups.rename': { groupId: 'g-1', name: 'auditors' },
+  'auth.admin.members.set': { groupId: 'g-1', userIds: [] },
+  'auth.admin.rules.set': { groupId: 'g-1', rules: [] },
 }
 
 /** POST one method through the real carrier as one principal. */
@@ -188,6 +196,26 @@ describe('the policy table over every registered method', () => {
     for (const method of UNARY_METHODS) {
       expect(['user', 'admin', 'owner']).toContain(policyOf(method))
     }
+  })
+
+  it('routes the whole administration plane, and declares every row of it admin', () => {
+    const adminPlane = UNARY_METHODS.filter(method => method.startsWith('auth.admin.'))
+    expect([...adminPlane].sort()).toEqual([
+      'auth.admin.groups.create',
+      'auth.admin.groups.delete',
+      'auth.admin.groups.list',
+      'auth.admin.groups.rename',
+      'auth.admin.members.set',
+      'auth.admin.rules.set',
+      'auth.admin.users.create',
+      'auth.admin.users.disable',
+      'auth.admin.users.list',
+    ])
+    for (const method of adminPlane) expect({ method, policy: policyOf(method) }).toEqual({ method, policy: 'admin' })
+    // The exhaustive refusal below walks every admin row, so the plane's nine
+    // rows have to be inside that set for it to cover them.
+    expect(UNARY_METHODS.filter(method => policyOf(method) === 'admin').length)
+      .toBeGreaterThanOrEqual(adminPlane.length)
   })
 
   it('refuses a non-administrator on EVERY admin row', async () => {

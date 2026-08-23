@@ -4,7 +4,17 @@
 
 面向模型的 skill（技能）目录和 `skill` 工具。
 
-需要 `ctx.agents`、`ctx.tools` 和 `ctx.skills`（`inject: ['agents', 'tools', 'skills']`）。
+需要 `ctx.agents`、`ctx.tools` 和 `ctx.skills`（`inject: ['agents', 'tools', 'skills']`）。`ctx.auth` 为可选读取，因此单租户组合无需额外挂载任何东西。
+
+## 目录取决于观看者是谁
+
+这里每一次面向模型的 skill 读取，都会按拥有该会话的账号收窄，并在每次调用时经 [`checkForSessionOwner`](../../auth/auth/README.zh.md#permission-rules) 解析一次：持久目录、`skill` 工具的执行器，以及用户显式的 `/name` 手势。被 owner 的 `skill` 规则拒绝的技能，对该会话而言根本不存在 —— 它不在目录中，工具回答"未知或已不可用"，`/name` 也只是普通散文。
+
+过滤发生在快照上、**先于**目录条目的构建，因此持久的 `skill-catalog` 消息记录的正是模型看到的内容。若改为过滤渲染后的正文，会话日志就会声称一份从未发送过的目录，而"模型可见 ⟺ 已记录"正是让该日志成为忠实记录的前提。这不需要新的会话事件，也不需要变更 `SESSION_FORMAT_VERSION`：目录消息一向是按会话视图的投影，这里只是收窄了该视图。
+
+有两种情形保持不过滤的行为，均属刻意：未挂载 auth 提供方的组合，以及没有记录 owner 的会话（在认证挂载之前创建）。而提供方已无法解析的 owner —— 被删除或被停用 —— 得到空目录与一律拒绝的工具。
+
+执行器会重新判定名字，而不是信任目录，因为目录属于 prompt 内容：模型可能从更早的一轮、一个 fork 出的会话或凭猜测说出某个名字，从而直接抵达执行器。
 
 ## 目录生命周期
 
@@ -28,7 +38,7 @@
 
 资源指引只会根据 `resourceBase` 解析指令显式引用的路径或 URL；脚本、参考资料和资源文件按需加载，结果不会列举 skill 目录。本地提供方可以提供目录，而远程或嵌入式提供方可以提供 URL 或不透明加载指引。
 
-无法解析的名称会报告 skill 未知或已不可用。无效名称和 `invocation.modelInvocable` 为 `false` 的 skill 会产生不同的错误结果。`invocation.userInvocable` 不限制这个面向模型的接口。这里读取的是生效策略，因此用户在设置文档中存储的 `skills` 覆盖（[优先级](../skill/README.zh.md#user-settings-overrides)）拒绝该名称的方式，与 `disable-model-invocation` frontmatter 完全一致。
+无法解析的名称会报告 skill 未知或已不可用；被会话 owner 的 `skill` 规则拒绝的名称，在询问任何提供方之前就报告同一件事 —— 拒绝绝不能与不存在被区分开。无效名称和 `invocation.modelInvocable` 为 `false` 的 skill 会产生不同的错误结果。`invocation.userInvocable` 不限制这个面向模型的接口。这里读取的是生效策略，因此用户在设置文档中存储的 `skills` 覆盖（[优先级](../skill/README.zh.md#user-settings-overrides)）拒绝该名称的方式，与 `disable-model-invocation` frontmatter 完全一致。
 
 工具执行不会添加合成上下文消息。新加载的结果已作为工具结果记录，并在下一个模型步骤可用，无需重复正文。只有目录投影会添加替换摘要。
 
@@ -57,11 +67,11 @@ A user may also invoke a skill directly; its <skill_content> block then appears 
 
 #### Token 影响
 
-重复输入成本随 skill 数量和 `catalogDescriptionMaxLength` 增长；当列表为空或工具被隐藏或遮蔽时，不会发送初始目录 token。每次实际目录变更都会添加一条保留的完整替换消息。
+重复输入成本随**本会话 owner 可见的** skill 数量和 `catalogDescriptionMaxLength` 增长；当该视图为空或工具被隐藏或遮蔽时，不会发送初始目录 token。每次实际目录变更都会添加一条保留的完整替换消息。
 
 #### KV Cache 影响
 
-初始持久目录追加在现有可重用前缀之后。动态变更作为该目录之后的仅追加历史，因此较早的可重用 token 保持不变，每条新追加的目录和后续轮次都会形成新的后缀。新建或恢复的实例如果 digest 发生变化，可能会从新追加的目录位置起影响缓存重用。翻转一个已存储的调用覆盖，代价是在下一次 pre-step 追加一条替换目录，绝不会重写此前那条。
+owner 持有不同 `skill` 规则的两个会话会发布不同的目录，因此自该点起不共享前缀。在单个会话内答案是稳定的，所以 owner 检查不带来额外失效。初始持久目录追加在现有可重用前缀之后。动态变更作为该目录之后的仅追加历史，因此较早的可重用 token 保持不变，每条新追加的目录和后续轮次都会形成新的后缀。新建或恢复的实例如果 digest 发生变化，可能会从新追加的目录位置起影响缓存重用。翻转一个已存储的调用覆盖，代价是在下一次 pre-step 追加一条替换目录，绝不会重写此前那条。
 
 ### 工具 schema
 
@@ -168,4 +178,5 @@ Load referenced resources only as needed.
 - **资源是指引，而非附件**：工具报告基础目录/URL/不透明提示，但既不列举也不为模型获取引用文件。
 - **加载是一次性文本**：远程提供方缓慢或 skill 正文很大时，不提供部分内容、流式输出或缓存内容句柄。
 - **目录替换采用全量列表**：一个名称或描述发生变化，就会追加当前所有可见摘要；这样能显式停用陈旧名称，但 token 成本与目录大小成正比。
+- **owner 规则按调用读取**：目录、工具与手势各自在运行时解析会话 owner 的判定，因此规则变更在下一次 pre-step 或下一次工具调用时生效，而不会为 agent 的整个生命周期缓存。这些读取属于提供方，若某个提供方让它们变得昂贵，就会在每个 step 上付出代价。
 - **正文不做版本化**：仅修改正文不会改变目录 digest，也不会通知模型；后续工具调用会读取提供方的当前内容，而先前工具结果仍是历史事实。

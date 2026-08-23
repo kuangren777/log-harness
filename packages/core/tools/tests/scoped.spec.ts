@@ -181,6 +181,20 @@ describe('restrict()', () => {
     expect(ctx.tools.schemas(key).map(t => t.name)).toEqual(['b'])
   })
 
+  it('reports the inherited names a filter may name, before its own registrations and its own filters', async () => {
+    const ctx = await mount()
+    const { scope, key } = await mintAgentScope(ctx, 'a')
+    ctx.tools.register(tool('read'))
+    ctx.tools.register(tool('bash'))
+    scope.ctx.tools.register(tool('capture'))
+    expect(ctx.tools.restrictableNames(key)).toEqual(['read', 'bash'])
+    expect(ctx.tools.restrictableNames()).toEqual(['read', 'bash'])
+    scope.ctx.tools.restrict({ allow: ['read'] })
+    // Still both: a filter narrows what the scope SEES, not what it may name.
+    expect(ctx.tools.restrictableNames(key)).toEqual(['read', 'bash'])
+    expect(() => scope.ctx.tools.restrict({ allow: ctx.tools.restrictableNames(key) })).not.toThrow()
+  })
+
   it('fails loud on an unscoped call, an empty filter, and names it does not inherit', async () => {
     const ctx = await mount()
     const { scope } = await mintAgentScope(ctx, 'a')

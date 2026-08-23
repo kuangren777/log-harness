@@ -54,6 +54,7 @@ describe('web e2e: the composer model switch is the default for later sessions',
     const response = await scaffold.ctx.apiProxy.sessions.models({
       rpcId: `default-model-${sessionId}` as never,
       payload: { sessionId: SessionId(sessionId) },
+      principal: LOCAL_PRINCIPAL,
     })
     if (!response.result.ok) throw new Error(`session.models failed: ${response.result.error.message}`)
     return response.result.value.current

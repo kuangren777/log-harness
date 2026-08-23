@@ -21,12 +21,22 @@ type PermissionDomain = 'skill' | 'tool' | 'model' | 'settings-section'
 interface PermissionRule { domain: PermissionDomain; pattern: string; effect: 'allow' | 'deny' }
 
 function evaluate(rules: readonly PermissionRule[], domain: PermissionDomain, name: string): boolean
+function governs(rules: readonly PermissionRule[], domain: PermissionDomain): boolean
 function permits(principal: Principal, rules: readonly PermissionRule[], domain: PermissionDomain, name: string): boolean
 ```
 
-Precedence is **deny > allow > default-deny**: a matching `deny` settles the question, a matching `allow` grants, and a name no rule mentions is refused. A `pattern` is an exact name or a trailing-`*` prefix glob; `model` patterns read `provider/model`. `permits` adds the principal: `local` and `admin: true` bypass evaluation, every other principal goes through `evaluate` against the union of their groups' rules.
+Precedence is **deny > allow > default-deny**: a matching `deny` settles the question, a matching `allow` grants, and a name no rule mentions is refused. A `pattern` is an exact name or a trailing-`*` prefix glob; `model` patterns read `provider/model`. `evaluate` is that algebra alone, and an administration surface previewing what a group grants calls it directly.
 
-Default-deny is what makes a new capability safe by construction: a skill, tool, model, or settings section that no rule names is invisible to a restricted group until someone grants it.
+`permits` is the entry point every Consumer calls, and it adds two steps around `evaluate`. `local` and `admin: true` bypass evaluation entirely. Then **governance is per domain and opt-in**: a domain no rule addresses (`governs` is false) grants every name in it, and one rule anywhere in a domain makes the whole domain rule-decided. Default-deny still applies inside a governed domain, so `allow skill:onboarding` is an exact allowlist for skills — and leaves that group's tools, models, and settings sections untouched.
+
+Without the opt-in step a freshly created group would take the entire product away from its members, because a group starts with no rules at all and default-deny would then refuse every skill, tool, model route, and settings namespace. Granting a capability is therefore always a deliberate narrowing of one named domain.
+
+```ts ignore-check
+type PermissionCheck = (domain: PermissionDomain, name: string) => boolean
+function checkForSessionOwner(auth: AuthService, sessionId: SessionId): Promise<PermissionCheck>
+```
+
+A running agent carries no `Principal`; it acts for whichever account owns its session. `checkForSessionOwner` resolves that owner's decision once — `PERMITS_EVERYTHING` for a session recorded before authentication was mounted, `PERMITS_NOTHING` for an owner that no longer resolves — so the model-facing skill catalog and the per-agent tool restriction cannot answer the same question two different ways.
 
 ## Password and token primitives
 
@@ -36,7 +46,7 @@ Default-deny is what makes a new capability safe by construction: a skill, tool,
 
 ## Service API
 
-`AuthService` on `ctx.auth` declares the operations a provider implements: user and password records, login verification, auth-session issue and revocation, one-time tokens for 2FA / e-mail verification / password reset, group, membership and rule administration, session and workspace ownership, and an audit append-and-read pair. Every member's contract is documented at this declaration; [dsh-auth-sqlite](../auth-sqlite/README.md) is the mounted implementation.
+`AuthService` on `ctx.auth` declares the operations a provider implements: user records (roster, password, disable and restore, and `principalOf`, which resolves an account to its `Principal` without a credential), login verification, auth-session issue and revocation, one-time tokens for 2FA / e-mail verification / password reset, group, membership and rule administration, session and workspace ownership, and an audit append-and-read pair. Every member's contract is documented at this declaration; [dsh-auth-sqlite](../auth-sqlite/README.md) is the mounted implementation.
 
 ## Model Experience
 

@@ -35,6 +35,10 @@ async function mount(): Promise<Bench> {
       getSnapshot: () => undefined,
       subscribe: () => () => {},
     },
+    authRequired: {
+      getSnapshot: () => false,
+      subscribe: () => () => {},
+    },
     rpc: {
       call: () => Promise.reject(new Error('unexpected generic RPC call')),
     },

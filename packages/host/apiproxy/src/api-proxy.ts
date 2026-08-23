@@ -14,7 +14,8 @@ import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatu
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
 import { AttachmentError, admitEncodedImages } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import type { Principal, UserId } from '@deepseek-ai/dsh-auth'
+import { AuthError, permits } from '@deepseek-ai/dsh-auth'
+import type { GroupId, PermissionDomain, PermissionRule, Principal, UserId, UserRecord } from '@deepseek-ai/dsh-auth'
 import { createUserMessage, freezeMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
@@ -38,7 +39,7 @@ import {
 import type { PresetBearingSession } from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {
-  ApiProxy, ConfigurableProviderView, CredentialView, GoalRef, HistoryEntry, HostFrame,
+  AdminUserView, ApiProxy, ConfigurableProviderView, CredentialView, GoalRef, HistoryEntry, HostFrame,
   ModelCatalogFailure, ModelProviderGroup,
   ModelReasoning, MuxFrame, PromptContentPart, QuestionResponsePayload, SessionListMetadata, SessionProjectionsBlock, SessionSearchItem,
   QueuedInboxItem, SessionSummary, SettingsNamespaceView, SubagentAddress, JobView, ToolEventView,
@@ -268,14 +269,28 @@ function ok<T>(request: RpcRequest<unknown>, value: T): RpcResponse<T> {
  * provider dispatch, but is not injected back into the selector after its
  * owning catalog stops advertising it. Per-provider failures ride `failures`
  * without failing the sound groups; groups that advertise nothing are dropped.
+ *
+ * `admits` decides one `provider/model` route, which is the name the `model`
+ * permission domain addresses. A refused route is dropped before the group is
+ * assembled, so a provider whose every model is refused disappears along with
+ * the empty groups. A provider whose LISTING failed still reports its failure:
+ * the failure is about the deployment, not about who is asking, and hiding it
+ * would make a broken adapter look like a permission.
+ * @param ctx - the composed host context.
+ * @param admits - whether one `provider/model` route may be advertised; the default advertises every route.
+ * @returns the catalog groups and the per-provider listing failures.
  */
-async function buildModelCatalog(ctx: Context): Promise<{
+async function buildModelCatalog(
+  ctx: Context,
+  admits: (route: string) => boolean = () => true,
+): Promise<{
   groups: ModelProviderGroup[]
   failures: ModelCatalogFailure[]
 }> {
   const catalog = await Promise.all(ctx.llm.listProviders().map(async (provider) => {
     try {
-      const models = await ctx.llm.listModels(provider.id)
+      const models = (await ctx.llm.listModels(provider.id))
+        .filter(model => admits(`${provider.id}/${model.id}`))
       const entries = await Promise.all(models.map(async (model) => {
         const resolved = await ctx.llm.resolveModelInfo(provider.id, model.id)
         const reasoning: ModelReasoning | undefined = resolved.reasoning === undefined
@@ -1859,6 +1874,86 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     return { agent }
   }
 
+  /** Wire view of one account; nothing that could authenticate as it rides. */
+  function userView(user: UserRecord): AdminUserView {
+    return {
+      userId: user.userId,
+      email: user.email,
+      emailVerified: user.emailVerifiedAt !== undefined,
+      disabled: user.disabledAt !== undefined,
+      createdAt: user.createdAt,
+    }
+  }
+
+  /**
+   * The audit actor for one administration write, or nothing for the `local`
+   * principal, which is not an account and must not be recorded as one.
+   */
+  function actorOf(principal: Principal): { actorUserId?: UserId } {
+    return principal.kind === 'user' ? { actorUserId: principal.userId } : {}
+  }
+
+  /**
+   * Mail every newly added member the group notice, through the mounted gate.
+   *
+   * The gate owns the template and the audit row it writes; this is the caller
+   * that knows WHEN a member was added. A composition with no gate — a
+   * single-tenant host, or a test — simply does not notify. One failed
+   * delivery is logged and the rest still go out: a save that already
+   * committed must not be reported as failed because a mail server was down.
+   * @param groupId - the group members were added to.
+   * @param added - the accounts added by this write.
+   */
+  async function notifyAdded(groupId: GroupId, added: readonly UserId[]): Promise<void> {
+    const gate = ctx.get('authGate')
+    const auth = ctx.get('auth')
+    if (gate === undefined || auth === undefined || added.length === 0) return
+    const group = (await auth.listGroups()).find(candidate => candidate.groupId === groupId)
+    if (group === undefined) return
+    const roster = new Map((await auth.listUsers()).map(user => [user.userId, user.email]))
+    for (const userId of added) {
+      const email = roster.get(userId)
+      if (email === undefined) continue
+      try {
+        await gate.notifyAddedToGroup(email, group.name)
+      } catch (error: unknown) {
+        ctx.logger.warn(`api-proxy: the group membership was saved but ${userId} could not be notified: ${String(error)}`)
+      }
+    }
+  }
+
+  /** Missing-service report shared by the auth administration domain (skills-domain stance). */
+  function authAbsent(): RpcError {
+    return { code: 'internal', message: 'auth service is absent: this deployment does not mount an auth provider (e.g. @deepseek-ai/dsh-auth-sqlite) in its composition', details: {} }
+  }
+
+  /**
+   * Run one administration write and map an `AuthError` onto the wire.
+   *
+   * Every refusal the seam owns — a duplicate address or group name, a builtin
+   * group, an unknown id, a rate limit — is a caller-fixable outcome, so it
+   * rides `auth-rejected` with the seam's code. Anything else is this
+   * deployment's failure and stays `internal`.
+   * @param request - the request being answered, for its rpcId.
+   * @param run - the write, given the mounted provider.
+   * @returns the successful value's response, or the refusal.
+   */
+  async function authWrite<T>(
+    request: RpcRequest<unknown>,
+    run: (auth: NonNullable<ReturnType<typeof ctx.get<'auth'>>>) => Promise<T>,
+  ): Promise<RpcResponse<T>> {
+    const auth = ctx.get('auth')
+    if (auth === undefined) return err(request, authAbsent())
+    try {
+      return ok(request, await run(auth))
+    } catch (error: unknown) {
+      if (error instanceof AuthError) {
+        return err(request, { code: 'auth-rejected', message: error.message, details: { authCode: error.code } })
+      }
+      return err(request, { code: 'internal', message: `auth administration failed: ${String(error)}`, details: {} })
+    }
+  }
+
   /** Missing-service report shared by the settings domain (skills-domain stance). */
   function settingsAbsent(): RpcError {
     return { code: 'internal', message: 'settings service is absent: this deployment does not mount a settings provider (e.g. @deepseek-ai/dsh-settings-file) in its composition', details: {} }
@@ -1939,7 +2034,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
    * `settings-rejected` carrying the seam's own message.
    */
   async function settingsWrite(
-    request: RpcRequest<unknown>,
+    request: AuthorizedRequest<unknown>,
     ns: string,
     mode: 'update' | 'replace' | 'mutate',
     section: object,
@@ -1947,6 +2042,9 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   ): Promise<RpcResponse<SettingsNamespaceView>> {
     const settings = ctx.get('settings')
     if (settings === undefined) return err(request, settingsAbsent())
+    // Before the seam is touched at all: a refused namespace must not learn
+    // the caller whether it exists, is writable, or would have validated.
+    if (!await permitsName(request.principal, 'settings-section', ns)) return err(request, forbiddenError())
     const rejected = (error: unknown): RpcResponse<SettingsNamespaceView> => {
       // A stale writer is its own outcome, not a malformed request: the client
       // must re-read and re-apply rather than treat the write as invalid.
@@ -1994,6 +2092,48 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
    */
   function ownership(): OwnershipLookup {
     return ctx.get('auth') ?? UNAVAILABLE_OWNERSHIP
+  }
+
+  /**
+   * The permission rules that apply to one request.
+   *
+   * A `local` principal carries none, and neither does an administrator: both
+   * bypass rule evaluation inside `permits`, so collecting rules for them
+   * would only cost a query. A user principal whose provider is absent gets an
+   * empty list too, and that is not the same answer — with no rule to consult,
+   * every governed domain refuses, which is the safe direction for a principal
+   * that cannot exist without the provider that minted it.
+   * @param principal - the request's principal.
+   * @returns the rules to evaluate against.
+   */
+  async function rulesOf(principal: Principal): Promise<readonly PermissionRule[]> {
+    if (principal.kind !== 'user' || principal.admin) return []
+    return await ctx.get('auth')?.rulesFor(principal.userId) ?? []
+  }
+
+  /**
+   * One name's decision for one request, for the surfaces that check a single
+   * name rather than filter a list.
+   * @param principal - the request's principal.
+   * @param domain - the namespace being addressed.
+   * @param name - the name being checked.
+   * @returns whether the principal may reach it.
+   */
+  async function permitsName(principal: Principal, domain: PermissionDomain, name: string): Promise<boolean> {
+    return permits(principal, await rulesOf(principal), domain, name)
+  }
+
+  /**
+   * The `model`-domain decision for one request, resolved once and reused for
+   * every route in a catalog. The rules are read once because a catalog asks
+   * about every registered model, and asking the provider per row would turn
+   * one query into hundreds.
+   * @param principal - the request's principal.
+   * @returns whether one `provider/model` route may be advertised.
+   */
+  async function routeFilterFor(principal: Principal): Promise<(route: string) => boolean> {
+    const rules = await rulesOf(principal)
+    return route => permits(principal, rules, 'model', route)
   }
 
   /**
@@ -2326,13 +2466,18 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         const found = await agentFor(sessionId)
         if ('error' in found) return err(request, found.error)
         const current = selectionFor(found.agent).current
-        const { groups, failures } = await buildModelCatalog(ctx)
+        const { groups, failures } = await buildModelCatalog(ctx, await routeFilterFor(request.principal))
         const routable = routeServed(current.provider)
         return ok(request, { current: { ...current }, routable, groups, failures })
       },
 
       async selectModel(request) {
         const { sessionId, provider, model, reasoningEffort } = request.payload
+        // Before resolution: a refused route must not be told apart from an
+        // unknown one by whether the adapter accepted its reasoning effort.
+        if (!await permitsName(request.principal, 'model', `${provider}/${model}`)) {
+          return err(request, forbiddenError())
+        }
         const found = await agentFor(sessionId)
         if ('error' in found) return err(request, found.error)
         return serializeImageAdmission(found.agent, async () => {
@@ -3262,8 +3407,11 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       async list(request) {
         const view = await skillViewFor(request.payload.sessionId)
         if ('error' in view) return err(request, view.error)
+        const rules = await rulesOf(request.principal)
         try {
-          const skills = (await view.registry.list({ cwd: view.cwd, scope: view.scope })).filter(isUserInvocable)
+          const skills = (await view.registry.list({ cwd: view.cwd, scope: view.scope }))
+            .filter(isUserInvocable)
+            .filter(skill => permits(request.principal, rules, 'skill', skill.name))
           return ok(request, {
             skills: skills.map(skill => ({
               name: skill.name,
@@ -3283,6 +3431,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       async inventory(request) {
         const view = await skillViewFor(request.payload.sessionId)
         if ('error' in view) return err(request, view.error)
+        const rules = await rulesOf(request.principal)
         try {
           const inventory = await view.registry.inventory({ cwd: view.cwd, scope: view.scope })
           return ok(request, {
@@ -3291,7 +3440,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
               rank: group.rank,
               ...group.root === undefined ? {} : { root: group.root },
               layer: group.layer,
-              skills: group.skills.map(skill => ({
+              skills: group.skills.filter(skill => permits(request.principal, rules, 'skill', skill.name)).map(skill => ({
                 name: skill.name,
                 description: skill.description,
                 ...skill.whenToUse === undefined ? {} : { whenToUse: skill.whenToUse },
@@ -3311,18 +3460,28 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     },
 
     settings: {
-      describe(request) {
+      async describe(request) {
         const settings = ctx.get('settings')
-        if (settings === undefined) return Promise.resolve(err(request, settingsAbsent()))
-        return Promise.resolve(ok(request, {
+        if (settings === undefined) return err(request, settingsAbsent())
+        const rules = await rulesOf(request.principal)
+        return ok(request, {
           writable: settings.writable,
           hasDocument: settings.documentPath !== undefined,
-          namespaces: settings.describe({ redactSecrets: true }).map(namespaceView),
-        }))
+          namespaces: settings.describe({ redactSecrets: true })
+            .filter(descriptor => permits(request.principal, rules, 'settings-section', descriptor.ns))
+            .map(namespaceView),
+        })
       },
       async openDocument(request, signal) {
         const settings = ctx.get('settings')
         if (settings === undefined) return err(request, settingsAbsent())
+        // The document is every namespace in one editable file, so opening it
+        // is a write grant over all of them at once. Nothing here can scope
+        // the handoff to a subset, so the whole set is the unit of decision.
+        const rules = await rulesOf(request.principal)
+        const refused = settings.describe({ redactSecrets: true })
+          .some(descriptor => !permits(request.principal, rules, 'settings-section', descriptor.ns))
+        if (refused) return err(request, forbiddenError())
         if (isAborted(signal)) {
           return err(request, {
             code: 'cancelled',
@@ -3448,7 +3607,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
 
       async models(request) {
-        return ok(request, await buildModelCatalog(ctx))
+        return ok(request, await buildModelCatalog(ctx, await routeFilterFor(request.principal)))
       },
 
       async discoverModels(request, signal) {
@@ -3473,6 +3632,119 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             details: { settingsNs, ...baseURL === undefined ? {} : { baseURL } },
           })
         }
+      },
+    },
+
+    authAdmin: {
+      async listUsers(request) {
+        const auth = ctx.get('auth')
+        if (auth === undefined) return err(request, authAbsent())
+        return ok(request, { users: (await auth.listUsers()).map(userView) })
+      },
+
+      createUser(request) {
+        const { email, password } = request.payload
+        return authWrite(request, async (auth) => {
+          const userId = await auth.createUser(email, password)
+          await auth.audit({
+            event: 'auth.admin.user-created',
+            ...actorOf(request.principal),
+            subject: userId,
+          })
+          return { userId }
+        })
+      },
+
+      disableUser(request) {
+        const { userId, disabled } = request.payload
+        return authWrite(request, async (auth) => {
+          await auth.setUserDisabled(userId, disabled)
+          await auth.audit({
+            event: disabled ? 'auth.admin.user-disabled' : 'auth.admin.user-restored',
+            ...actorOf(request.principal),
+            subject: userId,
+          })
+          return {}
+        })
+      },
+
+      async listGroups(request) {
+        const auth = ctx.get('auth')
+        if (auth === undefined) return err(request, authAbsent())
+        const groups = await Promise.all((await auth.listGroups()).map(async group => ({
+          groupId: group.groupId,
+          name: group.name,
+          builtin: group.builtin,
+          createdAt: group.createdAt,
+          members: [...await auth.listMembers(group.groupId)],
+          rules: (await auth.listRules(group.groupId)).map(rule => ({ ...rule })),
+        })))
+        return ok(request, { groups })
+      },
+
+      createGroup(request) {
+        const { name } = request.payload
+        return authWrite(request, async (auth) => {
+          const groupId = await auth.createGroup(name)
+          await auth.audit({ event: 'auth.admin.group-created', ...actorOf(request.principal), subject: groupId, detail: name })
+          return { groupId }
+        })
+      },
+
+      deleteGroup(request) {
+        const { groupId } = request.payload
+        return authWrite(request, async (auth) => {
+          await auth.deleteGroup(groupId)
+          await auth.audit({ event: 'auth.admin.group-deleted', ...actorOf(request.principal), subject: groupId })
+          return {}
+        })
+      },
+
+      renameGroup(request) {
+        const { groupId, name } = request.payload
+        return authWrite(request, async (auth) => {
+          await auth.renameGroup(groupId, name)
+          await auth.audit({ event: 'auth.admin.group-renamed', ...actorOf(request.principal), subject: groupId, detail: name })
+          return {}
+        })
+      },
+
+      setMembers(request) {
+        const { groupId, userIds } = request.payload
+        return authWrite(request, async (auth) => {
+          // The membership BEFORE the write is what makes "newly added"
+          // meaningful, and it has to be read before the write commits: a
+          // second save with the same roster must mail nobody.
+          const before = new Set(await auth.listMembers(groupId))
+          const added = userIds.filter(userId => !before.has(userId))
+          await auth.setMembers(groupId, userIds)
+          await auth.audit({
+            event: 'auth.admin.members-set',
+            ...actorOf(request.principal),
+            subject: groupId,
+            detail: `${String(userIds.length)} member(s), ${String(added.length)} added`,
+          })
+          // Notices go out only after the membership is durable, and only to
+          // the accounts the write actually added. A gate that cannot deliver
+          // does not undo the save: the membership is the commit, the notice
+          // is a courtesy, and the audit row above already recorded the fact.
+          await notifyAdded(groupId, added)
+          return { added }
+        })
+      },
+
+      setRules(request) {
+        const { groupId, rules } = request.payload
+        return authWrite(request, async (auth) => {
+          await auth.setRules(groupId, rules)
+          await auth.audit({
+            event: 'auth.admin.rules-set',
+            ...actorOf(request.principal),
+            subject: groupId,
+            detail: `${String(rules.length)} rule(s)`,
+          })
+          return {}
+        })
       },
     },
 

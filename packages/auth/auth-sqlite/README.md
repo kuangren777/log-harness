@@ -26,6 +26,8 @@ The database lives at the configured `path` (`$DSH_HOME/auth.db` in the shipped 
 
 **An undeletable admin group.** The builtin group refuses deletion, so a deployment cannot lock every administrator out of its own permission surface.
 
+**A reversible block.** `setUserDisabled` writes and clears `users.disabled_at`, and a repeat disable keeps the first timestamp, so the column reads as when the block started. Every row the account owns survives it, and live login sessions are untouched — ending them is `revokeAllSessions`, a separate decision. `principalOf` resolves an account to its `Principal` without a credential (the read the agent plane makes for a session's owner) and answers `undefined` for an unknown OR disabled account, so a block reaches a running deployment through the same answer a deletion would.
+
 ## Ownership
 
 `session_owners` and `workspace_owners` map an agent session or workspace to the user who created it. Ownership lives here rather than in the session log so that adding authentication to a deployment does not change `SESSION_FORMAT_VERSION` or the durable session record.

@@ -110,7 +110,7 @@ export class HostConnectionService extends Service implements HostConnectionHand
         // The Fetch handler is built per request because the client address
         // is a socket fact the bridged Request no longer carries, and a
         // channel that rate-limits its own callers needs it.
-        await bridge(req, res, rpcFetchHandler(channel, handler, req.socket?.remoteAddress))
+        await bridge(req, res, rpcFetchHandler(channel, handler, req.socket.remoteAddress))
       },
     }
     return owner.effect(

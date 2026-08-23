@@ -8,7 +8,7 @@
  * `settings/document-updated` owner events.
  */
 
-import type { RpcRequest, RpcResponse } from './rpc.ts'
+import type { AuthorizedRequest, RpcRequest, RpcResponse } from './rpc.ts'
 import type { ModelCatalogFailure, ModelProviderGroup } from './sessions.ts'
 
 /** Wire view of one configurable provider. */
@@ -42,11 +42,13 @@ export interface LlmApi {
   providers(request: RpcRequest<{}>): Promise<RpcResponse<{ providers: ConfigurableProviderView[] }>>
 
   /**
-   * Host-scoped model catalog over every registered provider route: the
+   * Host-scoped model catalog over every registered provider route, narrowed
+   * to the `provider/model` routes the request's principal may use: the
    * settings surface's models view, needing no session. Per-provider listing
-   * failures ride `failures` without failing the sound groups.
+   * failures ride `failures` without failing the sound groups, and a provider
+   * every one of whose models is refused drops out with its group.
    */
-  models(request: RpcRequest<{}>): Promise<RpcResponse<{ groups: ModelProviderGroup[]; failures: ModelCatalogFailure[] }>>
+  models(request: AuthorizedRequest<{}>): Promise<RpcResponse<{ groups: ModelProviderGroup[]; failures: ModelCatalogFailure[] }>>
 
   /**
    * Interrogate a provider endpoint the configuration surface is still

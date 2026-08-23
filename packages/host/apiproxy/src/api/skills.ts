@@ -6,7 +6,7 @@
  */
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { RpcRequest, RpcResponse } from './rpc.ts'
+import type { AuthorizedRequest, RpcResponse } from './rpc.ts'
 
 /** Skill catalog row (wire projection of the host SkillSummary; provider/source vocabulary stays host-side). */
 export interface SkillEntry {
@@ -100,14 +100,25 @@ export interface SkillInventory {
  * one deterministic path with no dedicated invocation wire.
  */
 export interface SkillsApi {
-  /** Lists the user-invocable skill catalog for the session's project. */
-  list(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<{ skills: readonly SkillEntry[] }>>
+  /**
+   * Lists the user-invocable skill catalog for the session's project, as the
+   * request's principal may see it: a skill the `skill` domain's permission
+   * rules refuse that account is absent, not merely uninvocable.
+   */
+  list(request: AuthorizedRequest<{ sessionId: SessionId }>): Promise<RpcResponse<{ skills: readonly SkillEntry[] }>>
   /**
    * Reports every skill the session's project discovers, grouped by origin
    * and including shadowed losers, with each entry's authored policy, its
    * effective policy, and the override between them. `list` answers what the
    * composer may invoke; this answers what exists and why it is not winning,
    * which is what a policy editor needs to offer a toggle.
+   *
+   * Permission rules OMIT a refused entry here rather than marking it. The
+   * inventory is the product's richest disclosure of a skill — its
+   * description, its origin, and its absolute path — so a marked row would
+   * hand a refused account everything except the content. Groups survive an
+   * emptied entry list: the origin roster and `complete` describe what the
+   * project discovered, which does not change with who is asking.
    */
-  inventory(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<SkillInventory>>
+  inventory(request: AuthorizedRequest<{ sessionId: SessionId }>): Promise<RpcResponse<SkillInventory>>
 }

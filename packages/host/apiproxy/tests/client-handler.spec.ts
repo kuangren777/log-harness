@@ -28,6 +28,7 @@ function scriptedApi(overrides: {
   settings?: Partial<ApiProxy['settings']>
   credentials?: Partial<ApiProxy['credentials']>
   llm?: Partial<ApiProxy['llm']>
+  authAdmin?: Partial<ApiProxy['authAdmin']>
   respond?: ApiProxy['respond']
 } = {}): ApiProxy {
   async function *empty<F>(): AsyncGenerator<RpcRequest<F>> { /* no frames */ }
@@ -131,6 +132,18 @@ function scriptedApi(overrides: {
       models: r => ok(r, { groups: [], failures: [] }),
       discoverModels: err,
       ...overrides.llm,
+    },
+    authAdmin: {
+      listUsers: r => ok(r, { users: [] }),
+      createUser: err,
+      disableUser: r => ok(r, {}),
+      listGroups: r => ok(r, { groups: [] }),
+      createGroup: err,
+      deleteGroup: r => ok(r, {}),
+      renameGroup: r => ok(r, {}),
+      setMembers: r => ok(r, { added: [] }),
+      setRules: r => ok(r, {}),
+      ...overrides.authAdmin,
     },
     events: { mux: () => empty<MuxFrame>(), host: () => empty<HostFrame>(), ...overrides.events },
     respond: overrides.respond ?? (() => Promise.resolve({ accepted: false as const, reason: 'not-pending' as const })),
@@ -807,6 +820,58 @@ describe('config unary surface', () => {
       api: 'openai-completions',
       apiKey: 'probe-key',
     })
+  })
+
+  it('round-trips every administration method with its own payload and value shape', async () => {
+    const seen: { method: string; payload: unknown }[] = []
+    const record = recorderInto(seen)
+    const user = {
+      userId: 'user-1' as never, email: 'ada@example.test', emailVerified: true, disabled: false, createdAt: 7,
+    }
+    const group = {
+      groupId: 'g-1' as never,
+      name: 'reviewers',
+      builtin: false,
+      createdAt: 8,
+      members: ['user-1' as never],
+      rules: [{ domain: 'tool' as const, pattern: 'bash', effect: 'deny' as const }],
+    }
+    const api = scriptedApi({
+      authAdmin: {
+        listUsers: record('auth.admin.users.list', r => ok(r, { users: [user] })),
+        createUser: record('auth.admin.users.create', r => ok(r, { userId: user.userId })),
+        disableUser: record('auth.admin.users.disable', r => ok(r, {})),
+        listGroups: record('auth.admin.groups.list', r => ok(r, { groups: [group] })),
+        createGroup: record('auth.admin.groups.create', r => ok(r, { groupId: group.groupId })),
+        deleteGroup: record('auth.admin.groups.delete', r => ok(r, {})),
+        renameGroup: record('auth.admin.groups.rename', r => ok(r, {})),
+        setMembers: record('auth.admin.members.set', r => ok(r, { added: [user.userId] })),
+        setRules: record('auth.admin.rules.set', r => ok(r, {})),
+      },
+    })
+    const c = client(api)
+
+    expect((await c.authAdmin.listUsers({})).result).toEqual({ ok: true, value: { users: [user] } })
+    expect((await c.authAdmin.createUser({ email: 'ada@example.test', password: 'pw' })).result)
+      .toEqual({ ok: true, value: { userId: user.userId } })
+    expect((await c.authAdmin.disableUser({ userId: user.userId, disabled: true })).result).toEqual({ ok: true, value: {} })
+    expect((await c.authAdmin.listGroups({})).result).toEqual({ ok: true, value: { groups: [group] } })
+    expect((await c.authAdmin.createGroup({ name: 'reviewers' })).result)
+      .toEqual({ ok: true, value: { groupId: group.groupId } })
+    expect((await c.authAdmin.deleteGroup({ groupId: group.groupId })).result).toEqual({ ok: true, value: {} })
+    expect((await c.authAdmin.renameGroup({ groupId: group.groupId, name: 'auditors' })).result).toEqual({ ok: true, value: {} })
+    expect((await c.authAdmin.setMembers({ groupId: group.groupId, userIds: [user.userId] })).result)
+      .toEqual({ ok: true, value: { added: [user.userId] } })
+    expect((await c.authAdmin.setRules({ groupId: group.groupId, rules: group.rules })).result).toEqual({ ok: true, value: {} })
+
+    expect(seen.map(call => call.method)).toEqual([
+      'auth.admin.users.list', 'auth.admin.users.create', 'auth.admin.users.disable',
+      'auth.admin.groups.list', 'auth.admin.groups.create', 'auth.admin.groups.delete',
+      'auth.admin.groups.rename', 'auth.admin.members.set', 'auth.admin.rules.set',
+    ])
+    // The password crosses on the way in and rides nothing on the way back.
+    expect(seen[1]?.payload).toEqual({ email: 'ada@example.test', password: 'pw' })
+    expect(seen[8]?.payload).toEqual({ groupId: 'g-1', rules: [{ domain: 'tool', pattern: 'bash', effect: 'deny' }] })
   })
 
   it('rejects an invalid credential reference name at the carrier boundary', async () => {

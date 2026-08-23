@@ -68,6 +68,20 @@ Workspace 列表与 Session 列表是相互独立的重连基线。`workspace.cr
 
 任何不做认证的入口都解析为 `LOCAL_PRINCIPAL`，它无条件通过每条策略，因此没有 auth provider 的部署行为与这张表出现之前完全一致。请求是谁由 [`dsh-auth-gate`](../../auth/auth-gate/README.zh.md) 回答；两条服务端到浏览器的流无法靠拒绝连接来保证安全，因此 `frame-visibility.ts` 改为在每一帧发出的路上丢弃或收窄它。
 
+## 已放行调用内部的权限规则
+
+策略行决定一次调用是否运行。它随后作答的内容，则由调用方的[权限规则](../../auth/auth/README.zh.md#permission-rules)收窄，规则按请求经 `ctx.auth.rulesFor` 解析一次 —— `local` 与管理员不携带规则，跳过下面每一项检查。
+
+- `skill` —— `skill.list` 把被拒技能从编辑器菜单中剔除，`skill.inventory` 把它从其来源分组中剔除但保留该分组，因此被拒技能的任何信息（描述、host 路径）都不会存活到投影中。面向模型的目录另行过滤，位于 [`dsh-tool-skill`](../../skill/tool-skill/README.zh.md)。
+- `model` —— `llm.models` 与 `session.models` 只公布调用方可用的 `provider/model` 路由，某个 provider 的模型若被全部拒绝，则连同其分组一起消失。而 provider 的**列举失败**仍然出现在 `failures` 中：那是关于部署的事实，与谁在询问无关。`session.selectModel` 在解析任何东西之前就对被拒路由回答 `forbidden`；本轮自身的拒绝位于网关的 `agent/request`。
+- `settings-section` —— `settings.describe` 只返回调用方可触及的命名空间，`settings.update`/`replace`/`mutate` 在触碰 seam 之前回答 `forbidden`，因此被拒命名空间无法被探测其存在性或校验行为。`settings.openDocument` 需要全部已注册命名空间，因为该文档就是它们合在一个可编辑文件里。
+
+## 管理平面（`auth.admin.*`）
+
+覆盖 auth seam 的九条 `admin` 行：`users.list`/`create`/`disable`、`groups.list`/`create`/`delete`/`rename`、`members.set` 与 `rules.set`。它们是决定其他所有行放行什么的那个平面，因此连 `owner` 都不对它们开放。`groups.list` 连同成员与规则一起返回每个组，因为管理界面要把三者一起渲染，三次往返可能彼此不一致。`users.disable` 接受布尔值而非单向操作：一次误封不该变成数据库修复。任何响应都不携带密码、哈希或令牌；密码只在 `users.create` 上单向传入。
+
+`members.set` 整体替换成员关系，以写入**之前**存储中的内容计算出新增账号，并在写入落盘之后请求已挂载的网关分别给他们发信。以相同名册重复保存不会给任何人发信。投递失败只记日志且保存依然成立，因为成员关系才是提交点，通知只是附带的礼节。每次写入还会追加一条记录了执行管理员的 `auth.admin.*` 审计行。seam 的拒绝（重复地址或组名、内置组、未知 id、限流）回答 `auth-rejected`，并携带 seam 自己的 `AuthErrorCode`。
+
 ## 载体层（`/client` + 根路径）
 
 `AbstractApiClient` 持有全部协议不变量：签发 rpcId、包装／解包信封、Zod 解析、SSE 帧解码、一元请求超时，以及按微任务批处理的信封观测（`subscribeEnvelopes`）；平台子类只提供 `doFetch` 传输环节。`InProcessApiClient` 以 `toFetchHandler(api)` 为基础，仍是同构接点：它运行完整的协议序列化与校验路径而不经过网络，供需要该路径的调用方和载体测试使用。产品的 `dsh --profile headless` 是直连 core 的入口，不挂载本包。

@@ -52,6 +52,13 @@ import {
 } from '../api/workspace.schema.ts'
 import { skillInventoryRequestSchema, skillListRequestSchema } from '../api/skills.schema.ts'
 import {
+  authAdminGroupsCreateRequestSchema, authAdminGroupsDeleteRequestSchema,
+  authAdminGroupsListRequestSchema, authAdminGroupsRenameRequestSchema,
+  authAdminMembersSetRequestSchema, authAdminRulesSetRequestSchema,
+  authAdminUsersCreateRequestSchema, authAdminUsersDisableRequestSchema,
+  authAdminUsersListRequestSchema,
+} from '../api/auth-admin.schema.ts'
+import {
   agentPresetCopyRequestSchema, agentPresetListRequestSchema, agentPresetOpenDocumentRequestSchema,
   agentPresetReadRequestSchema, agentPresetRemoveRequestSchema, agentPresetSelectRequestSchema,
 } from '../api/agent-presets.schema.ts'
@@ -148,6 +155,15 @@ const UNARY_ROUTES: UnaryRoutes = {
   'llm.providers': { schema: llmProvidersRequestSchema, invoke: (api, r) => api.llm.providers(r) },
   'llm.models': { schema: llmModelsRequestSchema, invoke: (api, r) => api.llm.models(r) },
   'llm.discoverModels': { schema: llmDiscoverModelsRequestSchema, invoke: (api, r, signal) => api.llm.discoverModels(r, signal) },
+  'auth.admin.users.list': { schema: authAdminUsersListRequestSchema, invoke: (api, r) => api.authAdmin.listUsers(r) },
+  'auth.admin.users.create': { schema: authAdminUsersCreateRequestSchema, invoke: (api, r) => api.authAdmin.createUser(r) },
+  'auth.admin.users.disable': { schema: authAdminUsersDisableRequestSchema, invoke: (api, r) => api.authAdmin.disableUser(r) },
+  'auth.admin.groups.list': { schema: authAdminGroupsListRequestSchema, invoke: (api, r) => api.authAdmin.listGroups(r) },
+  'auth.admin.groups.create': { schema: authAdminGroupsCreateRequestSchema, invoke: (api, r) => api.authAdmin.createGroup(r) },
+  'auth.admin.groups.delete': { schema: authAdminGroupsDeleteRequestSchema, invoke: (api, r) => api.authAdmin.deleteGroup(r) },
+  'auth.admin.groups.rename': { schema: authAdminGroupsRenameRequestSchema, invoke: (api, r) => api.authAdmin.renameGroup(r) },
+  'auth.admin.members.set': { schema: authAdminMembersSetRequestSchema, invoke: (api, r) => api.authAdmin.setMembers(r) },
+  'auth.admin.rules.set': { schema: authAdminRulesSetRequestSchema, invoke: (api, r) => api.authAdmin.setRules(r) },
 }
 
 /**
@@ -194,6 +210,10 @@ type PolicyRow<K extends keyof RpcMethodMap> = 'user' | 'admin' | OwnerCapable<K
  *   privileged as writing them.
  * - `llm.providers` and `llm.models` stay `user`: the catalog carries provider
  *   ids, display names, and model lists, and every session composer needs it.
+ * - Every `auth.admin.*` row is `admin`, with no narrower option. They are the
+ *   plane that decides what every other row admits, so a caller able to reach
+ *   one of them could grant itself the rest; `owner` is not even offered,
+ *   since their payloads address accounts and groups rather than sessions.
  */
 const METHOD_POLICY: { [K in keyof RpcMethodMap]: PolicyRow<K> } = {
   'session.list': 'user',
@@ -249,6 +269,15 @@ const METHOD_POLICY: { [K in keyof RpcMethodMap]: PolicyRow<K> } = {
   'llm.providers': 'user',
   'llm.models': 'user',
   'llm.discoverModels': 'admin',
+  'auth.admin.users.list': 'admin',
+  'auth.admin.users.create': 'admin',
+  'auth.admin.users.disable': 'admin',
+  'auth.admin.groups.list': 'admin',
+  'auth.admin.groups.create': 'admin',
+  'auth.admin.groups.delete': 'admin',
+  'auth.admin.groups.rename': 'admin',
+  'auth.admin.members.set': 'admin',
+  'auth.admin.rules.set': 'admin',
 }
 
 /**

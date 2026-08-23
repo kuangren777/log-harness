@@ -32,6 +32,7 @@ import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
 import type { CommandDescriptor, CommandExecution, CommandResult } from '@deepseek-ai/dsh-commands/types'
 import { deriveEventMessage, foldSurface } from '@deepseek-ai/dsh-session/surface'
 import type {
+  AdminGroupView, AdminUserView, GroupId, UserId,
   ApiProxy, AuthorizedRequest, ClientRequest, ClientResponse, HistoryEntry, HostFrame, MuxFrame, RpcReceipt,
   ModelProviderGroup, ModelSelection, RpcRequest, RpcResponse, RpcResult, ServerRequest, ServerResponse, SessionSummary,
   ToolCallView, ToolEventView, ToolResultView, WorkspaceId, WorkspaceView,
@@ -1457,6 +1458,90 @@ export interface FixtureOptions {
   dropSessionCreateResponse?: boolean
   /** Order of the two successful create frames. */
   createFrameOrder?: 'session-first' | 'workspace-first'
+  /**
+   * Serve the `/auth` sign-in channel. Off by default, and deliberately so: a
+   * fixture page is a deployment with no request gate, and a sign-in surface
+   * must be invisible there.
+   */
+  auth?: boolean
+}
+
+/** The one account the fixture's `/auth` channel knows. */
+export const FIXTURE_ACCOUNT = {
+  /** Address that signs in. */
+  email: 'ada@example.test',
+  /** Password `login.start` accepts for {@link FIXTURE_ACCOUNT.email}. */
+  password: 'correct-horse-battery',
+  /** Second factor `login.verify` accepts; a real deployment mails it. */
+  code: '424242',
+} as const
+
+/** Address whose sign-in is always refused as rate-limited, for the "try again later" state. */
+export const FIXTURE_RATE_LIMITED_EMAIL = 'blocked@example.test'
+
+/** Token the fixture's mailed reset link carries. */
+export const FIXTURE_RESET_TOKEN = 'fx-reset-token'
+
+/** Token the fixture's mailed confirmation link carries. */
+export const FIXTURE_VERIFY_TOKEN = 'fx-verify-token'
+
+/** Challenge id `login.start` answers with; the fixture runs one challenge at a time. */
+const FIXTURE_PENDING_ID = 'fx-2fa-challenge'
+
+/**
+ * The `/auth` channel's in-memory double: one account, one fixed second
+ * factor, and a signed-in flag every endpoint agrees on. Failures are as
+ * shapeless as the Host's — a wrong address and a wrong password answer
+ * identically — so a journey cannot accidentally assert an oracle the product
+ * does not have.
+ * @returns the channel's endpoint dispatch.
+ */
+function createFixtureAuth(): (endpoint: string, payload: unknown) => RpcResult<unknown> | undefined {
+  let signedIn = false
+  let pendingId: string | undefined
+  return (endpoint, payload) => {
+    const sent = payload as { email?: string; password?: string; pendingId?: string; code?: string; token?: string }
+    switch (endpoint) {
+      case 'login.start': {
+        if (sent.email === FIXTURE_RATE_LIMITED_EMAIL) {
+          return { ok: true, value: { status: 'failed', retryAfterMs: 60_000 } }
+        }
+        if (sent.email !== FIXTURE_ACCOUNT.email || sent.password !== FIXTURE_ACCOUNT.password) {
+          return { ok: true, value: { status: 'failed' } }
+        }
+        pendingId = FIXTURE_PENDING_ID
+        return { ok: true, value: { status: '2fa-required', pendingId } }
+      }
+      case 'login.verify': {
+        if (sent.pendingId !== pendingId || sent.code !== FIXTURE_ACCOUNT.code) {
+          return { ok: true, value: { status: 'failed' } }
+        }
+        pendingId = undefined
+        signedIn = true
+        return { ok: true, value: { status: 'ok' } }
+      }
+      case 'logout':
+      case 'logoutEverywhere':
+        signedIn = false
+        return { ok: true, value: { status: 'ok' } }
+      case 'password.forgot':
+        return { ok: true, value: { status: 'ok' } }
+      case 'password.reset':
+        return sent.token === FIXTURE_RESET_TOKEN && sent.email === FIXTURE_ACCOUNT.email
+          ? { ok: true, value: { status: 'ok' } }
+          : { ok: true, value: { status: 'failed' } }
+      case 'email.verify':
+        return sent.token === FIXTURE_VERIFY_TOKEN
+          ? { ok: true, value: { status: 'ok' } }
+          : { ok: true, value: { status: 'failed' } }
+      case 'me':
+        return signedIn
+          ? { ok: true, value: { authenticated: true, email: FIXTURE_ACCOUNT.email, admin: true, groups: ['admin'] } }
+          : { ok: true, value: { authenticated: false } }
+      default:
+        return undefined
+    }
+  }
 }
 
 /** Inbox pump shared by both stream generators (FrameQueue pattern: ONE abort listener hung
@@ -1545,6 +1630,27 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     String(FIXTURE_IMAGE_REF.attachmentId),
     { attachment: FIXTURE_IMAGE_REF, data: FIXTURE_IMAGE_DATA },
   ]])
+  /**
+   * Administration-plane doubles. The fixture ships one administrator and the
+   * builtin group so an administration surface renders a populated roster
+   * instead of an empty state, and every write below mutates these maps, so
+   * what a journey reads back is what it saved.
+   */
+  const fixtureUsers = new Map<UserId, AdminUserView>([
+    ['user-1' as UserId, {
+      userId: 'user-1' as UserId, email: 'ada@example.test', emailVerified: true, disabled: false, createdAt: 0,
+    }],
+  ])
+  const fixtureGroups = new Map<GroupId, AdminGroupView>([
+    ['admin' as GroupId, {
+      groupId: 'admin' as GroupId,
+      name: 'admin',
+      builtin: true,
+      createdAt: 0,
+      members: ['user-1' as UserId],
+      rules: [],
+    }],
+  ])
   /** Credential store double: set/unset flip the describe badge, values never read back. */
   const fixtureCredentials = new Map<string, true>([
     // The assembled fixture represents an already-configured shipped
@@ -3116,6 +3222,51 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         models: fixtureModelGroups().flatMap(group => group.models.map(model => ({ id: model.id, name: model.name }))),
       }),
     },
+    authAdmin: {
+      listUsers: request => ok(request, { users: [...fixtureUsers.values()] }),
+      createUser: (request) => {
+        const userId = `user-${String(fixtureUsers.size + 1)}` as UserId
+        fixtureUsers.set(userId, {
+          userId, email: request.payload.email, emailVerified: false, disabled: false, createdAt: Date.now(),
+        })
+        return ok(request, { userId })
+      },
+      disableUser: (request) => {
+        const user = fixtureUsers.get(request.payload.userId)
+        if (user !== undefined) fixtureUsers.set(user.userId, { ...user, disabled: request.payload.disabled })
+        return ok(request, {})
+      },
+      listGroups: request => ok(request, { groups: [...fixtureGroups.values()] }),
+      createGroup: (request) => {
+        const groupId = `group-${String(fixtureGroups.size + 1)}` as GroupId
+        fixtureGroups.set(groupId, {
+          groupId, name: request.payload.name, builtin: false, createdAt: Date.now(), members: [], rules: [],
+        })
+        return ok(request, { groupId })
+      },
+      deleteGroup: (request) => {
+        fixtureGroups.delete(request.payload.groupId)
+        return ok(request, {})
+      },
+      renameGroup: (request) => {
+        const group = fixtureGroups.get(request.payload.groupId)
+        if (group !== undefined) fixtureGroups.set(group.groupId, { ...group, name: request.payload.name })
+        return ok(request, {})
+      },
+      setMembers: (request) => {
+        const group = fixtureGroups.get(request.payload.groupId)
+        if (group === undefined) return ok(request, { added: [] })
+        const before = new Set(group.members)
+        const added = request.payload.userIds.filter(userId => !before.has(userId))
+        fixtureGroups.set(group.groupId, { ...group, members: [...request.payload.userIds] })
+        return ok(request, { added })
+      },
+      setRules: (request) => {
+        const group = fixtureGroups.get(request.payload.groupId)
+        if (group !== undefined) fixtureGroups.set(group.groupId, { ...group, rules: [...request.payload.rules] })
+        return ok(request, {})
+      },
+    },
     respond(message: ClientResponse): Promise<RpcReceipt> {
       // Same routing discipline as the host: rpcId first, then the payload's
       // audit correlation; a settled or unknown id is not-pending.
@@ -3149,9 +3300,18 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     },
   }
 
+  const auth = options.auth === true ? createFixtureAuth() : undefined
   const rpc: ClientConnectionRpc = {
     call(channel, endpoint, payload) {
+      if (channel === '/auth' && auth !== undefined) {
+        const answer = auth(endpoint, payload)
+        return answer === undefined
+          ? Promise.reject(new Error(`fixture connection RPC endpoint ${JSON.stringify(endpoint)} is unavailable`))
+          : Promise.resolve(answer)
+      }
       if (channel !== '/api') {
+        // An unmounted channel answers the way the Host's transport does: no
+        // route, so the caller's own transport failure, never an empty result.
         return Promise.reject(new Error(`fixture connection RPC channel ${JSON.stringify(channel)} is unavailable`))
       }
       const args = (payload as {
@@ -3288,6 +3448,15 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'llm.providers': return this.api.llm.providers(request)
       case 'llm.models': return this.api.llm.models(request)
       case 'llm.discoverModels': return this.api.llm.discoverModels(request, signal)
+      case 'auth.admin.users.list': return this.api.authAdmin.listUsers(request)
+      case 'auth.admin.users.create': return this.api.authAdmin.createUser(request)
+      case 'auth.admin.users.disable': return this.api.authAdmin.disableUser(request)
+      case 'auth.admin.groups.list': return this.api.authAdmin.listGroups(request)
+      case 'auth.admin.groups.create': return this.api.authAdmin.createGroup(request)
+      case 'auth.admin.groups.delete': return this.api.authAdmin.deleteGroup(request)
+      case 'auth.admin.groups.rename': return this.api.authAdmin.renameGroup(request)
+      case 'auth.admin.members.set': return this.api.authAdmin.setMembers(request)
+      case 'auth.admin.rules.set': return this.api.authAdmin.setRules(request)
     }
   }
 
@@ -3343,5 +3512,6 @@ function fixtureOptionsFromLocation(): FixtureOptions {
     failWorkspaceAttach: query.get('fixtureAttach') === 'fail',
     dropSessionCreateResponse: query.get('fixtureSessionCreate') === 'drop-response',
     createFrameOrder: query.get('fixtureFrames') === 'workspace-first' ? 'workspace-first' : 'session-first',
+    auth: query.get('fixtureAuth') === 'on',
   }
 }

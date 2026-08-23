@@ -8,6 +8,7 @@ import type { SessionsApi } from './sessions.ts'
 import type { HostApi } from './host.ts'
 import type { WorkspaceApi } from './workspace.ts'
 import type { AgentPresetsApi } from './agent-presets.ts'
+import type { AuthAdminApi } from './auth-admin.ts'
 import type { SkillsApi } from './skills.ts'
 import type { GoalsApi } from './goals.ts'
 import type { SettingsApi } from './settings.ts'
@@ -75,6 +76,15 @@ export interface RpcMethodMap {
   'llm.providers': LlmApi['providers']
   'llm.models': LlmApi['models']
   'llm.discoverModels': LlmApi['discoverModels']
+  'auth.admin.users.list': AuthAdminApi['listUsers']
+  'auth.admin.users.create': AuthAdminApi['createUser']
+  'auth.admin.users.disable': AuthAdminApi['disableUser']
+  'auth.admin.groups.list': AuthAdminApi['listGroups']
+  'auth.admin.groups.create': AuthAdminApi['createGroup']
+  'auth.admin.groups.delete': AuthAdminApi['deleteGroup']
+  'auth.admin.groups.rename': AuthAdminApi['renameGroup']
+  'auth.admin.members.set': AuthAdminApi['setMembers']
+  'auth.admin.rules.set': AuthAdminApi['setRules']
 }
 
 /** Business request payload of method K (reaches through the RpcRequest narrow form to payload). */

@@ -25,6 +25,9 @@
       "path": "../../core/agent"
     },
     {
+      "path": "../../auth/auth"
+    },
+    {
       "path": "../skill"
     },
     {

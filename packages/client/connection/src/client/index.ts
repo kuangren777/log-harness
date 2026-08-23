@@ -50,6 +50,22 @@ export interface HostDescriptionSource {
   subscribe(listener: () => void): () => void
 }
 
+/**
+ * Observable "this Host refused an unauthenticated request".
+ *
+ * The flag latches: a deployment that answered 401 once will answer it for
+ * every later call too, and the credential a browser is missing arrives
+ * through a page the sign-in surface reloads, not through a retry. A
+ * deployment with no request gate never answers 401, so the flag stays false
+ * for its whole lifetime and nothing observes it.
+ */
+export interface AuthRequiredSource {
+  /** Whether an `/api` call has been refused as unauthenticated. */
+  getSnapshot(): boolean
+  /** Subscribe to the single false-to-true transition. */
+  subscribe(listener: () => void): () => void
+}
+
 /** Required services (none — this is the wire root). */
 export const inject: string[] = []
 
@@ -96,6 +112,12 @@ export interface ConnectionHandle {
   readonly isLoopback: boolean
   /** Generation-scoped Host facts, including the account home and native path-open capability. */
   readonly hostDescription: HostDescriptionSource
+  /**
+   * Whether the Host has refused an `/api` call as unauthenticated. Reading it
+   * is how a sign-in surface learns that this deployment authenticates at all;
+   * nothing in the transport acts on it.
+   */
+  readonly authRequired: AuthRequiredSource
   /** Generic logical RPC channels over the same Connection transport. */
   readonly rpc: ClientConnectionRpc
   /**
@@ -118,7 +140,20 @@ export function apply(ctx: Context): void {
   const fixture = pageLocation !== undefined && new URLSearchParams(pageLocation.search).has('fixture')
   const fixtureClient = fixture ? new FixtureApiClient() : undefined
   const transport = (globalThis as ClientTransportGlobal).__DSH_TRANSPORT__
-  const api: IApiClient = fixtureClient ?? transport?.createApiClient() ?? new WebApiClient()
+  let authRequired = false
+  const authRequiredListeners = new Set<() => void>()
+  const reportUnauthorized = (): void => {
+    if (authRequired) return
+    authRequired = true
+    for (const listener of [...authRequiredListeners]) {
+      try {
+        listener()
+      } catch (error) {
+        console.error('[web-runtime] auth-required listener threw:', error)
+      }
+    }
+  }
+  const api: IApiClient = fixtureClient ?? transport?.createApiClient() ?? new WebApiClient(reportUnauthorized)
   const rpc = fixtureClient?.rpc ?? createWebConnectionRpc(transport?.fetch)
   let started = false
   let description: HostDescription | undefined
@@ -145,6 +180,13 @@ export function apply(ctx: Context): void {
       subscribe: (listener) => {
         descriptionListeners.add(listener)
         return () => { descriptionListeners.delete(listener) }
+      },
+    },
+    authRequired: {
+      getSnapshot: () => authRequired,
+      subscribe: (listener) => {
+        authRequiredListeners.add(listener)
+        return () => { authRequiredListeners.delete(listener) }
       },
     },
     rpc,

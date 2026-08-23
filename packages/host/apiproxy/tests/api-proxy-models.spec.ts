@@ -23,7 +23,8 @@ import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import type { AuthorizedRequest } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '../src/api-proxy.ts'
-import { LOCAL_PRINCIPAL } from '@deepseek-ai/dsh-auth'
+import { LOCAL_PRINCIPAL, UserId } from '@deepseek-ai/dsh-auth'
+import type { Principal } from '@deepseek-ai/dsh-auth'
 
 let nextRpc = 1
 function request<P>(payload: P): AuthorizedRequest<P> {
@@ -495,6 +496,38 @@ describe('Web session model selection', () => {
     expect(catalog.current).toEqual({ provider: 'deleted-gateway', model: 'deleted-model' })
     expect(catalog.groups.flatMap(group => group.models.map(model => `${group.id}/${model.id}`)))
       .not.toContain('deleted-gateway/deleted-model')
+    await ctx.fiber.dispose()
+  })
+})
+
+describe('a session catalog under permission rules', () => {
+  it('advertises only the routes the requesting account may use', async () => {
+    const { ctx, sessionId } = await harness({ provider: 'deepseek-official', model: 'deepseek-chat' })
+    ctx.provide('auth', {
+      rulesFor: () => Promise.resolve([
+        { domain: 'model', pattern: 'deepseek-official/deepseek-chat', effect: 'allow' },
+      ]),
+    } as never)
+    const api = createApiProxy(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+    const member: Principal = {
+      kind: 'user', userId: UserId('u-1'), email: 'member@example.test', groups: [], admin: false,
+    }
+
+    const restricted = expectValue(await api.sessions.models({
+      rpcId: RpcId('models-restricted'), payload: { sessionId }, principal: member,
+    }))
+    const local = expectValue(await api.sessions.models(request({ sessionId })))
+
+    expect(restricted.groups.flatMap(group => group.models.map(model => `${group.id}/${model.id}`)))
+      .toEqual(['deepseek-official/deepseek-chat'])
+    // The selection itself still rides: the composer has to show what the
+    // session is pointed at even while the catalog around it narrows.
+    expect(restricted.current).toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
+    expect(local.groups.flatMap(group => group.models.map(model => `${group.id}/${model.id}`)))
+      .toContain('deepseek-official/deepseek-reasoner')
     await ctx.fiber.dispose()
   })
 })

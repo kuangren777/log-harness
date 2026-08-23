@@ -140,6 +140,19 @@ export interface RequestGate {
    */
   clearedCookie(): string
 
+  /**
+   * Tell one account it was added to a permission group.
+   *
+   * Declared here because the gateway is the caller: `auth.admin.members.set`
+   * is what knows which accounts a save newly added, while the message itself
+   * belongs to the gate that already owns every other message this deployment
+   * sends. The notice is refused for an address with no account, so it cannot
+   * be used to mail a stranger.
+   * @param email - the account's address.
+   * @param groupName - the group the account was added to.
+   */
+  notifyAddedToGroup(email: string, groupName: string): Promise<void>
+
   /** Ownership resolution backed by the same provider that authenticated the request. */
   readonly ownership: OwnershipLookup
 }

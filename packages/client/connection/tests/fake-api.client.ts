@@ -224,6 +224,18 @@ export class FakeApiClient implements IApiClient {
     unset: payload => this.record('credentials.unset', payload, Promise.resolve(ok({}))),
   }
 
+  readonly authAdmin: IApiClient['authAdmin'] = {
+    listUsers: payload => this.record('auth.admin.users.list', payload, Promise.resolve(ok({ users: [] }))),
+    createUser: payload => this.record('auth.admin.users.create', payload, Promise.resolve(ok({ userId: 'u-1' as never }))),
+    disableUser: payload => this.record('auth.admin.users.disable', payload, Promise.resolve(ok({}))),
+    listGroups: payload => this.record('auth.admin.groups.list', payload, Promise.resolve(ok({ groups: [] }))),
+    createGroup: payload => this.record('auth.admin.groups.create', payload, Promise.resolve(ok({ groupId: 'g-1' as never }))),
+    deleteGroup: payload => this.record('auth.admin.groups.delete', payload, Promise.resolve(ok({}))),
+    renameGroup: payload => this.record('auth.admin.groups.rename', payload, Promise.resolve(ok({}))),
+    setMembers: payload => this.record('auth.admin.members.set', payload, Promise.resolve(ok({ added: [] }))),
+    setRules: payload => this.record('auth.admin.rules.set', payload, Promise.resolve(ok({}))),
+  }
+
   readonly llm: IApiClient['llm'] = {
     providers: payload => this.record('llm.providers', payload, Promise.resolve(ok({ providers: [] }))),
     models: payload => this.record('llm.models', payload, Promise.resolve(ok({ groups: [], failures: [] }))),

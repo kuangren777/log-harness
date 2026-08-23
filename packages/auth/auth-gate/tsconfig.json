@@ -21,6 +21,15 @@
       "path": "../auth"
     },
     {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../llm/llm"
+    },
+    {
       "path": "../../mail/mail"
     },
     {

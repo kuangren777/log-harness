@@ -8,7 +8,10 @@ import { describe, expect, it } from 'vitest'
 import type { SessionId } from '../src/client/api.ts'
 import { RpcId } from '../src/client/api.ts'
 import type { AuthorizedRequest } from '../src/client/api.ts'
-import { FixtureApiClient, createFixtureApi, createFixtureFaces } from '../src/client/fixture.ts'
+import {
+  FIXTURE_ACCOUNT, FIXTURE_RATE_LIMITED_EMAIL, FIXTURE_RESET_TOKEN, FIXTURE_VERIFY_TOKEN,
+  FixtureApiClient, createFixtureApi, createFixtureFaces,
+} from '../src/client/fixture.ts'
 
 /** Drive one commands Remote endpoint against the fixture state graph. */
 async function callRemote<T>(
@@ -178,5 +181,71 @@ describe('FixtureApiClient command/skill dispatch', () => {
     const skills = await client.skills.list({ sessionId: sid('fx-alpha') })
     if (!skills.result.ok) throw new Error('skill.list failed')
     expect(skills.result.value.skills.length).toBeGreaterThan(0)
+  })
+})
+
+describe('the fixture /auth channel', () => {
+  /** Call one `/auth` endpoint and unwrap the business value. */
+  async function auth<T>(
+    rpc: ReturnType<typeof createFixtureFaces>['rpc'],
+    endpoint: string,
+    payload: Record<string, unknown> = {},
+  ): Promise<T> {
+    const result = await rpc.call('/auth', endpoint, payload)
+    if (!result.ok) throw new Error(`${endpoint} failed: ${result.error.code}`)
+    return result.value as T
+  }
+
+  it('is absent unless the page asked for it', async () => {
+    const { rpc } = createFixtureFaces()
+    await expect(rpc.call('/auth', 'me', {})).rejects.toThrow(/channel.*unavailable/)
+  })
+
+  it('signs in through the two steps and reports the account', async () => {
+    const { rpc } = createFixtureFaces({ auth: true })
+    expect(await auth(rpc, 'me')).toEqual({ authenticated: false })
+    const started = await auth<{ status: string; pendingId: string }>(rpc, 'login.start', {
+      email: FIXTURE_ACCOUNT.email, password: FIXTURE_ACCOUNT.password,
+    })
+    expect(started.status).toBe('2fa-required')
+    expect(await auth(rpc, 'login.verify', { pendingId: started.pendingId, code: '000000' }))
+      .toEqual({ status: 'failed' })
+    expect(await auth(rpc, 'login.verify', { pendingId: started.pendingId, code: FIXTURE_ACCOUNT.code }))
+      .toEqual({ status: 'ok' })
+    expect(await auth(rpc, 'me'))
+      .toEqual({ authenticated: true, email: FIXTURE_ACCOUNT.email, admin: true, groups: ['admin'] })
+    expect(await auth(rpc, 'logout')).toEqual({ status: 'ok' })
+    expect(await auth(rpc, 'me')).toEqual({ authenticated: false })
+  })
+
+  it('answers a wrong password and an unknown address identically, and ends every session', async () => {
+    const { rpc } = createFixtureFaces({ auth: true })
+    const wrongPassword = await auth(rpc, 'login.start', { email: FIXTURE_ACCOUNT.email, password: 'nope' })
+    const unknownAddress = await auth(rpc, 'login.start', { email: 'nobody@example.test', password: 'nope' })
+    expect(wrongPassword).toEqual({ status: 'failed' })
+    expect(unknownAddress).toEqual(wrongPassword)
+    expect(await auth(rpc, 'login.start', { email: FIXTURE_RATE_LIMITED_EMAIL, password: 'nope' }))
+      .toEqual({ status: 'failed', retryAfterMs: 60_000 })
+
+    const started = await auth<{ pendingId: string }>(rpc, 'login.start', {
+      email: FIXTURE_ACCOUNT.email, password: FIXTURE_ACCOUNT.password,
+    })
+    await auth(rpc, 'login.verify', { pendingId: started.pendingId, code: FIXTURE_ACCOUNT.code })
+    expect(await auth(rpc, 'logoutEverywhere')).toEqual({ status: 'ok' })
+    expect(await auth(rpc, 'me')).toEqual({ authenticated: false })
+  })
+
+  it('redeems the mailed reset and confirmation tokens, and refuses every other one', async () => {
+    const { rpc } = createFixtureFaces({ auth: true })
+    expect(await auth(rpc, 'password.forgot', { email: 'nobody@example.test' })).toEqual({ status: 'ok' })
+    expect(await auth(rpc, 'password.reset', {
+      email: FIXTURE_ACCOUNT.email, token: FIXTURE_RESET_TOKEN, password: 'next-password',
+    })).toEqual({ status: 'ok' })
+    expect(await auth(rpc, 'password.reset', {
+      email: FIXTURE_ACCOUNT.email, token: 'forged', password: 'next-password',
+    })).toEqual({ status: 'failed' })
+    expect(await auth(rpc, 'email.verify', { token: FIXTURE_VERIFY_TOKEN })).toEqual({ status: 'ok' })
+    expect(await auth(rpc, 'email.verify', { token: 'forged' })).toEqual({ status: 'failed' })
+    await expect(rpc.call('/auth', 'account.delete', {})).rejects.toThrow(/endpoint.*unavailable/)
   })
 })

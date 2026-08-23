@@ -14,6 +14,8 @@ import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import SkillRegistry, { SKILLS_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-skill'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import * as toolSkill from '@deepseek-ai/dsh-tool-skill'
+import { GroupId, UserId } from '@deepseek-ai/dsh-auth'
+import type { AuthService, PermissionRule, Principal } from '@deepseek-ai/dsh-auth'
 
 const testToolSignal = new AbortController().signal
 
@@ -1183,5 +1185,143 @@ describe('settings policy overrides', () => {
       arguments: { name: 'toggle-demo' },
     })
     expect(loaded.isError).toBe(false)
+  })
+})
+
+describe('owner permission rules', () => {
+  const OWNER = UserId('owner-1')
+
+  /**
+   * An auth double serving only the three reads `checkForSessionOwner` makes.
+   * The rest of the seam is irrelevant here and a full double would hide which
+   * three this Consumer actually depends on.
+   */
+  function authDouble(options: {
+    owner?: UserId
+    principal?: Principal
+    rules?: PermissionRule[]
+  }): AuthService {
+    return {
+      ownerOfSession: () => Promise.resolve(options.owner),
+      principalOf: () => Promise.resolve(options.principal),
+      rulesFor: () => Promise.resolve(options.rules ?? []),
+    } as unknown as AuthService
+  }
+
+  async function governedHarness(auth: AuthService): Promise<{ ctx: Context; agent: Agent }> {
+    const home = await tempDir('tool-governed')
+    await writeSkill(join(home, '.dsh/skills'), 'allowed-skill', 'Allowed skill', 'Allowed instructions.')
+    await writeSkill(join(home, '.dsh/skills'), 'secret-skill', 'Secret skill', 'Secret instructions.')
+    const ctx = await setup(home)
+    await ctx.plugin((inner: Context) => { inner.provide('auth', auth) })
+    return { ctx, agent: agentForCwd(home) }
+  }
+
+  const member: Principal = {
+    kind: 'user', userId: OWNER, email: 'owner@example.test', groups: [GroupId('g-1')], admin: false,
+  }
+  const denySecret: PermissionRule[] = [
+    { domain: 'skill', pattern: 'allowed-*', effect: 'allow' },
+    { domain: 'skill', pattern: 'secret-skill', effect: 'deny' },
+  ]
+
+  it('publishes only the permitted skills into the durable catalog', async () => {
+    const { ctx, agent } = await governedHarness(authDouble({ owner: OWNER, principal: member, rules: denySecret }))
+
+    await composePrefixForAgent(ctx, agent)
+
+    const published = catalogMessages(agent.session)
+    expect(published).toHaveLength(1)
+    // The session LOG is the assertion: model-visible and logged are the same
+    // fact, so a filtered prompt with an unfiltered record would be the bug.
+    expect(published[0]?.data.source).toMatchObject({
+      kind: 'skill-catalog',
+      entries: [{ name: 'allowed-skill', description: 'Allowed skill' }],
+    })
+    const block = published[0]?.data.content[0]
+    if (block?.type !== 'text') throw new Error('expected text catalog message')
+    expect(block.text).toContain('allowed-skill')
+    expect(block.text).not.toContain('secret-skill')
+  })
+
+  it('refuses the denied name at the executor, even called directly', async () => {
+    const { ctx, agent } = await governedHarness(authDouble({ owner: OWNER, principal: member, rules: denySecret }))
+
+    const denied = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: CallId('governed-1'),
+      name: 'skill',
+      arguments: { name: 'secret-skill' },
+      agent,
+    })
+    expect(denied.isError).toBe(true)
+    const deniedBlock = denied.content[0]
+    if (deniedBlock?.type !== 'text') throw new Error('expected text tool result')
+    expect(deniedBlock.text).toContain('skill "secret-skill" is unknown or no longer available')
+
+    const allowed = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: CallId('governed-2'),
+      name: 'skill',
+      arguments: { name: 'allowed-skill' },
+      agent,
+    })
+    expect(allowed.isError).toBe(false)
+  })
+
+  it('leaves a denied /name gesture as plain prose', async () => {
+    const { ctx, agent } = await governedHarness(authDouble({ owner: OWNER, principal: member, rules: denySecret }))
+
+    const decision = await proposeStep(ctx, agent, [createUserMessage({
+      content: [{ type: 'text', text: '/secret-skill and /allowed-skill please' }],
+      source: { kind: 'user' },
+    })])
+
+    if (decision.kind !== 'enter') throw new Error('expected enter')
+    const invoked = decision.messages
+      .filter(message => (message.source as { kind?: string }).kind === 'skill-invocation')
+      .map(message => (message.source as { name?: string }).name)
+    expect(invoked).toEqual(['allowed-skill'])
+  })
+
+  it('keeps the unfiltered catalog for a session with no recorded owner', async () => {
+    const { ctx, agent } = await governedHarness(authDouble({ rules: denySecret }))
+
+    await composePrefixForAgent(ctx, agent)
+
+    expect(catalogMessages(agent.session)[0]?.data.source).toMatchObject({
+      entries: [{ name: 'allowed-skill' }, { name: 'secret-skill' }],
+    })
+  })
+
+  it('publishes nothing for an owner the provider can no longer resolve', async () => {
+    const { ctx, agent } = await governedHarness(authDouble({ owner: OWNER, rules: denySecret }))
+
+    await composePrefixForAgent(ctx, agent)
+
+    expect(catalogMessages(agent.session)).toHaveLength(0)
+    const denied = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: CallId('governed-3'),
+      name: 'skill',
+      arguments: { name: 'allowed-skill' },
+      agent,
+    })
+    expect(denied.isError).toBe(true)
+  })
+
+  it('grants an administrator every skill, and a rule-less owner too', async () => {
+    const administrator: Principal = { ...member, admin: true }
+    const asAdmin = await governedHarness(authDouble({ owner: OWNER, principal: administrator, rules: denySecret }))
+    await composePrefixForAgent(asAdmin.ctx, asAdmin.agent)
+    expect(catalogMessages(asAdmin.agent.session)[0]?.data.source).toMatchObject({
+      entries: [{ name: 'allowed-skill' }, { name: 'secret-skill' }],
+    })
+
+    const ungoverned = await governedHarness(authDouble({ owner: OWNER, principal: member, rules: [] }))
+    await composePrefixForAgent(ungoverned.ctx, ungoverned.agent)
+    expect(catalogMessages(ungoverned.agent.session)[0]?.data.source).toMatchObject({
+      entries: [{ name: 'allowed-skill' }, { name: 'secret-skill' }],
+    })
   })
 })

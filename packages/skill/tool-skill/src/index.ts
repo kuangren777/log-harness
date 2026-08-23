@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
+import { checkForSessionOwner, PERMITS_EVERYTHING, type PermissionCheck } from '@deepseek-ai/dsh-auth'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
@@ -78,6 +79,22 @@ export function apply(ctx: Context, config: Config = {}): void {
   const catalogDescriptionMaxLength = config.catalogDescriptionMaxLength ?? DEFAULT_CATALOG_DESCRIPTION_MAX_LENGTH
   assertPositiveInteger('catalogDescriptionMaxLength', catalogDescriptionMaxLength, 3)
 
+  /**
+   * The skill decision for one agent, taken from whoever owns its session.
+   *
+   * `ctx.get` rather than an injection: a single-tenant composition mounts no
+   * auth provider, and this plugin must stay usable there. Absent provider and
+   * unowned session both grant everything, which is what keeps a deployment
+   * that never adopted accounts behaving as it always did.
+   * @param agent - the agent whose session owner decides.
+   * @returns the check to apply to skill names.
+   */
+  async function permissionsFor(agent: Agent): Promise<PermissionCheck> {
+    const auth = ctx.get('auth')
+    if (auth === undefined) return PERMITS_EVERYTHING
+    return checkForSessionOwner(auth, agent.session.id)
+  }
+
   const skillTool = defineTool({
     name: 'skill',
     description: 'Load the full instructions for an available skill. Call this with the exact skill name from the session skill catalog before acting on a task that names or clearly matches that skill.',
@@ -127,6 +144,16 @@ export function apply(ctx: Context, config: Config = {}): void {
     async execute(args, exec) {
       if (!isSkillName(args.name)) {
         throw new Error(`invalid skill name "${args.name}"`)
+      }
+      // Re-decided here rather than trusted from the catalog: the catalog is
+      // prompt content, and a model that names a skill it was never offered —
+      // from an earlier turn, a forked session, or a guess — reaches this
+      // executor directly.
+      const owner = exec.agent === undefined
+        ? PERMITS_EVERYTHING
+        : await permissionsFor(exec.agent)
+      if (!owner('skill', args.name)) {
+        throw new Error(`skill "${args.name}" is unknown or no longer available`)
       }
       // The agent is its own scope key, so the lookup resolves the layered
       // registry exactly as this agent's composition sees it.
@@ -184,15 +211,18 @@ export function apply(ctx: Context, config: Config = {}): void {
     if (names.length === 0) return decision
     signal.throwIfAborted()
     const lookup = { cwd: agent.session.header.cwd, signal, scope: agent }
+    const permitted = await permissionsFor(agent)
+    signal.throwIfAborted()
     const injections: UserMessage[] = []
     for (const name of names) {
       const skill = await ctx.skills.get(name, lookup)
       signal.throwIfAborted()
-      // Unknown names and user-disabled skills stay plain prose: the
-      // gesture was never a claim this boundary recognizes. The check sits
-      // on the loaded definition — the single lookup that produces what is
-      // actually injected.
-      if (skill === undefined || !isUserInvocable(skill)) continue
+      // Unknown names, user-disabled skills, and skills this session's owner
+      // may not load stay plain prose: the gesture was never a claim this
+      // boundary recognizes. The check sits on the loaded definition — the
+      // single lookup that produces what is actually injected — so a typed
+      // `/name` cannot reach content the composer's own catalog withheld.
+      if (skill === undefined || !isUserInvocable(skill) || !permitted('skill', name)) continue
       const source: SkillInvocationSource = { kind: 'skill-invocation', name, form: 'instructions' }
       injections.push(createUserMessage({
         content: [{ type: 'text', text: renderSkillContent(skill) }],
@@ -223,7 +253,15 @@ export function apply(ctx: Context, config: Config = {}): void {
       : { skills: [], complete: true }
     signal.throwIfAborted()
     if (!snapshot.complete) return decision
-    const skills = snapshot.skills.filter(isModelInvocable)
+    // The filter runs BEFORE the entries are built, so the durable
+    // `skill-catalog` message and the prose rendered from it publish exactly
+    // what this session's owner may load. Filtering the rendered text instead
+    // would leave the log claiming a catalog the model never saw.
+    const permitted = await permissionsFor(agent)
+    signal.throwIfAborted()
+    const skills = snapshot.skills
+      .filter(isModelInvocable)
+      .filter(skill => permitted('skill', skill.name))
     const entries = catalogSourceEntries(skills, catalogDescriptionMaxLength)
     const digest = digestCatalogEntries(entries)
     const history = catalogHistory(agent)

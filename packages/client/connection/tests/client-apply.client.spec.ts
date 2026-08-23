@@ -398,3 +398,54 @@ describe('connection client apply', () => {
       .rejects.toThrow(/endpoint.*unavailable/)
   })
 })
+
+describe('the authRequired signal', () => {
+  it('stays false while the Host serves, and latches on the first 401', async () => {
+    ;(globalThis as Win).location = { hostname: 'localhost', search: '', origin: 'http://localhost' }
+    const handle = await mount()
+    const seen: boolean[] = []
+    const unsubscribe = handle.authRequired.subscribe(() => { seen.push(handle.authRequired.getSnapshot()) })
+    const original = globalThis.fetch
+    try {
+      globalThis.fetch = vi.fn().mockResolvedValue(Response.json({
+        type: 'server-response', rpcId: 'x', result: { ok: true, value: {} },
+      }))
+      await (handle.api as WebApiClient).host.describe({}).catch(() => undefined)
+      expect(handle.authRequired.getSnapshot()).toBe(false)
+      expect(seen).toEqual([])
+
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response('unauthorized', { status: 401 }))
+      // The refusal still reaches the caller as the transport failure it is.
+      await expect((handle.api as WebApiClient).host.describe({})).rejects.toThrow('HTTP 401')
+      expect(handle.authRequired.getSnapshot()).toBe(true)
+      expect(seen).toEqual([true])
+
+      // The flag latches: a second refusal notifies nobody a second time.
+      await (handle.api as WebApiClient).host.describe({}).catch(() => undefined)
+      expect(seen).toEqual([true])
+    } finally {
+      globalThis.fetch = original
+      unsubscribe()
+    }
+  })
+
+  it('contains a throwing subscriber and releases the unsubscribed one', async () => {
+    ;(globalThis as Win).location = { hostname: 'localhost', search: '', origin: 'http://localhost' }
+    const handle = await mount()
+    const gone = vi.fn()
+    handle.authRequired.subscribe(gone)()
+    handle.authRequired.subscribe(() => { throw new Error('subscriber exploded') })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const original = globalThis.fetch
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response('unauthorized', { status: 401 }))
+    try {
+      await (handle.api as WebApiClient).host.describe({}).catch(() => undefined)
+      expect(handle.authRequired.getSnapshot()).toBe(true)
+      expect(gone).not.toHaveBeenCalled()
+      expect(errors).toHaveBeenCalledWith('[web-runtime] auth-required listener threw:', expect.any(Error))
+    } finally {
+      globalThis.fetch = original
+      errors.mockRestore()
+    }
+  })
+})

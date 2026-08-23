@@ -26,6 +26,8 @@
 
 **不可删除的 admin 组。** 内置组拒绝删除，因此部署不可能把所有管理员挡在自己的权限界面之外。
 
+**可撤销的封禁。** `setUserDisabled` 写入并清除 `users.disabled_at`，重复停用保留首次时间戳，因此该列读作封禁开始的时刻。账号拥有的每一行都在封禁后留存，活跃的登录会话也不受影响 —— 结束它们是 `revokeAllSessions`，一个独立的决定。`principalOf` 无需凭据即可把账号解析为 `Principal`（agent 平面为会话 owner 做的那次读取），对未知**或**已停用的账号一律返回 `undefined`，因此封禁抵达运行中部署的方式与删除完全相同。
+
 ## 归属
 
 `session_owners` 与 `workspace_owners` 把 agent 会话或工作区映射到创建它的用户。归属信息放在这里而不是会话日志中，因此为部署加上认证不会改变 `SESSION_FORMAT_VERSION` 或持久会话记录。

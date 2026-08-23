@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 Consumer of the [authentication and authorization](../README.md) seam: the plugin that turns [`AuthService`](../auth/README.md) into something a browser can use. It serves the `/auth` sign-in channel and provides `ctx.authGate`, which the HTTP transport asks before it admits any request.
 
-It decides who a request is, never what that request may do. The permitted operations are the gateway's [policy table](../../host/apiproxy/README.md); this package answers only the first question, and how a browser comes to have an answer to present.
+It decides who a request is, and — on the agent plane, where there is no request to carry a principal — what that agent's owner may reach. Which RPC methods a caller may reach at all stays the gateway's [policy table](../../host/apiproxy/README.md).
 
 The plugin injects `auth`, `connection`, and `mail`, all three without a fallback. A composition that mounts the gate without a mail provider could deliver no second factor, so the plugin stays inactive rather than signing anyone in through a weakened flow.
 
@@ -23,6 +23,16 @@ The plugin injects `auth`, `connection`, and `mail`, all three without a fallbac
 **Method policy**, in the gateway's `METHOD_POLICY`. Each RPC method is `user`, `admin`, or `owner`.
 
 **Frame visibility**, in the gateway's stream filter. Both server-to-browser streams subscribe every session on the host, so they cannot be secured by refusing the connection; each frame is dropped or narrowed on its way out instead.
+
+## Agent-plane enforcement
+
+A running agent presents no credential: it acts for whichever account owns its session, resolved once per agent through [`checkForSessionOwner`](../auth/README.md#permission-rules). Two domains are enforced here because nothing else stands between the agent and them.
+
+**Tools.** The owner's `tool` rules become one scoped `tools.restrict({ allow })` on the agent's own context, which removes a refused tool from the prompt AND refuses its execution. An allowlist that admits every inherited name is not registered at all. The restriction is resolved from `agent/session-start`, and awaited again at a prepended `agent/pre-step` listener — the emit is not awaited by the loop, so the step barrier is what guarantees the mask is in force before anything reads the registry. A failed resolution surfaces at that barrier, to the turn that is blocked on it.
+
+**Model routes.** A prepended `agent/request` listener reads the config AFTER `next()`, which is where the session's selection has already been applied, and throws `ModelRouteForbidden` when the owner's `model` rules refuse `provider/model`. `session.selectModel` refuses the same route earlier with a better message; this is the operation that makes the routing decision, so it is where the decision is enforced.
+
+A session with no recorded owner, and an owner whose groups carry no rule in the domain, both keep the unrestricted behavior.
 
 ## Why the policy table is compiler-locked
 
@@ -46,14 +56,15 @@ A bearer token is minted in exactly one place, `login.verify`, so a cookie a cal
 
 ## Model Experience
 
-None, as the gate authenticates Host requests and mails sign-in messages; no principal, cookie, or mailed text enters a model request, and the package registers no tool, prompt section, or session event.
+Indirectly, through what it takes away: the gate writes no principal, cookie, mailed message, or rule into any prompt, tool schema, or tool result, and registers no tool, prompt section, or session event, but a tool the session owner's `tool` rules refuse is absent from that agent's tool schemas exactly as any other scoped restriction makes it absent, a refused `provider/model` route ends the turn with an error instead of reaching an adapter, and the model is told nothing about either — a refused capability reads as one this deployment does not have.
 
 #### KV Cache effect
 
-None; the package contributes no request content, so no prefix can be invalidated.
+Per agent, and once. The tool restriction is installed before the first step, so an agent's tool schemas are stable for its whole life and no prefix is invalidated mid-conversation. Two agents whose owners hold different `tool` rules do not share a prefix, because their tool schemas differ.
 
 ## Known Limitations and Deferred Work
 
 - **No self-service registration** — accounts are created by `dsh auth bootstrap` or by an administration surface; the channel serves sign-in, sign-out, reset, and confirmation only.
-- **Group-change notices need a caller** — `notifyAddedToGroup` owns the template but not the trigger, because the seam publishes no membership event; whichever surface changes membership has to call it.
+- **Group-change notices are delivered best-effort** — `auth.admin.members.set` calls `notifyAddedToGroup` for the accounts a save newly added, after the membership is durable. A delivery failure is logged and the save stands; there is no retry queue.
+- **Enforcement is per agent, resolved once** — a rule change reaches a live agent only when its next agent is created. Nothing re-resolves an agent already running under the previous answer.
 - **Opt-in composition only** — no shipped profile mounts this plugin. Layering it is documented in [`examples/web-auth/`](../../../examples/web-auth/README.md).

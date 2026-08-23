@@ -4,7 +4,17 @@ English | [中文](README.zh.md)
 
 The model-facing skill catalog and `skill` tool.
 
-Requires `ctx.agents`, `ctx.tools`, and `ctx.skills` (`inject: ['agents', 'tools', 'skills']`).
+Requires `ctx.agents`, `ctx.tools`, and `ctx.skills` (`inject: ['agents', 'tools', 'skills']`). `ctx.auth` is read optionally, so a single-tenant composition mounts nothing extra.
+
+## The catalog depends on who is watching
+
+Every model-facing skill read here is narrowed by the account that owns the session, resolved once per call through [`checkForSessionOwner`](../../auth/auth/README.md#permission-rules): the durable catalog, the `skill` tool's executor, and the user-explicit `/name` gesture. A skill the owner's `skill` rules refuse simply does not exist for that session — it is absent from the catalog, the tool answers "unknown or no longer available", and `/name` stays ordinary prose.
+
+The filter runs on the snapshot BEFORE catalog entries are built, so the durable `skill-catalog` message records exactly what the model was shown. Filtering the rendered prose instead would leave the session log claiming a catalog that was never sent, and "model-visible ⟺ logged" is what makes that log a faithful transcript. No session event and no `SESSION_FORMAT_VERSION` change is needed: the catalog message was always a projection of a per-session view, and this narrows the view.
+
+Two cases keep the unfiltered behavior, both deliberate: a composition that mounts no auth provider, and a session with no recorded owner (created before authentication was mounted). An owner the provider can no longer resolve — deleted or disabled — gets an empty catalog and a refusing tool.
+
+The executor re-decides the name rather than trusting the catalog, because the catalog is prompt content: a model that names a skill from an earlier turn, a forked session, or a guess reaches the executor directly.
 
 ## Catalog lifecycle
 
@@ -28,7 +38,7 @@ Execution uses the calling agent's `session.header.cwd` so workspace-sensitive p
 
 Resource guidance resolves only paths or URLs explicitly referenced by the instructions against `resourceBase`; scripts, references, and assets load on demand, and the result does not enumerate a skill directory. Local providers may supply a directory, while remote or embedded providers may supply a URL or opaque loading guidance.
 
-An unresolved name reports that the skill is unknown or no longer available. Invalid names and skills whose `invocation.modelInvocable` is `false` produce distinct error results. `invocation.userInvocable` does not restrict this model-facing tool. The policy read here is the effective one, so a user's stored `skills` override in the settings document ([precedence](../skill/README.md#user-settings-overrides)) refuses the name exactly as `disable-model-invocation` frontmatter does.
+An unresolved name reports that the skill is unknown or no longer available, and a name the session owner's `skill` rules refuse reports the same thing, before any provider is asked — a refusal must not be distinguishable from absence. Invalid names and skills whose `invocation.modelInvocable` is `false` produce distinct error results. `invocation.userInvocable` does not restrict this model-facing tool. The policy read here is the effective one, so a user's stored `skills` override in the settings document ([precedence](../skill/README.md#user-settings-overrides)) refuses the name exactly as `disable-model-invocation` frontmatter does.
 
 Tool execution does not add a synthetic context message. Its freshly loaded result is already recorded as the tool result and becomes available to the next model step without duplicating the body. Only the catalog projection adds replacement summaries.
 
@@ -57,11 +67,11 @@ A user may also invoke a skill directly; its <skill_content> block then appears 
 
 #### Token effect
 
-Repeated input cost scales with skill count and `catalogDescriptionMaxLength`; no initial catalog tokens are sent when the list is empty or the tool is hidden or shadowed. Each actual catalog change adds one retained complete replacement message.
+Repeated input cost scales with the skill count THIS SESSION'S OWNER may see and `catalogDescriptionMaxLength`; no initial catalog tokens are sent when that view is empty or the tool is hidden or shadowed. Each actual catalog change adds one retained complete replacement message.
 
 #### KV Cache effect
 
-The initial durable catalog is appended after the existing reusable prefix. Dynamic changes are append-only history after that catalog, so earlier reusable tokens stay intact while each newly appended catalog and later turns form a new suffix. A new or resumed instance with a changed digest may affect cache reuse from the newly appended catalog position. Flipping a stored invocation override costs one appended replacement catalog on the next pre-step, never a rewrite of the earlier one.
+Two sessions whose owners hold different `skill` rules publish different catalogs and therefore share no prefix past that point. Within one session the answer is stable, so the owner check costs no additional invalidation. The initial durable catalog is appended after the existing reusable prefix. Dynamic changes are append-only history after that catalog, so earlier reusable tokens stay intact while each newly appended catalog and later turns form a new suffix. A new or resumed instance with a changed digest may affect cache reuse from the newly appended catalog position. Flipping a stored invocation override costs one appended replacement catalog on the next pre-step, never a rewrite of the earlier one.
 
 ### Tool schema
 
@@ -168,4 +178,5 @@ Append-only; the injection lands after the reusable request prefix inside the st
 - **Resources are guidance, not attachments** — the tool reports a base directory/URL/opaque hint but neither enumerates nor fetches referenced files for the model.
 - **Loading is one-shot text** — there is no partial, streaming, or cached-content handle when a remote provider is slow or a skill body is large.
 - **Catalog replacement is whole-list** — one changed name or description appends every currently visible summary; this keeps stale-name retirement explicit but costs tokens proportional to the catalog.
+- **The owner's rules are read per call** — the catalog, the tool, and the gesture each resolve the session owner's decision when they run, so a rule change lands at the next pre-step or the next tool call rather than being cached for the agent's life. The reads are the provider's, and a provider that makes them expensive pays on every step.
 - **Bodies are not versioned** — body-only edits do not change the catalog digest or notify the model; a later tool call reads the current provider content while earlier tool results remain historical facts.

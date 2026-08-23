@@ -308,6 +308,35 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
         return { rpcId: request.rpcId, result: { ok: true, value: { models: [] } } }
       },
     },
+    authAdmin: {
+      async listUsers(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { users: [] } } }
+      },
+      async createUser(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { userId: 'u-1' as never } } }
+      },
+      async disableUser(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: {} } }
+      },
+      async listGroups(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { groups: [] } } }
+      },
+      async createGroup(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { groupId: 'g-1' as never } } }
+      },
+      async deleteGroup(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: {} } }
+      },
+      async renameGroup(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: {} } }
+      },
+      async setMembers(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { added: [] } } }
+      },
+      async setRules(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: {} } }
+      },
+    },
     events: {
       mux: (_request, signal) => stream(muxFrames, signal),
       host: (_request, signal) => stream(hostFrames, signal),

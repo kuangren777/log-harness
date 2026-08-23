@@ -167,6 +167,52 @@ describe('accounts', () => {
     await expect(store.verifyLogin('ada@example.test', 'new')).resolves.toMatchObject({ ok: true, userId })
     await expect(store.setPassword(UserId('missing'), 'x')).rejects.toMatchObject({ code: 'unknown-subject' })
   })
+
+  it('rosters every account oldest first', async () => {
+    const { store, advance } = harness()
+    const first = await store.createUser('first@example.test', 'pw')
+    advance(1000)
+    const second = await store.createUser('second@example.test', 'pw')
+    expect((await store.listUsers()).map(user => user.userId)).toEqual([first, second])
+    expect(await store.listUsers()).toMatchObject([
+      { email: 'first@example.test', createdAt: EPOCH },
+      { email: 'second@example.test', createdAt: EPOCH + 1000 },
+    ])
+  })
+
+  it('disables an account, restores it, and audits only a real change', async () => {
+    const { store, advance } = harness()
+    const userId = await store.createUser('ada@example.test', 'pw')
+    advance(5)
+    await store.setUserDisabled(userId, true)
+    expect(await store.getUserByEmail('ada@example.test')).toMatchObject({ disabledAt: EPOCH + 5 })
+    await expect(store.verifyLogin('ada@example.test', 'pw')).resolves.toMatchObject({ ok: false })
+    advance(5)
+    // Idempotent: a repeat disable keeps the timestamp the block started at.
+    await store.setUserDisabled(userId, true)
+    expect(await store.getUserByEmail('ada@example.test')).toMatchObject({ disabledAt: EPOCH + 5 })
+    await store.setUserDisabled(userId, false)
+    expect(await store.getUserByEmail('ada@example.test')).toMatchObject({ disabledAt: undefined })
+    await store.setUserDisabled(userId, false)
+    await expect(store.verifyLogin('ada@example.test', 'pw')).resolves.toMatchObject({ ok: true, userId })
+    const events = (await store.readAudit(50)).map(record => record.event)
+    expect(events.filter(event => event === 'auth.user-disabled')).toHaveLength(1)
+    expect(events.filter(event => event === 'auth.user-restored')).toHaveLength(1)
+    await expect(store.setUserDisabled(UserId('missing'), true)).rejects.toMatchObject({ code: 'unknown-subject' })
+  })
+
+  it('resolves an account to its principal without a credential', async () => {
+    const { store } = harness()
+    const userId = await store.createUser('ada@example.test', 'pw')
+    expect(await store.principalOf(userId)).toEqual({
+      kind: 'user', userId, email: 'ada@example.test', groups: [], admin: false,
+    })
+    await store.setMembers(ADMIN_GROUP_ID, [userId])
+    expect(await store.principalOf(userId)).toMatchObject({ groups: [ADMIN_GROUP_ID], admin: true })
+    await store.setUserDisabled(userId, true)
+    expect(await store.principalOf(userId)).toBeUndefined()
+    expect(await store.principalOf(UserId('missing'))).toBeUndefined()
+  })
 })
 
 describe('password checks', () => {

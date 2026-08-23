@@ -11,8 +11,21 @@ type Parser<F> = { parse(value: unknown): F }
 
 /** Browser platform subclass: unary/respond use fetch; mux/host use downlink-only WebSockets. */
 export class WebApiClient extends AbstractApiClient {
-  protected doFetch(input: URL, init?: RequestInit): Promise<Response> {
-    return globalThis.fetch(input, init)
+  /**
+   * @param onUnauthorized - notified for every `/api` answer a mounted request gate refused as
+   * unauthenticated. A deployment with no gate never answers 401, so it is never called there.
+   */
+  constructor(private readonly onUnauthorized?: () => void) {
+    super()
+  }
+
+  protected async doFetch(input: URL, init?: RequestInit): Promise<Response> {
+    const response = await globalThis.fetch(input, init)
+    // The refusal is reported, not translated: the caller still sees the same
+    // transport failure it always did, and whoever presents a sign-in reads
+    // this signal instead of parsing an error message.
+    if (response.status === 401) this.onUnauthorized?.()
+    return response
   }
 
   protected override openMux(
