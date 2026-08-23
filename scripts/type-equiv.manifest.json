@@ -1974,6 +1974,96 @@
       "doc": "docs/subsystems/feedback.md",
       "symbol": "MessageFeedbackDeleteResult",
       "source": "packages/feedback/message-feedback/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "Principal",
+      "source": "packages/auth/auth/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "UserId",
+      "source": "packages/auth/auth/src/brand.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "GroupId",
+      "source": "packages/auth/auth/src/brand.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "AuthSessionId",
+      "source": "packages/auth/auth/src/brand.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "OneTimeTokenId",
+      "source": "packages/auth/auth/src/brand.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "PermissionDomain",
+      "source": "packages/auth/auth/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "PermissionRule",
+      "source": "packages/auth/auth/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "UserRecord",
+      "source": "packages/auth/auth/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "LoginOutcome",
+      "source": "packages/auth/auth/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "AuthSessionMeta",
+      "source": "packages/auth/auth/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "IssuedAuthSession",
+      "source": "packages/auth/auth/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "OneTimeTokenKind",
+      "source": "packages/auth/auth/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "IssuedOneTimeToken",
+      "source": "packages/auth/auth/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "GroupRecord",
+      "source": "packages/auth/auth/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "AuditEntry",
+      "source": "packages/auth/auth/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "AuditRecord",
+      "source": "packages/auth/auth/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/auth.md",
+      "symbol": "RequestHeaders",
+      "source": "packages/host/apiproxy/src/authorization.ts"
+    },
+    {
+      "doc": "docs/subsystems/mail.md",
+      "symbol": "MailMessage",
+      "source": "packages/mail/mail/src/types.ts"
     }
   ]
 }

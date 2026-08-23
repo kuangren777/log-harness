@@ -310,6 +310,8 @@ const subsystemGroups = [
     ['workspace.md', '工作区', 'Workspaces'],
     ['settings.md', '用户设置', 'User settings'],
     ['credentials.md', '用户凭据', 'User credentials'],
+    ['auth.md', '身份认证与授权', 'Authentication and authorization'],
+    ['mail.md', '邮件发送', 'Outbound mail'],
   ]],
 ] as const
 
