@@ -59,6 +59,10 @@ it('ships an app-shell worker that never answers for Host state', async () => {
   // answer would report a session state this Host no longer holds.
   expect(worker).toContain("const API_PATH = '/api'")
   expect(worker).toContain('if (url.pathname === API_PATH || url.pathname.startsWith(`${API_PATH}/`)) return false')
+  // Only content-hashed names may be answered from the cache first; a stable
+  // URL served that way outlives the deployment that produced it.
+  expect(worker).toContain("const HASHED_ASSET_PATH = '/assets/'")
+  expect(worker).toContain('if (url.pathname.startsWith(HASHED_ASSET_PATH)) {')
   // Update strategy: immediate takeover, no waiting worker left serving the
   // previous shell after a redeploy.
   expect(worker).toContain('self.skipWaiting()')

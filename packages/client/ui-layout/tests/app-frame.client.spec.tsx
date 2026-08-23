@@ -446,14 +446,18 @@ describe('AppFrame — phone form', () => {
       .toEqual({ collapsed: false, width: SIDEBAR_DEFAULT })
   })
 
-  it('names the drawer as a modal dialog and the toggle by its next action', () => {
+  it('is a named modal dialog only while it is open', () => {
     const { frame, toggle } = mountPhone()
     const drawer = frame.querySelector('[class*="sidebarCol"]')!
+    // Parked, it is a column nobody can reach — not a second dialog on the page.
+    expect(drawer.hasAttribute('role')).toBe(false)
+    expect(toggle.getAttribute('aria-label')).toBe('drawer.open')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+
+    act(() => { toggle.click() })
     expect(drawer.getAttribute('role')).toBe('dialog')
     expect(drawer.getAttribute('aria-modal')).toBe('true')
     expect(drawer.getAttribute('aria-label')).toBe('drawer.label')
-    expect(toggle.getAttribute('aria-label')).toBe('drawer.open')
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
   })
 
   it('the toggle opens the drawer, moves focus into it, and renders the backdrop', () => {

@@ -8,7 +8,7 @@ Mounting the row is harmless in a deployment that does not authenticate. The fir
 
 ## Signing in
 
-The card fills the shell's overlay layer and takes pointer events, because the app behind it cannot be used until the Host knows who is asking. It appears in two situations: the boot read said the cookie authenticates nobody, and the transport reported that an `/api` call was refused as unauthenticated.
+The card fills the shell's overlay layer and takes pointer events, because the app behind it cannot be used until the Host knows who is asking. At 640px and below it keeps the same width rule but drops its surround to what a 360px screen can spare, honours the display's safe areas, and pins itself to the top of the scrolling backdrop — a centered flex item overflows its scroll container's start edge, so a step taller than the screen would otherwise be unreachable at both ends. It appears in two situations: the boot read said the cookie authenticates nobody, and the transport reported that an `/api` call was refused as unauthenticated.
 
 Signing in takes two steps. The address and password go to `login.start`; on `2fa-required` the card asks for the six-digit code the Host mailed and sends it to `login.verify`. Success installs the session cookie server-side, and the page re-boots under it — every surface and both event streams were opened as nobody, so continuing without a reload would leave half the app talking with a credential it does not have.
 

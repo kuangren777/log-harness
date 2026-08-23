@@ -926,6 +926,37 @@ function normalizeAria(snapshot: string, workspaceCwd: string): string {
 }
 
 /**
+ * Resize the page and wait for the shell to finish re-solving its columns.
+ *
+ * AppFrame reads its own width from a rAF-throttled ResizeObserver, so its
+ * tracks land at least one frame after the viewport does, and crossing the
+ * phone breakpoint moves whole columns. A scenario that measures several boxes
+ * in sequence straddles the two layouts and compares one against the other.
+ * Two consecutive equal readings of the frame's rendered geometry mean it
+ * settled.
+ * @param page - the page under test.
+ * @param size - the viewport to move to.
+ */
+export async function setViewportSettled(page: Page, size: { width: number; height: number }): Promise<void> {
+  await page.setViewportSize(size)
+  const frame = page.locator('[class*="frame"]').first()
+  let previous = ''
+  await expect.poll(async () => {
+    const current = await frame.evaluate((element) => {
+      const centre = element.querySelector('[class*="centerCol"]')
+      return [
+        (element as HTMLElement).style.gridTemplateColumns,
+        element.getBoundingClientRect().width,
+        centre === null ? '' : `${centre.getBoundingClientRect().x}:${centre.getBoundingClientRect().width}`,
+      ].join('|')
+    })
+    const stable = current === previous
+    previous = current
+    return stable
+  }, { timeout: 5_000, message: 'the shell did not settle after the viewport change' }).toBe(true)
+}
+
+/**
  * Capture the region's aria snapshot at a settled milestone: poll until two
  * consecutive normalized captures are equal — a single-shot capture races the
  * last React commits.

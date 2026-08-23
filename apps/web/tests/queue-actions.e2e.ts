@@ -14,7 +14,7 @@ import { deriveReplayScript, parseSessionLog, type ReplayEntry } from '@deepseek
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
-  launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
+  launchWebScaffold, setViewportSettled, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
@@ -111,7 +111,7 @@ describe('web e2e: queue row actions', () => {
       { timeout: 10_000 },
     ).toBe(2)
 
-    await page.setViewportSize({ width: 640, height: 1000 })
+    await setViewportSettled(page, { width: 640, height: 1000 })
     const queueBox = await page.locator('[data-queue-dock]').boundingBox()
     const composerBox = await page.locator('[data-composer-card]').boundingBox()
     expect(queueBox).not.toBeNull()
@@ -129,7 +129,7 @@ describe('web e2e: queue row actions', () => {
     })
     expect(queueLeftInset).toBeCloseTo(composerMetrics.dockInset, 1)
     expect(queueRightInset).toBeCloseTo(composerMetrics.dockInset, 1)
-    await page.setViewportSize({ width: 1680, height: 1000 })
+    await setViewportSettled(page, { width: 1680, height: 1000 })
 
     const editRow = page.getByText(EDIT, { exact: true }).locator('..')
     await editRow.getByRole('button', { name: 'Edit queued message' }).click()
@@ -243,9 +243,9 @@ describe('web e2e: queue row actions', () => {
       expect(todoBox!.width).toBeCloseTo(queuePanelBox!.width, 1)
     }
     await expectAlignedContextPanels()
-    await page.setViewportSize({ width: 640, height: 1000 })
+    await setViewportSettled(page, { width: 640, height: 1000 })
     await expectAlignedContextPanels()
-    await page.setViewportSize({ width: 1680, height: 1000 })
+    await setViewportSettled(page, { width: 1680, height: 1000 })
 
     await queueHeader.click()
     const removeButtons = page.getByRole('button', { name: 'Remove queued message' })

@@ -217,6 +217,33 @@ describe('web e2e: the client at a phone viewport', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
 
+  it('installs the app-shell worker, with the Host\'s own state kept out of it', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-mobile-service-worker'))
+    // The scaffold serves plain http on loopback, which the browser treats as
+    // a secure context — the same eligibility the tailnet's https origin has.
+    await expect.poll(
+      async () => page.evaluate(async () => (await navigator.serviceWorker.getRegistration('/'))?.active?.scriptURL ?? null),
+      { timeout: 20_000 },
+    ).toContain('/sw.js')
+
+    const cached = await page.evaluate(async () => {
+      const names = await caches.keys()
+      const entries: string[] = []
+      for (const name of names) {
+        const keys = await (await caches.open(name)).keys()
+        entries.push(...keys.map(request => new URL(request.url).pathname))
+      }
+      return { names, entries }
+    })
+    // The shell is there for an offline launch…
+    expect(cached.names).toContain('dsh-shell-v1')
+    expect(cached.entries).toContain('/')
+    expect(cached.entries).toContain('/manifest.webmanifest')
+    // …and no answer the Host owns ever is. This page has already driven a
+    // sign-in and a settings dialog, so /api has been busy throughout.
+    expect(cached.entries.filter(path => path.startsWith('/api'))).toEqual([])
+  }, 60_000)
+
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, ['settings-dialog.expected.md', 'sign-in-card.expected.md'])
   })

@@ -9,8 +9,15 @@
  *
  * WHAT IT CACHES: the application shell only — the document, the manifest and
  * the icon set at install, plus the hashed build assets as they are first
- * requested. Hashed names make a stale asset impossible: a new build asks for
- * a new URL.
+ * requested.
+ *
+ * Only `/assets/` is answered from the cache first, because only those names
+ * carry a content hash: a new build asks for a new URL, so a hit is never
+ * stale. Everything else it keeps — the document, the icons, and the
+ * `/plugins/<package>/client.js` bundles, whose URLs are stable across
+ * deployments — is fetched network-first and cached as the offline fallback.
+ * Serving a stable URL from the cache first is exactly how a redeployed
+ * plugin gets replaced by the previous build for as long as the cache lives.
  *
  * WHAT IT NEVER TOUCHES: anything under `/api`. That prefix carries every RPC
  * call and both event WebSocket downlinks (dsh-client-connection's
@@ -20,10 +27,11 @@
  *
  * UPDATE STRATEGY: skipWaiting plus clients.claim, with NO forced reload. A
  * redeployed worker therefore takes over immediately rather than waiting for
- * every tab to close, and because navigations are network-first, an online
- * page always receives the freshly deployed document — the cache is the
- * offline fallback, never the online answer. The page is not reloaded out
- * from under a running turn; the next navigation picks the new shell up.
+ * every tab to close, and because everything but the hashed assets is
+ * network-first, an online page always receives the freshly deployed document
+ * and bundles — the cache is the offline fallback, never the online answer.
+ * The page is not reloaded out from under a running turn; the next navigation
+ * picks the new shell up.
  */
 
 /** Cache name; bump to invalidate every shell entry at once. */
@@ -31,6 +39,9 @@ const CACHE = 'dsh-shell-v1'
 
 /** Path prefix owning every RPC call and event downlink — never cached, never intercepted. */
 const API_PATH = '/api'
+
+/** Build-output prefix; the only URLs whose names carry a content hash. */
+const HASHED_ASSET_PATH = '/assets/'
 
 /** Fetched and cached at install so a cold offline launch has a document to open. */
 const SHELL = [
@@ -68,35 +79,46 @@ function isShellRequest(request, url) {
   return true
 }
 
-/** Network-first, so an online page never opens a stale shell; cache is the offline fallback. */
-async function navigationResponse(request) {
+/**
+ * Keep a same-origin success as the offline copy of this URL. An opaque or
+ * error response is not kept: replaying it would make it the app's own answer.
+ */
+async function remember(request, response) {
+  if (!response.ok || response.type !== 'basic') return
+  const cache = await caches.open(CACHE)
+  await cache.put(request, response.clone())
+}
+
+/** Network-first: the live answer when there is one, the last-seen copy when there is not. */
+async function networkFirst(request, offlineFallback) {
   try {
-    return await fetch(request)
+    const response = await fetch(request)
+    await remember(request, response)
+    return response
   } catch (offline) {
-    const cached = await caches.match('/')
+    const cached = await caches.match(offlineFallback ?? request)
     if (cached !== undefined) return cached
     throw offline
   }
 }
 
-/** Cache-first for build assets: their names carry a content hash, so a hit is never stale. */
-async function assetResponse(request) {
+/** Cache-first, for hashed names only: a new build asks for a new URL, so a hit is never stale. */
+async function hashedAsset(request) {
   const cached = await caches.match(request)
   if (cached !== undefined) return cached
   const response = await fetch(request)
-  // Only same-origin successes are worth keeping; an opaque or error response
-  // cached here would be replayed as the app's own answer.
-  if (response.ok && response.type === 'basic') {
-    const cache = await caches.open(CACHE)
-    await cache.put(request, response.clone())
-  }
+  await remember(request, response)
   return response
 }
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
   if (!isShellRequest(event.request, url)) return
-  event.respondWith(event.request.mode === 'navigate'
-    ? navigationResponse(event.request)
-    : assetResponse(event.request))
+  if (url.pathname.startsWith(HASHED_ASSET_PATH)) {
+    event.respondWith(hashedAsset(event.request))
+    return
+  }
+  // A navigation falls back to the cached start URL, not to its own address:
+  // a deep link has no offline copy of its own, and the shell routes itself.
+  event.respondWith(networkFirst(event.request, event.request.mode === 'navigate' ? '/' : undefined))
 })
