@@ -31,4 +31,6 @@ bootstrap 命令排在前面，且只运行一次。它在 `$DSH_HOME/auth.db` �
 
 overlay 里写 `cookieSecure: false`，是因为默认 `baseUrl` 是 loopback HTTP，那里带 `Secure` 的 cookie 根本不会被发送。它只在 loopback、或在 origin 从公网不可达的加密 tailnet 内部才成立。其他任何部署都应把 `baseUrl` 设为自己的 HTTPS origin 并删掉这一行，恢复 `true` 默认值。
 
+覆盖层的预设表里刻意没有 `danger-full-access`。这个部署由多人共用，任何会话都不应越出自己的工作区；这里是把该条目**移除**，而不是仅仅改掉默认值——默认值是会话可以再切回来的东西。约束能否成立取决于宿主：`workspace-write` 需要 bubblewrap 或启用 Landlock 的内核，没有它 shell 会拒绝运行而不是无约束地运行——这是安全的失败方式，但在会话中途遇到会让人意外。若 `$DSH_HOME/settings.yaml` 中已有指向被移除预设的 `permission.defaultPreset`，必须清掉，否则它引用的预设已不在表中。
+
 `baseUrl` 必须与浏览器实际访问的 origin 一致，端口也要一致：邮件中每个链接都以它为基准解析。

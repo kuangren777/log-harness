@@ -35,3 +35,22 @@
         # `Secure` cookie would never be sent at all. Any deployment reachable
         # over plain HTTP beyond that must leave this at its `true` default.
         cookieSecure: false
+
+# A deployment that serves several people should not offer any of them a way
+# out of the workspace. This layer REPLACES the base preset table — a patch
+# entry carrying an id and no `insert` overrides that entry's fields — so
+# `danger-full-access` is not a switch target for any session and no settings
+# value can name it. Enforcement is real only where the host carries a sandbox
+# backend (bubblewrap, or a Landlock-enforcing kernel): without one the shell
+# refuses to run at all rather than running unconfined, which is the safe
+# failure but a surprising one, so check the host before layering this in.
+- id: permission
+  config:
+    defaultPreset: workspace-write
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask

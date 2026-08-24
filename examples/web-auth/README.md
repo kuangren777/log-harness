@@ -31,4 +31,6 @@ The reset and confirmation links the gate mails resolve against `baseUrl` and la
 
 `cookieSecure: false` is in the overlay because the default `baseUrl` is loopback HTTP, where a `Secure` cookie would never be sent at all. It stays correct only over loopback or inside an encrypted tailnet where the origin is unreachable from the open network. Any other deployment sets `baseUrl` to its own HTTPS origin and drops the line, restoring the `true` default.
 
+`danger-full-access` is absent from the overlay's preset table on purpose. Several people share this deployment, so no session may step outside its workspace; the entry is removed rather than merely defaulted away, because a default is something a session can switch back. Confinement is only as real as the host: `workspace-write` needs bubblewrap or a Landlock-enforcing kernel, and without one the shell refuses to run rather than running unconfined — safe, but surprising if it is discovered mid-session. A pre-existing `permission.defaultPreset` in `$DSH_HOME/settings.yaml` naming the removed preset must be cleared, or it names a preset the table no longer has.
+
 `baseUrl` must match the origin the browser actually reaches, including port: it is the base every mailed link resolves against.
