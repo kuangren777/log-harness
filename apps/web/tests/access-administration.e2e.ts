@@ -198,14 +198,28 @@ describe('web e2e: an administrator writes a group rule and its member lives und
       .poll(async () => (await auth().listMembers(await groupId())).length, { timeout: 15_000 })
       .toBe(1)
 
-    // One denial, and nothing else. Without the seeded catch-all this would
-    // deny every skill the group has; the page adds it and says that it did.
-    await dialog.getByLabel('Name, or a prefix ending in *').fill(DENIED_SKILL)
-    await dialog.getByRole('button', { name: 'Add rule' }).click()
-    await dialog.getByText('Allow · Skills · *').waitFor({ timeout: 10_000 })
+    // One denial, and nothing else, written into the Skills card. Without the
+    // seeded catch-all this would deny every skill the group has; the card adds
+    // it, says that it did, and its badge settles on open-with-exceptions
+    // rather than allowlist.
+    const skills = dialog.getByRole('region', { name: 'Skills' })
+    await skills.getByLabel('Skills: name, or a prefix ending in *').fill(DENIED_SKILL)
+    await skills.getByRole('button', { name: 'Add rule to Skills' }).click()
+    await skills.getByRole('button', { name: 'Remove rule: Allow Skills *' }).waitFor({ timeout: 10_000 })
+    expect(await skills.getByText('Open with exceptions').count()).toBe(1)
     expect(await dialog.getByRole('alert').count()).toBe(0)
-    // The preview reads the real catalog through `skill.inventory` and answers
-    // for the draft, before anything is saved.
+    // The other three domains stay open, which is the per-domain rule made
+    // visible: writing into one card governs that card and nothing else.
+    expect(await dialog.getByRole('region', { name: 'Tools' }).getByText('Open', { exact: true }).count()).toBe(1)
+
+    // The probe answers the denied name against the unsaved draft, through the
+    // same evaluation the badges read.
+    await skills.getByLabel('Skills: try a name').fill(DENIED_SKILL)
+    await skills.getByText('Refused').waitFor({ timeout: 10_000 })
+    expect(await skills.getByText(`Denied by ${DENIED_SKILL}: deny beats allow.`).count()).toBe(1)
+
+    // The catalog preview reads the real inventory through `skill.inventory`
+    // and answers for the draft too, before anything is saved.
     expect(await dialog.getByText(`Skills refused (1): ${DENIED_SKILL}`).count()).toBe(1)
     expect(await dialog.getByText(`Skills visible (1): ${OPEN_SKILL}`).count()).toBe(1)
 

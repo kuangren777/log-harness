@@ -244,7 +244,7 @@ describe('the rule draft', () => {
     b.controller.addDraftRule('skill', 'secret', 'deny')
     const state = b.controller.store.getSnapshot()
     expect(state.draft).toEqual([allowEverything, denySecret])
-    expect(state.seeded).toBe(true)
+    expect(state.seededDomain).toBe('skill')
     expect(state.dirty).toBe(true)
   })
 
@@ -253,7 +253,7 @@ describe('the rule draft', () => {
     await b.controller.refresh()
     b.controller.selectGroup(TEAM_GROUP)
     b.controller.addDraftRule('skill', 'alpha', 'allow')
-    expect(b.controller.store.getSnapshot().seeded).toBe(false)
+    expect(b.controller.store.getSnapshot().seededDomain).toBeUndefined()
   })
 
   it('removes one rule by position and forgets the seeding notice', async () => {
@@ -263,7 +263,7 @@ describe('the rule draft', () => {
     b.controller.addDraftRule('skill', 'secret', 'deny')
     b.controller.removeDraftRule(0)
     expect(b.controller.store.getSnapshot().draft).toEqual([denySecret])
-    expect(b.controller.store.getSnapshot().seeded).toBe(false)
+    expect(b.controller.store.getSnapshot().seededDomain).toBeUndefined()
   })
 
   it('saves the draft to the selected group and settles clean', async () => {

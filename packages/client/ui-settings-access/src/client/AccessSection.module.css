@@ -86,8 +86,7 @@
   line-height: 18px;
 }
 
-.rows,
-.warnings {
+.rows {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -148,4 +147,239 @@
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 10px;
   background: var(--dsw-alias-bg-module-platform);
+}
+
+/* The rules editor is one card per domain, always all four. The grid is the
+   explanation the copy used to carry: a domain nobody has written a rule for
+   is a quiet dashed card, and the first rule turns it into a solid governed
+   one with a posture badge, its chips, and whatever warning it earned. */
+.domains {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 8px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+/* An ungoverned domain reads as empty rather than as a panel with nothing in
+   it, so writing its first rule is a visible change of state. */
+.card[data-reach='open'] {
+  border-style: dashed;
+  background: transparent;
+}
+
+.card[data-reach='locked'] {
+  border-color: var(--dsw-alias-state-error-secondary);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.posture {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-1);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.posture[data-reach='open-with-exceptions'] {
+  border-color: var(--dsw-alias-state-success-secondary);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.posture[data-reach='allowlist'] {
+  border-color: var(--dsw-alias-state-warn-secondary);
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.posture[data-reach='locked'] {
+  border-color: var(--dsw-alias-state-error-secondary);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.reach {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Deny outranks allow wherever both match, so a denial is the loud chip and an
+   allow is the quiet outline beside it. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.chip[data-effect='deny'] {
+  border-color: var(--dsw-alias-state-error-secondary);
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.chipEffect {
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+}
+
+.chip[data-effect='deny'] .chipEffect {
+  font-weight: 600;
+}
+
+.chipPattern {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-primary);
+}
+
+.chip[data-effect='deny'] .chipPattern {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.chipRemove {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.chipRemove:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.chipRemove:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.cardWarning {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+/* The probe answers the precedence question by demonstration, which is why
+   the panel no longer opens with a paragraph stating it. */
+.probe {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.probeRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Wrapper for a primitive Input, whose own element is an inline-flex span; the
+   card's rows are narrow enough that both fields must be able to shrink. */
+.field {
+  display: flex;
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.field > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.verdict {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border: 1px solid var(--dsw-alias-state-success-secondary);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-1);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.verdict[data-permitted='false'] {
+  border-color: var(--dsw-alias-state-error-secondary);
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* Phone form (ui-layout's PHONE_MAX_WIDTH, where the settings dialog goes
+   full-bleed): one card per row, and the add and probe controls stack so a
+   long pattern never pushes the dialog into a horizontal scroll. */
+@media (max-width: 640px) {
+  .domains {
+    grid-template-columns: 1fr;
+  }
+
+  .card .form,
+  .probeRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .card .select,
+  .field {
+    width: 100%;
+  }
+
+  .verdict {
+    align-self: flex-start;
+  }
 }

@@ -1,13 +1,14 @@
 /**
  * The rule algebra the editor previews from: pattern matching, the
- * deny > allow > default-deny decision, per-domain reach, and the catch-all
- * seeding that keeps "block one thing" from meaning "block everything".
+ * deny > allow > default-deny decision, per-domain reach, the probe that
+ * reports which rule decided a name, and the catch-all seeding that keeps
+ * "block one thing" from meaning "block everything".
  */
 import { describe, expect, it } from 'vitest'
 import type { AdminRuleView } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   ACCESS_DOMAINS, addRule, analyzeDomain, analyzeRules, CATCH_ALL_PATTERN, evaluateRules,
-  governsDomain, hasRule, matchesPattern, memberPermits, previewNames,
+  governsDomain, hasRule, matchesPattern, memberPermits, previewNames, probeName,
 } from '../src/client/rules.ts'
 
 const allow = (pattern: string, domain: AdminRuleView['domain'] = 'skill'): AdminRuleView =>
@@ -141,5 +142,34 @@ describe('hasRule and addRule', () => {
     expect(addRule([allow('alpha')], deny('bash', 'tool'))).toEqual([
       allow('alpha'), allow(CATCH_ALL_PATTERN, 'tool'), deny('bash', 'tool'),
     ])
+  })
+})
+
+describe('probeName', () => {
+  it('answers an ungoverned domain without consulting a rule', () => {
+    expect(probeName([deny('bash', 'tool')], 'skill', 'alpha'))
+      .toEqual({ permitted: true, ground: 'open', pattern: undefined })
+  })
+
+  it('names the denial that beat a broader allow', () => {
+    expect(probeName([allow(CATCH_ALL_PATTERN), deny('secret')], 'skill', 'secret'))
+      .toEqual({ permitted: false, ground: 'deny', pattern: 'secret' })
+  })
+
+  it('names the allow that granted a name, including through a prefix', () => {
+    expect(probeName([allow('web_*')], 'skill', 'web_search'))
+      .toEqual({ permitted: true, ground: 'allow', pattern: 'web_*' })
+  })
+
+  it('refuses an unmatched name in a governed domain, with no rule to name', () => {
+    expect(probeName([allow('alpha')], 'skill', 'beta'))
+      .toEqual({ permitted: false, ground: 'unmatched', pattern: undefined })
+  })
+
+  it('agrees with memberPermits over every rule set it reports on', () => {
+    const rules = [allow(CATCH_ALL_PATTERN), deny('secret'), allow('bash', 'tool')]
+    for (const [domain, name] of [['skill', 'alpha'], ['skill', 'secret'], ['tool', 'ls'], ['model', 'x']] as const) {
+      expect(probeName(rules, domain, name).permitted).toBe(memberPermits(rules, domain, name))
+    }
   })
 })

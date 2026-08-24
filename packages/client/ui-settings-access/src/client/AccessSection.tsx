@@ -1,6 +1,7 @@
 /**
  * Access administration section: the account roster, the permission groups,
- * one group's membership, and the rules editor with its live preview.
+ * one group's membership, and the rules editor — one card per rule domain,
+ * each with its posture, its rules, and a probe that answers for one name.
  *
  * The page renders nothing administrable unless the gate said this browser is
  * an administrator. That is a courtesy, not a control — the Host refuses every
@@ -15,7 +16,7 @@ import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import { domainLabel, type AccessTranslate } from './locales.ts'
 import type { AccessFace, AccessState } from './access-controller.ts'
 import {
-  ACCESS_DOMAINS, analyzeRules, CATCH_ALL_PATTERN, previewNames, type AccessDomain, type DomainAnalysis,
+  analyzeRules, CATCH_ALL_PATTERN, previewNames, probeName, type AccessDomain, type DomainAnalysis,
 } from './rules.ts'
 import styles from './AccessSection.module.css'
 
@@ -30,12 +31,28 @@ export type AccessSectionProps = Partial<InjectFace<AccessSectionInjected>>
 
 type AccessFaceProps = InjectFace<AccessSectionInjected>
 
-/** Copy key per domain reach, so the preview states every domain's posture. */
+/** Copy key per domain reach: the sentence under a card's badge. */
 const REACH_KEYS = {
   open: 'reachOpen',
   'open-with-exceptions': 'reachOpenWithExceptions',
   allowlist: 'reachAllowlist',
   locked: 'reachLocked',
+} as const
+
+/** Badge copy per domain reach, which is the card's posture at a glance. */
+const BADGE_KEYS = {
+  open: 'badgeOpen',
+  'open-with-exceptions': 'badgeOpenWithExceptions',
+  allowlist: 'badgeAllowlist',
+  locked: 'badgeLocked',
+} as const
+
+/** Copy key per probe ground, in the precedence order the Host applies. */
+const PROBE_REASON_KEYS = {
+  open: 'probeReasonOpen',
+  deny: 'probeReasonDeny',
+  allow: 'probeReasonAllow',
+  unmatched: 'probeReasonUnmatched',
 } as const
 
 /**
@@ -280,76 +297,20 @@ function Members(
   )
 }
 
-/** The rules editor: the draft, the add form, the warnings, and the preview. */
+/** The rules editor: one card per domain, the save bar, and the catalog preview. */
 function Rules(
   { injected, state, group }: { injected: AccessFaceProps; state: AccessState; group: AdminGroupView },
 ): ReactNode {
-  const { t, addDraftRule, removeDraftRule, saveRules, discardRules } = injected
-  const [domain, setDomain] = useState<AccessDomain>('skill')
-  const [pattern, setPattern] = useState('')
-  const [effect, setEffect] = useState<AdminRuleView['effect']>('deny')
-  const analyses = analyzeRules(state.draft)
+  const { t, saveRules, discardRules } = injected
   return (
     <section className={styles['panel']}>
       <h4 className={styles['panelTitle']}>{t('rulesTitle')}</h4>
       <p className={styles['hint']}>{t('rulesIntro')}</p>
-      <ul className={styles['rows']}>
-        {state.draft.map((rule, index) => (
-          <li key={`${rule.domain}:${rule.effect}:${rule.pattern}`} className={styles['row']}>
-            <span className={styles['name']}>
-              {`${t(rule.effect === 'allow' ? 'effectAllow' : 'effectDeny')} · ${domainLabel(rule.domain, t)} · ${rule.pattern}`}
-            </span>
-            <Button
-              size="sm"
-              disabled={state.busy}
-              aria-label={t('removeRule', {
-                effect: t(rule.effect === 'allow' ? 'effectAllow' : 'effectDeny'),
-                domain: domainLabel(rule.domain, t),
-                pattern: rule.pattern,
-              })}
-              onClick={() => { removeDraftRule(index) }}
-            >
-              {t('remove')}
-            </Button>
-          </li>
+      <div className={styles['domains']}>
+        {analyzeRules(state.draft).map(analysis => (
+          <DomainCard key={analysis.domain} injected={injected} state={state} group={group} analysis={analysis} />
         ))}
-      </ul>
-      <div className={styles['form']}>
-        <select
-          className={styles['select']}
-          aria-label={t('ruleDomain')}
-          value={domain}
-          onChange={(event) => { setDomain(event.target.value as AccessDomain) }}
-        >
-          {ACCESS_DOMAINS.map(candidate => (
-            <option key={candidate} value={candidate}>{domainLabel(candidate, t)}</option>
-          ))}
-        </select>
-        <select
-          className={styles['select']}
-          aria-label={t('ruleEffect')}
-          value={effect}
-          onChange={(event) => { setEffect(event.target.value as AdminRuleView['effect']) }}
-        >
-          <option value="allow">{t('effectAllow')}</option>
-          <option value="deny">{t('effectDeny')}</option>
-        </select>
-        <Input
-          aria-label={t('rulePattern')}
-          placeholder={t('rulePattern')}
-          value={pattern}
-          onChange={(event) => { setPattern(event.target.value) }}
-        />
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={pattern.length === 0 || state.busy}
-          onClick={() => { addDraftRule(domain, pattern, effect); setPattern('') }}
-        >
-          {t('addRule')}
-        </Button>
       </div>
-      {state.seeded && <p className={styles['notice']}>{t('seeded', { pattern: CATCH_ALL_PATTERN })}</p>}
       {state.dirty && (
         <div className={styles['form']}>
           <p className={styles['notice']}>{t('unsaved')}</p>
@@ -361,52 +322,171 @@ function Rules(
           </Button>
         </div>
       )}
-      <Warnings analyses={analyses} name={group.name} t={t} />
-      <Preview analyses={analyses} state={state} name={group.name} t={t} />
+      <Preview state={state} name={group.name} t={t} />
     </section>
   )
 }
 
-/** One alert per domain whose rules would refuse more than the administrator wrote. */
-function Warnings(
-  { analyses, name, t }: { analyses: readonly DomainAnalysis[]; name: string; t: AccessTranslate },
+/**
+ * One domain: its posture, its rules, whatever it earned a warning for, the
+ * form that writes another rule into it, and the probe that answers for a name.
+ *
+ * The card is the explanation. A domain nobody addressed renders quiet and
+ * empty, and writing its first rule changes the badge, the line under it, and
+ * every probe answer in front of the administrator who wrote it.
+ */
+function DomainCard(
+  { injected, state, group, analysis }: {
+    injected: AccessFaceProps
+    state: AccessState
+    group: AdminGroupView
+    analysis: DomainAnalysis
+  },
 ): ReactNode {
-  const warned = analyses.filter(analysis => analysis.warn)
-  if (warned.length === 0) return null
+  const { t, addDraftRule } = injected
+  const { domain, reach } = analysis
+  const [pattern, setPattern] = useState('')
+  const [effect, setEffect] = useState<AdminRuleView['effect']>('deny')
+  const label = domainLabel(domain, t)
+  const entries = state.draft
+    .map((rule, index) => ({ rule, index }))
+    .filter(entry => entry.rule.domain === domain)
   return (
-    <ul className={styles['warnings']} role="alert">
-      {warned.map(analysis => (
-        <li key={analysis.domain} className={styles['warning']}>
-          {t(analysis.reach === 'locked' ? 'warnLocked' : 'warnAllowlist', {
-            domain: domainLabel(analysis.domain, t),
-            name,
-          })}
-        </li>
-      ))}
-    </ul>
+    <section className={styles['card']} data-reach={reach} aria-label={label}>
+      <div className={styles['cardHeader']}>
+        <h5 className={styles['cardTitle']}>{label}</h5>
+        <span className={styles['posture']} data-reach={reach}>{t(BADGE_KEYS[reach])}</span>
+      </div>
+      <p className={styles['reach']}>{t(REACH_KEYS[reach])}</p>
+      {entries.length > 0 && (
+        <ul className={styles['chips']}>
+          {entries.map(entry => (
+            <li key={`${entry.rule.effect}:${entry.rule.pattern}`}>
+              <RuleChip injected={injected} rule={entry.rule} index={entry.index} busy={state.busy} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {analysis.warn && (
+        <p className={styles['cardWarning']} role="alert">
+          {t(reach === 'locked' ? 'warnLocked' : 'warnAllowlist', { name: group.name })}
+        </p>
+      )}
+      {state.seededDomain === domain && (
+        <p className={styles['notice']}>{t('seeded', { pattern: CATCH_ALL_PATTERN })}</p>
+      )}
+      <div className={styles['form']}>
+        <select
+          className={styles['select']}
+          aria-label={t('ruleEffect', { domain: label })}
+          value={effect}
+          onChange={(event) => { setEffect(event.target.value as AdminRuleView['effect']) }}
+        >
+          <option value="allow">{t('effectAllow')}</option>
+          <option value="deny">{t('effectDeny')}</option>
+        </select>
+        <span className={styles['field']}>
+          <Input
+            aria-label={t('rulePattern', { domain: label })}
+            placeholder={t('patternPlaceholder')}
+            value={pattern}
+            onChange={(event) => { setPattern(event.target.value) }}
+          />
+        </span>
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={pattern.length === 0 || state.busy}
+          aria-label={t('addRuleTo', { domain: label })}
+          onClick={() => { addDraftRule(domain, pattern, effect); setPattern('') }}
+        >
+          {t('addRule')}
+        </Button>
+      </div>
+      <Probe domain={domain} label={label} draft={state.draft} t={t} />
+    </section>
   )
 }
 
-/** What a member would see: every domain's posture, and the real skill catalog split. */
-function Preview(
-  { analyses, state, name, t }: {
-    analyses: readonly DomainAnalysis[]
-    state: AccessState
-    name: string
+/** One draft rule, removable in place; a denial is the loud chip because deny wins. */
+function RuleChip(
+  { injected, rule, index, busy }: {
+    injected: AccessFaceProps
+    rule: AdminRuleView
+    index: number
+    busy: boolean
+  },
+): ReactNode {
+  const { t, removeDraftRule } = injected
+  const effect = t(rule.effect === 'allow' ? 'effectAllow' : 'effectDeny')
+  return (
+    <span className={styles['chip']} data-effect={rule.effect}>
+      <span className={styles['chipEffect']}>{effect}</span>
+      <span className={styles['chipPattern']}>{rule.pattern}</span>
+      <button
+        type="button"
+        className={styles['chipRemove']}
+        disabled={busy}
+        aria-label={t('removeRule', { effect, domain: domainLabel(rule.domain, t), pattern: rule.pattern })}
+        onClick={() => { removeDraftRule(index) }}
+      >
+        ×
+      </button>
+    </span>
+  )
+}
+
+/**
+ * Try one name against the draft, and say which rule decided it.
+ *
+ * This is where precedence is stated, because here it is demonstrated: a name
+ * two rules match answers with the denial, and a governed domain answers a name
+ * nothing matches with a refusal.
+ */
+function Probe(
+  { domain, label, draft, t }: {
+    domain: AccessDomain
+    label: string
+    draft: readonly AdminRuleView[]
     t: AccessTranslate
   },
+): ReactNode {
+  const [name, setName] = useState('')
+  const verdict = name.length === 0 ? undefined : probeName(draft, domain, name)
+  return (
+    <div className={styles['probe']}>
+      <div className={styles['probeRow']}>
+        <span className={styles['field']}>
+          <Input
+            aria-label={t('probeField', { domain: label })}
+            placeholder={t('probePlaceholder')}
+            value={name}
+            onChange={(event) => { setName(event.target.value) }}
+          />
+        </span>
+        {verdict !== undefined && (
+          <span className={styles['verdict']} data-permitted={verdict.permitted}>
+            {t(verdict.permitted ? 'probeAllowed' : 'probeRefused')}
+          </span>
+        )}
+      </div>
+      <p className={styles['reach']}>
+        {verdict === undefined
+          ? t('probeHint')
+          : t(PROBE_REASON_KEYS[verdict.ground], { pattern: verdict.pattern })}
+      </p>
+    </div>
+  )
+}
+
+/** What a member would see of the one catalog the page can resolve by name. */
+function Preview(
+  { state, name, t }: { state: AccessState; name: string; t: AccessTranslate },
 ): ReactNode {
   return (
     <div className={styles['preview']}>
       <h5 className={styles['panelTitle']}>{t('previewTitle')}</h5>
       <p className={styles['hint']}>{t('previewIntro', { name })}</p>
-      <ul className={styles['rows']}>
-        {analyses.map(analysis => (
-          <li key={analysis.domain} className={styles['hint']}>
-            {t(REACH_KEYS[analysis.reach], { domain: domainLabel(analysis.domain, t) })}
-          </li>
-        ))}
-      </ul>
       <SkillPreview state={state} t={t} />
     </div>
   )

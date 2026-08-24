@@ -53,8 +53,8 @@ export interface AccessState {
   draft: readonly AdminRuleView[]
   /** Whether `draft` differs from what the selected group carries. */
   dirty: boolean
-  /** Set when the last add seeded a catch-all allow, so the editor can say it did. */
-  seeded: boolean
+  /** The domain whose card should say the last add seeded a catch-all allow beside the denial. */
+  seededDomain: AccessDomain | undefined
   /** Skill names discovered for the current session; undefined when no session is open. */
   skills: readonly string[] | undefined
   /** The last failure's text, shown above the forms until the next call succeeds. */
@@ -168,7 +168,7 @@ export class AccessController {
     selected: undefined,
     draft: [],
     dirty: false,
-    seeded: false,
+    seededDomain: undefined,
     skills: undefined,
     error: undefined,
     busy: false,
@@ -253,7 +253,7 @@ export class AccessController {
       draft.selected = undefined
       draft.draft = []
       draft.dirty = false
-      draft.seeded = false
+      draft.seededDomain = undefined
     })
   }
 
@@ -266,7 +266,7 @@ export class AccessController {
       draft.selected = groupId
       draft.draft = rulesOf(draft.groups, groupId)
       draft.dirty = false
-      draft.seeded = false
+      draft.seededDomain = undefined
       draft.error = undefined
     })
   }
@@ -302,7 +302,7 @@ export class AccessController {
     this.store.update((state) => {
       state.draft = next
       state.dirty = true
-      state.seeded = seeded
+      state.seededDomain = seeded ? domain : undefined
     })
   }
 
@@ -315,7 +315,7 @@ export class AccessController {
     this.store.update((state) => {
       state.draft = next
       state.dirty = true
-      state.seeded = false
+      state.seededDomain = undefined
     })
   }
 
@@ -331,7 +331,7 @@ export class AccessController {
     if (saved === undefined) return
     this.store.update((state) => {
       state.dirty = false
-      state.seeded = false
+      state.seededDomain = undefined
     })
   }
 
@@ -340,7 +340,7 @@ export class AccessController {
     this.store.update((state) => {
       state.draft = state.selected === undefined ? [] : rulesOf(state.groups, state.selected)
       state.dirty = false
-      state.seeded = false
+      state.seededDomain = undefined
     })
   }
 

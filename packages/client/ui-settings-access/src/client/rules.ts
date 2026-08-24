@@ -198,3 +198,44 @@ export function addRule(rules: readonly AdminRuleView[], candidate: AdminRuleVie
   const catchAll: AdminRuleView = { domain: candidate.domain, pattern: CATCH_ALL_PATTERN, effect: 'allow' }
   return seedsCatchAll ? [...rules, catchAll, candidate] : [...rules, candidate]
 }
+
+/** Why the probe answered as it did, in the precedence order the Host applies. */
+export type ProbeGround =
+  /** No rule addresses the domain, so nothing was consulted. */
+  | 'open'
+  /** A deny rule matched, which outranks every allow beside it. */
+  | 'deny'
+  /** An allow rule matched and no deny did. */
+  | 'allow'
+  /** The domain is governed and no rule matched, so the default refusal applies. */
+  | 'unmatched'
+
+/** One name tried against a draft, as the probe reports it. */
+export interface ProbeVerdict {
+  /** Whether a member of the group would reach the name. */
+  permitted: boolean
+  /** Which precedence step decided it. */
+  ground: ProbeGround
+  /** The deciding rule's pattern, absent when no rule was consulted or matched. */
+  pattern: string | undefined
+}
+
+/**
+ * Try one candidate name against a draft, reporting the decision and the rule
+ * that made it. The verdict itself comes from {@link memberPermits}, so the
+ * probe cannot drift from what the editor's other readings say.
+ * @param rules - the group's rules, draft included.
+ * @param domain - the namespace the name belongs to.
+ * @param name - the candidate name.
+ * @returns the decision, the precedence step behind it, and the deciding pattern.
+ */
+export function probeName(rules: readonly AdminRuleView[], domain: AccessDomain, name: string): ProbeVerdict {
+  const permitted = memberPermits(rules, domain, name)
+  if (!governsDomain(rules, domain)) return { permitted, ground: 'open', pattern: undefined }
+  const matching = rules.filter(rule => rule.domain === domain && matchesPattern(rule.pattern, name))
+  const denial = matching.find(rule => rule.effect === 'deny')
+  if (denial !== undefined) return { permitted, ground: 'deny', pattern: denial.pattern }
+  const grant = matching.find(rule => rule.effect === 'allow')
+  if (grant !== undefined) return { permitted, ground: 'allow', pattern: grant.pattern }
+  return { permitted, ground: 'unmatched', pattern: undefined }
+}

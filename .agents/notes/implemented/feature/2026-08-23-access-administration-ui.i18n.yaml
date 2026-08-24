@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-23-access-administration-ui.md
-2026-08-23-access-administration-ui.md: 8db93db5d67cdd978f808f10a586dcceeddca49a
-2026-08-23-access-administration-ui.zh.md: 1d127fc750b3bfd2807c92c1a44360612b7ec663
+2026-08-23-access-administration-ui.md: e35a81b9749ebcea56ecd4a5e5abcb4b2ad89c16
+2026-08-23-access-administration-ui.zh.md: 261a7378128e8969986ed9ba7651532e394ce27b

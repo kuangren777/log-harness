@@ -2,11 +2,12 @@
 /**
  * What the Access section shows: the two explained empty states, the roster and
  * group lists, the builtin group's missing delete control, and the rules editor
- * — its seeding notice, its lockout warning, and the preview that already
+ * — four domain cards that change posture as rules land on them, the probe that
+ * answers one name against the draft, and the catalog preview that already
  * counts unsaved rules.
  */
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
@@ -45,7 +46,7 @@ function renderSection(state: Partial<AccessState> = {}) {
     selected: undefined,
     draft: [],
     dirty: false,
-    seeded: false,
+    seededDomain: undefined,
     skills: ['alpha', 'secret'],
     error: undefined,
     busy: false,
@@ -67,7 +68,15 @@ function renderSection(state: Partial<AccessState> = {}) {
   }
   const props = { ...actions, t, useAccess: bindSnapshotSelector(store) } as unknown as AccessSectionProps
   render(<AccessSection {...props} />)
-  return actions
+  return { ...actions, store }
+}
+
+/** One domain's card, which is a landmark named by the domain it governs. */
+const card = (domain: string): HTMLElement => screen.getByRole('region', { name: domain })
+
+/** Rewrite the draft the way the controller would, and let the cards follow. */
+function setDraft(store: ReturnType<typeof renderSection>['store'], draft: readonly AdminRuleView[]): void {
+  act(() => { store.update((state) => { state.draft = draft }) })
 }
 
 describe('AccessSection postures', () => {
@@ -190,26 +199,100 @@ describe('groups', () => {
 })
 
 describe('the rules editor', () => {
-  it('adds a rule from the domain, effect, and pattern controls', () => {
+  it('renders one card per domain, whether or not anything governs it', () => {
+    renderSection({ selected: TEAM_GROUP, draft: [denySecret, allowEverything] })
+    for (const domain of ['Skills', 'Tools', 'Models', 'Settings namespaces']) {
+      expect(card(domain)).toBeTruthy()
+    }
+  })
+
+  it('reads a domain no rule addresses as open and leaves its card empty', () => {
+    renderSection({ selected: TEAM_GROUP })
+    const models = card('Models')
+    expect(within(models).getByText(en.badgeOpen)).toBeTruthy()
+    expect(within(models).getByText(en.reachOpen)).toBeTruthy()
+    expect(within(models).queryByRole('listitem')).toBeNull()
+  })
+
+  it('flips a card from open to allowlist as its first rule lands', () => {
+    const { store } = renderSection({ selected: TEAM_GROUP })
+    expect(within(card('Tools')).getByText(en.badgeOpen)).toBeTruthy()
+    setDraft(store, [{ domain: 'tool', pattern: 'bash', effect: 'allow' }])
+    expect(within(card('Tools')).getByText(en.badgeAllowlist)).toBeTruthy()
+    expect(within(card('Tools')).getByText(en.reachAllowlist)).toBeTruthy()
+    // The other three are untouched: reach is decided per domain.
+    expect(within(card('Models')).getByText(en.badgeOpen)).toBeTruthy()
+  })
+
+  it('flips to open-with-exceptions when a seeded catch-all stands beside the denial', () => {
+    const { store } = renderSection({ selected: TEAM_GROUP })
+    setDraft(store, [allowEverything, denySecret])
+    expect(within(card('Skills')).getByText(en.badgeOpenWithExceptions)).toBeTruthy()
+    expect(within(card('Skills')).getByText(en.reachOpenWithExceptions)).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('restores the open state when the last rule of a domain is removed', () => {
+    const { store } = renderSection({ selected: TEAM_GROUP, draft: [denySecret] })
+    expect(within(card('Skills')).getByText(en.badgeLocked)).toBeTruthy()
+    setDraft(store, [])
+    expect(within(card('Skills')).getByText(en.badgeOpen)).toBeTruthy()
+    expect(within(card('Skills')).getByText(en.reachOpen)).toBeTruthy()
+  })
+
+  it('marks a deny-only domain locked and warns on that card, not somewhere else', () => {
+    renderSection({ selected: TEAM_GROUP, draft: [denySecret], dirty: true })
+    const skills = card('Skills')
+    expect(within(skills).getByText(en.badgeLocked)).toBeTruthy()
+    expect(within(skills).getByText(en.reachLocked)).toBeTruthy()
+    expect(within(skills).getByRole('alert').textContent)
+      .toBe('Members of team lose everything in this domain.')
+    expect(within(card('Tools')).queryByRole('alert')).toBeNull()
+  })
+
+  it('warns more quietly on a domain narrowed to explicit allows', () => {
+    renderSection({ selected: TEAM_GROUP, draft: [{ domain: 'skill', pattern: 'alpha', effect: 'allow' }] })
+    expect(within(card('Skills')).getByRole('alert').textContent)
+      .toBe('Every other name in this domain is refused.')
+  })
+
+  it('anchors the seeding notice to the domain the seeding happened in', () => {
+    renderSection({
+      selected: TEAM_GROUP,
+      draft: [allowEverything, denySecret],
+      dirty: true,
+      seededDomain: 'skill',
+    })
+    expect(within(card('Skills')).getByText(t('seeded', { pattern: '*' }))).toBeTruthy()
+    expect(within(card('Tools')).queryByText(t('seeded', { pattern: '*' }))).toBeNull()
+  })
+
+  it('adds a rule from the card of the domain it belongs to', () => {
     const actions = renderSection({ selected: TEAM_GROUP })
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: en.addRule }).disabled).toBe(true)
-    fireEvent.change(screen.getByLabelText(en.ruleDomain), { target: { value: 'tool' } })
-    fireEvent.change(screen.getByLabelText(en.ruleEffect), { target: { value: 'allow' } })
-    fireEvent.change(screen.getByLabelText(en.rulePattern), { target: { value: 'bash' } })
-    fireEvent.click(screen.getByRole('button', { name: en.addRule }))
+    const tools = card('Tools')
+    const add = within(tools).getByRole<HTMLButtonElement>('button', { name: 'Add rule to Tools' })
+    expect(add.disabled).toBe(true)
+    fireEvent.change(within(tools).getByLabelText('Tools: effect'), { target: { value: 'allow' } })
+    fireEvent.change(within(tools).getByLabelText('Tools: name, or a prefix ending in *'), {
+      target: { value: 'bash' },
+    })
+    fireEvent.click(add)
     expect(actions.addDraftRule).toHaveBeenCalledWith('tool', 'bash', 'allow')
+    expect(within(tools).getByLabelText<HTMLInputElement>('Tools: name, or a prefix ending in *').value).toBe('')
   })
 
-  it('lists the draft rules and removes one by position', () => {
-    const actions = renderSection({ selected: TEAM_GROUP, draft: [allowEverything, denySecret], dirty: true })
-    expect(screen.getByText('Allow · Skills · *')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove rule: Deny Skills secret' }))
+  it('shows each rule as a chip in its own card and removes one by draft position', () => {
+    const actions = renderSection({
+      selected: TEAM_GROUP,
+      draft: [allowEverything, denySecret, { domain: 'tool', pattern: 'bash', effect: 'allow' }],
+      dirty: true,
+    })
+    const skills = card('Skills')
+    expect(within(skills).getAllByRole('listitem')).toHaveLength(2)
+    expect(within(skills).getByText('secret')).toBeTruthy()
+    expect(within(card('Tools')).getByText('bash')).toBeTruthy()
+    fireEvent.click(within(skills).getByRole('button', { name: 'Remove rule: Deny Skills secret' }))
     expect(actions.removeDraftRule).toHaveBeenCalledWith(1)
-  })
-
-  it('says when it seeded a catch-all beside the first denial', () => {
-    renderSection({ selected: TEAM_GROUP, draft: [allowEverything, denySecret], dirty: true, seeded: true })
-    expect(screen.getByText(t('seeded', { pattern: '*' }))).toBeTruthy()
   })
 
   it('offers save and discard only while the draft differs from what is stored', () => {
@@ -223,40 +306,67 @@ describe('the rules editor', () => {
     renderSection({ selected: TEAM_GROUP, draft: [denySecret] })
     expect(screen.queryByRole('button', { name: en.saveRules })).toBeNull()
   })
+})
 
-  it('warns that a deny-only domain takes everything, and stops once a catch-all allow exists', () => {
-    renderSection({ selected: TEAM_GROUP, draft: [denySecret], dirty: true })
-    expect(screen.getByRole('alert').textContent)
-      .toBe('Skills: these rules admit no name at all. Members of team lose everything in this domain.')
-    cleanup()
-    renderSection({ selected: TEAM_GROUP, draft: [allowEverything, denySecret], dirty: true })
-    expect(screen.queryByRole('alert')).toBeNull()
-  })
+describe('the per-domain probe', () => {
+  /** Type one candidate name into one domain's probe. */
+  function probe(domain: string, name: string): HTMLElement {
+    const owner = card(domain)
+    fireEvent.change(within(owner).getByLabelText(`${domain}: try a name`), { target: { value: name } })
+    return owner
+  }
 
-  it('warns that an explicit allowlist refuses everything it does not name', () => {
-    renderSection({ selected: TEAM_GROUP, draft: [{ domain: 'skill', pattern: 'alpha', effect: 'allow' }] })
-    expect(screen.getByRole('alert').textContent)
-      .toBe('Skills: only the listed allow rules apply, and every other name in this domain is refused.')
-  })
-
-  it('states every domain’s reach, governed or open', () => {
-    renderSection({
-      selected: TEAM_GROUP,
-      draft: [allowEverything, denySecret, { domain: 'tool', pattern: 'bash', effect: 'allow' }],
-    })
-    expect(screen.getByText('Skills: open except for the written denials.')).toBeTruthy()
-    expect(screen.getByText('Tools: allowlist, limited to the written allows.')).toBeTruthy()
-    expect(screen.getByText('Models: no rules, fully open.')).toBeTruthy()
-    expect(screen.getByText('Settings namespaces: no rules, fully open.')).toBeTruthy()
-  })
-
-  it('states a locked domain’s reach in the preview too', () => {
+  it('waits for a name and says what typing one buys', () => {
     renderSection({ selected: TEAM_GROUP, draft: [denySecret] })
-    expect(screen.getByText('Skills: everything refused.')).toBeTruthy()
+    const skills = card('Skills')
+    expect(within(skills).getByText(en.probeHint)).toBeTruthy()
+    expect(within(skills).queryByText(en.probeRefused)).toBeNull()
+  })
+
+  it('grants every name while the domain is ungoverned', () => {
+    renderSection({ selected: TEAM_GROUP })
+    const models = probe('Models', 'deepseek/deepseek-chat')
+    expect(within(models).getByText(en.probeAllowed)).toBeTruthy()
+    expect(within(models).getByText(en.probeReasonOpen)).toBeTruthy()
+  })
+
+  it('answers a denied name with the denial, saying deny beats allow', () => {
+    renderSection({ selected: TEAM_GROUP, draft: [allowEverything, denySecret] })
+    const skills = probe('Skills', 'secret')
+    expect(within(skills).getByText(en.probeRefused)).toBeTruthy()
+    expect(within(skills).getByText('Denied by secret: deny beats allow.')).toBeTruthy()
+  })
+
+  it('answers a name a prefix covers with the allow that covered it', () => {
+    renderSection({ selected: TEAM_GROUP, draft: [{ domain: 'tool', pattern: 'web_*', effect: 'allow' }] })
+    const tools = probe('Tools', 'web_search')
+    expect(within(tools).getByText(en.probeAllowed)).toBeTruthy()
+    expect(within(tools).getByText('Granted by web_*, and no denial matched.')).toBeTruthy()
+  })
+
+  it('refuses an unmatched name once the domain is an allowlist', () => {
+    renderSection({ selected: TEAM_GROUP, draft: [{ domain: 'skill', pattern: 'alpha', effect: 'allow' }] })
+    const skills = probe('Skills', 'secret')
+    expect(within(skills).getByText(en.probeRefused)).toBeTruthy()
+    expect(within(skills).getByText(en.probeReasonUnmatched)).toBeTruthy()
+  })
+
+  it('answers from the draft, so an unsaved rule changes the verdict under the typed name', () => {
+    const { store } = renderSection({ selected: TEAM_GROUP })
+    const skills = probe('Skills', 'secret')
+    expect(within(skills).getByText(en.probeAllowed)).toBeTruthy()
+    setDraft(store, [allowEverything, denySecret])
+    expect(within(card('Skills')).getByText(en.probeRefused)).toBeTruthy()
+  })
+
+  it('keeps each domain’s probe to its own rules', () => {
+    renderSection({ selected: TEAM_GROUP, draft: [denySecret] })
+    expect(within(probe('Skills', 'alpha')).getByText(en.probeRefused)).toBeTruthy()
+    expect(within(probe('Tools', 'alpha')).getByText(en.probeAllowed)).toBeTruthy()
   })
 })
 
-describe('the preview', () => {
+describe('the catalog preview', () => {
   it('resolves the real skill catalog against rules that are not saved yet', () => {
     renderSection({ selected: TEAM_GROUP, draft: [allowEverything, denySecret], dirty: true })
     expect(screen.getByText('Skills visible (1): alpha')).toBeTruthy()
