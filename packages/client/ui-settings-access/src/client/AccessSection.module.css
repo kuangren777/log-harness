@@ -155,7 +155,10 @@
    one with a posture badge, its chips, and whatever warning it earned. */
 .domains {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  /* Each card is as tall as its own contents; an open domain has nothing to
+     fill a stretched row with. */
+  align-items: start;
   gap: 8px;
 }
 
@@ -333,7 +336,7 @@
    card's rows are narrow enough that both fields must be able to shrink. */
 .field {
   display: flex;
-  flex: 1 1 140px;
+  flex: 1 1 96px;
   min-width: 0;
 }
 
@@ -361,25 +364,11 @@
 }
 
 /* Phone form (ui-layout's PHONE_MAX_WIDTH, where the settings dialog goes
-   full-bleed): one card per row, and the add and probe controls stack so a
-   long pattern never pushes the dialog into a horizontal scroll. */
+   full-bleed): one card per row. The rows inside a card already wrap and every
+   field may shrink, so nothing here pushes the dialog into a horizontal
+   scroll. */
 @media (max-width: 640px) {
   .domains {
     grid-template-columns: 1fr;
-  }
-
-  .card .form,
-  .probeRow {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .card .select,
-  .field {
-    width: 100%;
-  }
-
-  .verdict {
-    align-self: flex-start;
   }
 }

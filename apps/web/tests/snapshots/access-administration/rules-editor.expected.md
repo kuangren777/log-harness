@@ -58,34 +58,73 @@
     - listitem:
       - switch "ben@example.test belongs to journey-team" [checked]: ben@example.test
   - heading "Rules" [level=4]
-  - paragraph: "Rules apply per domain. The first rule addressing a domain turns that whole domain into an allowlist: deny beats allow, and a name no rule matches is refused."
-  - list:
-    - listitem:
-      - text: Allow · Skills · *
-      - 'button "Remove rule: Allow Skills *"': Remove
-    - listitem:
-      - text: Deny · Skills · journey-secret
-      - 'button "Remove rule: Deny Skills journey-secret"': Remove
-  - combobox "Domain":
-    - option "Skills" [selected]
-    - option "Tools"
-    - option "Models"
-    - option "Settings namespaces"
-  - combobox "Effect":
-    - option "Allow"
-    - option "Deny" [selected]
-  - textbox "Name, or a prefix ending in *"
-  - button "Add rule" [disabled]
-  - paragraph: "A * allow rule was added alongside it — without one, this single denial would also refuse every other name in the domain. It is an ordinary rule: delete it to get a strict allowlist."
-  - paragraph: Unsaved changes; the preview below already counts them.
+  - paragraph: "Each domain stands on its own: its card states where it stands, and its probe answers for any name you type."
+  - region "Skills":
+    - heading "Skills" [level=5]
+    - text: Open with exceptions
+    - paragraph: Everything reaches a member except the denials written below.
+    - list:
+      - listitem:
+        - text: Allow *
+        - 'button "Remove rule: Allow Skills *"': ×
+      - listitem:
+        - text: Deny journey-secret
+        - 'button "Remove rule: Deny Skills journey-secret"': ×
+    - paragraph: "A * allow rule was added alongside it — without one, this single denial would also refuse every other name in the domain. It is an ordinary rule: delete it to get a strict allowlist."
+    - 'combobox "Skills: effect"':
+      - option "Allow"
+      - option "Deny" [selected]
+    - 'textbox "Skills: name, or a prefix ending in *"':
+      - /placeholder: name or prefix*
+    - button "Add rule to Skills" [disabled]: Add
+    - 'textbox "Skills: try a name"':
+      - /placeholder: try a name
+      - text: journey-secret
+    - text: Refused
+    - paragraph: "Denied by journey-secret: deny beats allow."
+  - region "Tools":
+    - heading "Tools" [level=5]
+    - text: Open
+    - paragraph: No rule yet, so every name in this domain reaches a member.
+    - 'combobox "Tools: effect"':
+      - option "Allow"
+      - option "Deny" [selected]
+    - 'textbox "Tools: name, or a prefix ending in *"':
+      - /placeholder: name or prefix*
+    - button "Add rule to Tools" [disabled]: Add
+    - 'textbox "Tools: try a name"':
+      - /placeholder: try a name
+    - paragraph: Type a name to see what a member would get.
+  - region "Models":
+    - heading "Models" [level=5]
+    - text: Open
+    - paragraph: No rule yet, so every name in this domain reaches a member.
+    - 'combobox "Models: effect"':
+      - option "Allow"
+      - option "Deny" [selected]
+    - 'textbox "Models: name, or a prefix ending in *"':
+      - /placeholder: name or prefix*
+    - button "Add rule to Models" [disabled]: Add
+    - 'textbox "Models: try a name"':
+      - /placeholder: try a name
+    - paragraph: Type a name to see what a member would get.
+  - region "Settings namespaces":
+    - heading "Settings namespaces" [level=5]
+    - text: Open
+    - paragraph: No rule yet, so every name in this domain reaches a member.
+    - 'combobox "Settings namespaces: effect"':
+      - option "Allow"
+      - option "Deny" [selected]
+    - 'textbox "Settings namespaces: name, or a prefix ending in *"':
+      - /placeholder: name or prefix*
+    - button "Add rule to Settings namespaces" [disabled]: Add
+    - 'textbox "Settings namespaces: try a name"':
+      - /placeholder: try a name
+    - paragraph: Type a name to see what a member would get.
+  - paragraph: Unsaved changes; the cards and probes above already count them.
   - button "Save rules"
   - button "Discard changes"
   - heading "What a member would see" [level=5]
   - paragraph: Resolved from the current rules, unsaved changes included, for an ordinary member of journey-team. An administrator bypasses rules, so this is not you.
-  - list:
-    - listitem: "Skills: open except for the written denials."
-    - listitem: "Tools: no rules, fully open."
-    - listitem: "Models: no rules, fully open."
-    - listitem: "Settings namespaces: no rules, fully open."
   - paragraph: "Skills visible (1): journey-open"
   - paragraph: "Skills refused (1): journey-secret"
