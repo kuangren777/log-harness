@@ -123,6 +123,34 @@ describe('translate: tool calls', () => {
     ])
   })
 
+  it('keeps the opening id and name when a relay repeats them as empty strings', async () => {
+    // Captured from an OpenAI-compatible relay (CaMeL hub) in front of
+    // deepseek-v4-flash-0731: DeepSeek omits `id` and `name` on continuation
+    // deltas, this relay sends them as ''. Both mean unchanged. Letting ''
+    // through left every call nameless, so the executor answered
+    // `unknown tool ""` and the assembler saw one blank id start twice.
+    const chunks = await collect(translate(feed(
+      firstChunk,
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_7ca7', type: 'function', function: { name: 'skill', arguments: '' } }] } }] },
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: '', type: 'function', function: { name: '', arguments: '{' } }] } }] },
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: '', type: 'function', function: { name: '', arguments: '"name": "diag-nodes"}' } }] } }] },
+      { choices: [{ delta: { content: '' }, finish_reason: 'tool_calls' }] },
+      DONE,
+    )))
+    expect(chunks).toEqual([
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, id: 'call_7ca7', name: 'skill', argumentsDelta: '' },
+      { type: 'tool-call-delta', index: 0, id: 'call_7ca7', name: 'skill', argumentsDelta: '{' },
+      { type: 'tool-call-delta', index: 0, id: 'call_7ca7', name: 'skill', argumentsDelta: '"name": "diag-nodes"}' },
+      {
+        type: 'block-end',
+        index: 0,
+        block: { type: 'tool-call', id: 'call_7ca7', name: 'skill', arguments: '{"name": "diag-nodes"}' },
+      },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ])
+  })
+
   it('disambiguates parallel tool calls by wire index', async () => {
     const chunks = await collect(translate(feed(
       firstChunk,
