@@ -35,16 +35,20 @@ interface PackageManifest {
 type PublintResult =
   | {
     path: string
+    packageName: string
     status: 'passed'
     messages: Message[]
     closureViolations: string[]
+    unpublishedChunks: string[]
     manifest: Record<string, unknown>
   }
   | {
     path: string
+    packageName: string
     status: 'failed'
     messages: Message[]
     closureViolations: string[]
+    unpublishedChunks: string[]
     manifest: Record<string, unknown>
     failure?: string
   }
@@ -143,6 +147,20 @@ function publicationClosureViolations(target: PackageTarget, files: readonly Pac
   return violations
 }
 
+/**
+ * Top-level `lib/*.js` files (tsdown bundles and shared chunks, never `lib/types/**`)
+ * that no `files` pattern in package.json publishes. A bundle can omit an explicit
+ * import of a shared chunk it never loads eagerly (dynamic `import()` computed from
+ * a runtime value, for example), so {@link publicationClosureViolations} alone does
+ * not catch every unpublished chunk; this check is unconditional on `lib/*.js`.
+ */
+function unpublishedLibraryChunks(target: PackageTarget, files: readonly PackFile[]): string[] {
+  const chunks = globSync('lib/*.js', { cwd: target.directory })
+  if (chunks.length === 0) return []
+  const published = new Set(files.map(file => file.name.slice('package/'.length)))
+  return chunks.filter(chunk => !published.has(chunk)).sort()
+}
+
 /** Paths a relative JavaScript module request can resolve to in a published package. */
 function resolutionCandidates(target: string): string[] {
   const base = target.replace(/\/+$/, '')
@@ -181,20 +199,25 @@ async function runPublint(target: PackageTarget): Promise<PublintResult> {
   try {
     const files = publicationFiles(target)
     const closureViolations = publicationClosureViolations(target, files)
+    const unpublishedChunks = unpublishedLibraryChunks(target, files)
     const result = await publint({
       pkgDir: 'package',
       pack: { files },
     })
     const manifest = result.pkg as Record<string, unknown>
-    return result.messages.some(message => message.type === 'error') || closureViolations.length > 0
-      ? { path: target.path, status: 'failed', messages: result.messages, closureViolations, manifest }
-      : { path: target.path, status: 'passed', messages: result.messages, closureViolations, manifest }
+    const packageName = target.manifest.name ?? target.path
+    return result.messages.some(message => message.type === 'error')
+      || closureViolations.length > 0 || unpublishedChunks.length > 0
+      ? { path: target.path, packageName, status: 'failed', messages: result.messages, closureViolations, unpublishedChunks, manifest }
+      : { path: target.path, packageName, status: 'passed', messages: result.messages, closureViolations, unpublishedChunks, manifest }
   } catch (error: unknown) {
     return {
       path: target.path,
+      packageName: target.manifest.name ?? target.path,
       status: 'failed',
       messages: [],
       closureViolations: [],
+      unpublishedChunks: [],
       manifest: target.manifest as Record<string, unknown>,
       failure: error instanceof Error ? error.message : String(error),
     }
@@ -228,7 +251,14 @@ function printResult(result: PublintResult): void {
     console.log(formatMessage(message, result.manifest, { color: false }) ?? message.code)
   }
   for (const violation of result.closureViolations) console.error(violation)
-  if (result.status === 'passed' && result.messages.length === 0 && result.closureViolations.length === 0) {
+  for (const chunk of result.unpublishedChunks) {
+    console.error(
+      `${result.packageName} does not publish ${JSON.stringify(chunk)}`
+      + ' (built by `lib/`, but no package.json `files` pattern matches it); add `lib/*.js` to files.',
+    )
+  }
+  if (result.status === 'passed' && result.messages.length === 0 && result.closureViolations.length === 0
+    && result.unpublishedChunks.length === 0) {
     console.log('All good!')
   }
 }

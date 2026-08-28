@@ -17,6 +17,7 @@ function fixture(options: {
   exportPath?: string
   indexSource?: string
   files?: Record<string, string>
+  manifestFiles?: string[]
 } = {}): string {
   const root = mkdtempSync(join(tmpdir(), 'dsh-publint-all-'))
   roots.push(root)
@@ -29,7 +30,7 @@ function fixture(options: {
     license: 'MIT',
     engines: { node: '>=22.19' },
     sideEffects: false,
-    files: ['lib'],
+    files: options.manifestFiles ?? ['lib'],
     exports: { '.': { default: options.exportPath ?? './lib/index.js' } },
   }, null, 2)}\n`)
   writeFileSync(join(packageDir, 'README.md'), '# Probe\n')
@@ -39,6 +40,27 @@ function fixture(options: {
     writeFileSync(join(packageDir, path), source)
   }
   writeFileSync(join(packageDir, 'unpublished.js'), 'export const hidden = true\n')
+  return root
+}
+
+/** A package with no `lib/` output at all (e.g. never built), for the skip case. */
+function fixtureWithoutLib(): string {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-publint-all-'))
+  roots.push(root)
+  const packageDir = join(root, 'packages/core/nolib')
+  mkdirSync(packageDir, { recursive: true })
+  writeFileSync(join(packageDir, 'package.json'), `${JSON.stringify({
+    name: '@deepseek-ai/dsh-nolib',
+    version: '0.0.1',
+    type: 'module',
+    license: 'MIT',
+    engines: { node: '>=22.19' },
+    sideEffects: false,
+    files: ['index.js'],
+    exports: { '.': { default: './index.js' } },
+  }, null, 2)}\n`)
+  writeFileSync(join(packageDir, 'README.md'), '# No lib\n')
+  writeFileSync(join(packageDir, 'index.js'), 'export const nolib = true\n')
   return root
 }
 
@@ -91,5 +113,33 @@ describe('publint package runner', () => {
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('imports "./missing.js"')
     expect(result.stderr).toContain('imports "./missing.css"')
+  })
+})
+
+describe('lib chunk file-list coverage', () => {
+  it('rejects a built lib/*.js chunk unmatched by any files pattern', () => {
+    const result = run(fixture({
+      manifestFiles: ['lib/index.js'],
+      files: { 'lib/plugin-abc.js': 'export const plugin = true\n' },
+    }))
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('@deepseek-ai/dsh-probe')
+    expect(result.stderr).toContain('plugin-abc.js')
+    expect(result.stderr).toContain('add `lib/*.js` to files')
+  })
+
+  it('accepts a built lib/*.js chunk matched by a files glob', () => {
+    const result = run(fixture({
+      manifestFiles: ['lib/*.js'],
+      files: { 'lib/plugin-abc.js': 'export const plugin = true\n' },
+    }))
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toContain('All good!')
+  })
+
+  it('skips a package with no lib/ directory', () => {
+    const result = run(fixtureWithoutLib())
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toContain('All good!')
   })
 })
