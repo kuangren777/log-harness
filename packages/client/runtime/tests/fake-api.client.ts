@@ -205,6 +205,22 @@ export class FakeApiClient implements IApiClient {
   onWorkspaceArchiveSession: (payload: unknown) => Promise<RpcResponse<{ archivedSessionIds: SessionId[] }>> =
     payload => Promise.resolve(ok({ archivedSessionIds: [(payload as { sessionId: SessionId }).sessionId] }))
 
+  // Spelled out rather than named: WorkspaceFileContent is not part of the
+  // Client type re-export chain, and widening that chain is not this fake's job.
+  onWorkspaceReadFile: (payload: unknown) => Promise<RpcResponse<{
+    path: string
+    size: number
+    mediaType: string
+    encoding: 'utf8' | 'base64'
+    content: string
+  }>> = payload => Promise.resolve(ok({
+    path: `/f/ws/${(payload as { path: string }).path}`,
+    size: 0,
+    mediaType: 'text/plain',
+    encoding: 'utf8' as const,
+    content: '',
+  }))
+
   readonly workspace: IApiClient['workspace'] = {
     list: (payload: unknown) => this.record('workspace.list', payload, this.onWorkspaceList(payload).then(response => (
       response.result.ok
@@ -220,6 +236,8 @@ export class FakeApiClient implements IApiClient {
       this.record('workspace.insertSessionBefore', payload, this.onWorkspaceInsertSessionBefore(payload)),
     archiveSession: (payload: unknown) =>
       this.record('workspace.archiveSession', payload, this.onWorkspaceArchiveSession(payload)),
+    readFile: (payload: unknown) =>
+      this.record('workspace.readFile', payload, this.onWorkspaceReadFile(payload)),
   }
 
   // Payloads stay `unknown` (lint-lane note above); response rows are the real
