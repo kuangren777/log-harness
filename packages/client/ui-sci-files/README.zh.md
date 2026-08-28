@@ -8,7 +8,7 @@
 
 预览按文件本身分派。Office 文档（`.univer`、`.xlsx`、`.docx`、`.pptx`）在任何读取发生前就按扩展名路由到 Office 框架——`.univer` 是 SQLite 容器，导出格式是压缩包。其余文件经 `workspace.readFile` 整份读取（超出部署 `readFileMaxBytes` 上限的文件会被拒绝，而不是截断），再按宿主推导的 media type 分派：Markdown 经 `MarkdownText` 渲染为正文，源码与纯文本渲染为带大小行的高亮 `CodeBlock`，图片走 data URL，PDF 经 blob URL 交给浏览器自带的阅读器并随面板释放。没有渲染器的字节只说明其大小与不可预览。`workspace.readFile` 的七个错误码各有自己的一句话；未识别的错误码按内部失败呈现，而不是静默消失。
 
-`OfficeFrame` 向 Office 运行时的 `/univer-api/state` 询问该文档的 Viewer 目标与 Gateway 存活状态，随后以 `mode=embedded&scope=trunk` 嵌入。只有 Gateway 运行时才授予编辑（`editable=true`）——编辑就是一次协同写入，Gateway 不在时其背后无物；Gateway 已停止则以只读方式嵌入并明确说明。运行时完全不作答时——未组合 Office 插件、Gateway 启动失败、许可过期——给出具体原因，绝不呈现空白矩形。
+`OfficeFrame` 向 Office 运行时的 `/univer-api/state` 询问该文档的 Viewer 目标与 Gateway 存活状态，随后以 `mode=embedded&scope=trunk` 嵌入。只有 Gateway 运行时才授予编辑（`editable=true`）——编辑就是一次协同写入，Gateway 不在时其背后无物；Gateway 已停止则以只读方式嵌入并明确说明。运行时完全不作答时——未组合 Office 插件、Gateway 启动失败、许可过期——给出具体原因，绝不呈现空白矩形。其中一种「不作答」只是时序问题，因此不会立刻下结论：刚重启的宿主在挂载好会话之前会以 `SESSION_SCOPE_UNAVAILABLE` 拒绝该读取，仅这一个错误码会重试三次（间隔 0.8 秒、1.6 秒、3.2 秒）后框架才给出结论；其余失败一次即定案，而提示上自带的「重试」按钮供宿主慢于整段等待时由用户再读一次。
 
 该应答是一段没有任何 RPC schema 覆盖的无类型 JSON，其 `viewerUrl` 会成为 `<iframe src>`，也就是在本源内执行脚本——因此它按其本来面目作为线边界校验。`trustedViewerUrl` 只接受 `/univer-gw/` 前缀下的同源相对路径：`javascript:` 与 `data:` 引用解析出不透明源，`//host` 与任何绝对 URL 解析出外部源，而 `/univer-gw/../evil` 会被规范化到前缀之外——这正是校验读取解析后的 pathname 而非原始字符串的原因。`gatewayRunning` 必须严格等于布尔 `true` 而非仅为真值，因为它决定是否授予编辑。`embeddedViewerUrl` 重复同一道来源校验，对无法担保的目标直接抛错而不是组装它；两个调用方彼此独立，这个汇点值得两道防线。框架本身带 `sandbox="allow-scripts allow-same-origin allow-forms"`——Viewer 所需的能力，仅此而已，尤其不含弹窗、顶层导航、下载与模态框。
 

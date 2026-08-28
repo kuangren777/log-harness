@@ -31,6 +31,7 @@ export const zh = {
   'office.connected': '协同已连接',
   'office.readonly': '协同未连接，文档为只读。',
   'office.unavailable': 'Office 运行时不可用，无法打开这个文档。',
+  'office.retry': '重试',
   'office.title': '{name} 的 Office 预览',
 }
 
@@ -62,6 +63,7 @@ export const en: Record<SciFilesKey, string> = {
   'office.connected': 'Collaboration connected',
   'office.readonly': 'Collaboration is not connected; the document is read-only.',
   'office.unavailable': 'The office runtime is unavailable, so this document cannot be opened.',
+  'office.retry': 'Retry',
   'office.title': 'Office preview of {name}',
 }
 

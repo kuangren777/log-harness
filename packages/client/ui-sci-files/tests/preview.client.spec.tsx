@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 /**
  * The preview pane: the empty seat, every read-failure state, the renderer
- * each media type lands on, and the office frame's three outcomes (connected,
- * read-only, runtime absent).
+ * each media type lands on, the office frame's three outcomes (connected,
+ * read-only, runtime absent), and the two ways an absent runtime is read
+ * again.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { Translate } from '@deepseek-ai/dsh-client-locale/client'
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
@@ -222,6 +223,33 @@ describe('OfficeFrame', () => {
     const targetless = await frame({ ok: true, viewerUrl: null, gatewayRunning: true })
     expect(screen.getByRole('alert').textContent).toBe('office.unavailable')
     expect(targetless.view.container.querySelector('iframe')).toBeNull()
+  })
+
+  it('reads again when the user asks the unavailable notice to retry', async () => {
+    const officeState = vi.fn<(sessionId: SessionId, path: string) => Promise<OfficeStateOutcome>>()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValue({ ok: true, viewerUrl: '/univer-gw/?file=a', gatewayRunning: true })
+    render(<OfficeFrame sessionId={SESSION} path="/p/w/book.univer" officeState={officeState} t={t} />)
+    await act(async () => {})
+    expect(screen.getByRole('alert').textContent).toBe('office.unavailable')
+
+    fireEvent.click(screen.getByRole('button', { name: 'office.retry' }))
+    await act(async () => {})
+    expect(officeState).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('office.connected')).toBeTruthy()
+  })
+
+  it('reads again when the owner hands it a different reader', async () => {
+    const absent = vi.fn(async (): Promise<OfficeStateOutcome> => ({ ok: false }))
+    const live = vi.fn(async (): Promise<OfficeStateOutcome> => (
+      { ok: true, viewerUrl: '/univer-gw/?file=a', gatewayRunning: true }
+    ))
+    const view = render(<OfficeFrame sessionId={SESSION} path="/p/w/book.univer" officeState={absent} t={t} />)
+    await act(async () => {})
+    view.rerender(<OfficeFrame sessionId={SESSION} path="/p/w/book.univer" officeState={live} t={t} />)
+    await act(async () => {})
+    expect(live).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('office.connected')).toBeTruthy()
   })
 
   it('drops a runtime answer that arrives after the frame is gone', async () => {

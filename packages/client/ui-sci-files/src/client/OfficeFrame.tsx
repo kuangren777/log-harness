@@ -9,7 +9,10 @@
  * edit is a collaboration write with nothing behind it otherwise. A runtime
  * that does not answer at all produces a stated notice, never an empty frame:
  * a blank rectangle reads as a broken panel, while the reason is actionable
- * (the Gateway failed to start, or its license expired).
+ * (the Gateway failed to start, or its license expired). The notice carries a
+ * retry, because the read can also lose a race the user can win by asking
+ * again — a host that has not finished attaching the session answers nothing
+ * this frame can draw, and the reader's own waits are bounded.
  */
 import { useEffect, useState } from 'react'
 import type { Translate } from '@deepseek-ai/dsh-client-locale/client'
@@ -57,6 +60,9 @@ export interface OfficeFrameProps {
  */
 export function OfficeFrame({ sessionId, path, officeState, t }: OfficeFrameProps) {
   const [state, setState] = useState<OfficeStateOutcome | null>(null)
+  // Reading again is the same read: the counter is what makes a second one a
+  // new effect, since neither the document nor the reader has changed.
+  const [read, setRead] = useState(0)
 
   useEffect(() => {
     let live = true
@@ -65,10 +71,19 @@ export function OfficeFrame({ sessionId, path, officeState, t }: OfficeFrameProp
       if (live) setState(outcome)
     })
     return () => { live = false }
-  }, [sessionId, path, officeState])
+  }, [sessionId, path, officeState, read])
 
   if (state === null) return <div className={css.note}>{t('office.loading')}</div>
-  if (!state.ok || state.viewerUrl === null) return <div className={css.note} role="alert">{t('office.unavailable')}</div>
+  if (!state.ok || state.viewerUrl === null) {
+    return (
+      <div className={css.unavailable}>
+        <div className={css.note} role="alert">{t('office.unavailable')}</div>
+        <button type="button" className={css.retry} onClick={() => { setRead(count => count + 1) }}>
+          {t('office.retry')}
+        </button>
+      </div>
+    )
+  }
 
   const editable = state.gatewayRunning
   return (

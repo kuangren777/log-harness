@@ -2,11 +2,12 @@
  * Files-mode plugin, browser half: registers the Files entry of the details
  * column's mode strip and binds the three wire calls its components drive.
  *
- * All adaptation lives here — the directory rows, the read outcomes, and the
- * office runtime's answer become the plain vocabulary of `./contract.ts`, so
- * the components never see an RPC error envelope or a wire type. Composing
- * this plugin out of cordis.yml removes the tab entirely; the details column
- * falls back to its single built-in mode with no strip at all.
+ * All adaptation lives here — the directory rows and the read outcomes become
+ * the plain vocabulary of `./contract.ts` (the office runtime's answer, which
+ * carries its own retry, in `./office-state.ts`), so the components never see
+ * an RPC error envelope or a wire type. Composing this plugin out of
+ * cordis.yml removes the tab entirely; the details column falls back to its
+ * single built-in mode with no strip at all.
  */
 import type { ConnectionHandle, SessionId } from '@deepseek-ai/dsh-client-connection/client'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
@@ -16,10 +17,10 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {
-  DirectoryErrorCode, DirectoryOutcome, FileReadErrorCode, FileReadOutcome, OfficeStateOutcome, SciFilesInjected,
+  DirectoryErrorCode, DirectoryOutcome, FileReadErrorCode, FileReadOutcome, SciFilesInjected,
 } from './contract.ts'
 import { FilesMode } from './FilesMode.tsx'
-import { VIEWER_PATH_PREFIX } from './office-url.ts'
+import { createOfficeStateReader, SCOPE_ATTACH_RETRY_DELAYS_MS } from './office-state.ts'
 import { createSciFilesStore } from './stores.ts'
 import { watchProducedFiles } from './watch-produced.ts'
 import { en, NS, zh, type SciFilesKey } from './locales.ts'
@@ -40,9 +41,6 @@ export const inject = ['slots', 'locale', 'connection', 'layout', 'sessions']
 
 /** This entry's id in the details column's mode strip. */
 const MODE_ID = 'files'
-
-/** The office runtime's browser API path; same origin, session-scoped by the host. */
-const OFFICE_STATE_PATH = '/univer-api/state'
 
 /** Error codes `workspace.readFile` answers with; anything else reads as an internal failure. */
 const READ_ERROR_CODES: ReadonlySet<string> = new Set<FileReadErrorCode>([
@@ -101,76 +99,15 @@ async function listLevel(
 }
 
 /**
- * The Viewer target one runtime answer may be trusted for, or null.
- *
- * This value ends up in an `<iframe src>`, which is script execution in this
- * origin, and it arrives as untyped JSON over a route no RPC schema covers —
- * so it is a wire boundary and gets validated like one. Only a same-origin
- * relative path under the Gateway's own reverse-proxy prefix is accepted:
- * `javascript:` and `data:` parse to an opaque origin, `//host` and any
- * absolute URL to a foreign one, and `/univer-gw/../evil` normalizes out of
- * the prefix. Testing the PARSED pathname rather than the raw string is what
- * closes that last one. Anything refused leaves the panel in its
- * runtime-unavailable state instead of framing a hostile document.
- * @param value - the answer's `viewerUrl` member, unvalidated.
- * @returns the canonical relative target, or null when there is none to trust.
- */
-function trustedViewerUrl(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  let target: URL
-  try {
-    target = new URL(value, location.origin)
-  } catch {
-    // Not a parsable reference even against a base; there is nothing to frame.
-    return null
-  }
-  if (target.origin !== location.origin) return null
-  if (!target.pathname.startsWith(VIEWER_PATH_PREFIX)) return null
-  return `${target.pathname}${target.search}${target.hash}`
-}
-
-/**
- * One office document's collaboration state.
- *
- * The route is the office plugin's own browser API on this origin, reached
- * with `fetch` rather than the RPC carrier because that is the interface the
- * office package publishes. A deployment without the office plugin answers
- * 404, which reads the same as a Gateway that failed to start: no frame. The
- * body is untyped JSON, so both members it contributes are checked here —
- * `gatewayRunning` grants editing and `viewerUrl` becomes a frame source.
- * @param sessionId - session whose project directory scopes the path.
- * @param path - the document to open.
- * @returns the Viewer target and Gateway liveness, or the failure to reach the runtime.
- */
-async function fetchOfficeState(sessionId: SessionId, path: string): Promise<OfficeStateOutcome> {
-  const query = `file=${encodeURIComponent(path)}&sessionId=${encodeURIComponent(sessionId)}`
-  try {
-    const response = await fetch(`${OFFICE_STATE_PATH}?${query}`)
-    if (!response.ok) return { ok: false }
-    const body: unknown = await response.json()
-    if (typeof body !== 'object' || body === null) return { ok: false }
-    const state = body as { viewerUrl?: unknown; gatewayRunning?: unknown }
-    return {
-      ok: true,
-      viewerUrl: trustedViewerUrl(state.viewerUrl),
-      // Strict equality, not truthiness: a non-boolean must never grant editing.
-      gatewayRunning: state.gatewayRunning === true,
-    }
-  } catch {
-    // The office runtime is not reachable (absent plugin, dropped connection,
-    // a body that is not JSON); the frame states that instead of rendering an
-    // empty rectangle.
-    return { ok: false }
-  }
-}
-
-/**
  * Client plugin body: register the dictionaries and the Files mode entry.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
   const connection = ctx.get('connection') as ConnectionHandle
   const store = createSciFilesStore()
+  // One reader per plugin body: the frame's read effect depends on this
+  // identity, so a per-call reader would re-query on every render.
+  const officeState = createOfficeStateReader(SCOPE_ATTACH_RETRY_DELAYS_MS)
 
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-sci-files: dictionaries')
 
@@ -190,7 +127,7 @@ export function apply(ctx: ClientContext): void {
         ? { ok: true, file: response.result.value }
         : { ok: false, code: statedReadCode(response.result.error.code) }
     },
-    officeState: fetchOfficeState,
+    officeState,
   })
 
   // slots.inject, not a bare register: the conversation entry declaring this

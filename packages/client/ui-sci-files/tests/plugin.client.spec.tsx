@@ -2,7 +2,8 @@
 /**
  * The plugin body: the mode registration and its disposal, the three wire
  * adapters that turn RPC and HTTP answers into the mode's plain vocabulary,
- * and the live auto-locate watcher that brings the column forward.
+ * the office read's retry across a session the host has not attached yet, and
+ * the live auto-locate watcher that brings the column forward.
  */
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -14,6 +15,7 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { conversationSnapshot, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import type { DirectoryOutcome, FileReadOutcome, OfficeStateOutcome, SciFilesInjected } from '../src/client/contract.ts'
 import { apply, inject } from '../src/client/index.ts'
+import { createOfficeStateReader, SCOPE_ATTACH_RETRY_DELAYS_MS } from '../src/client/office-state.ts'
 import { apply as nodeApply } from '../src/index.ts'
 import { watchProducedFiles, type ProducedFileSessions } from '../src/client/watch-produced.ts'
 
@@ -255,6 +257,79 @@ describe('ui-sci-files plugin body', () => {
     await expect(face.officeState(SESSION, '/p/w/b.univer')).resolves.toEqual({
       ok: true, viewerUrl: '/univer-gw/?file=a', gatewayRunning: false,
     })
+  })
+})
+
+/** An office-state read whose retry waits are instant. */
+const instantReader = () => createOfficeStateReader([0, 0, 0])
+
+/** A `/univer-api/state` rejection naming the session the host has not attached yet. */
+function scopeUnavailable(): unknown {
+  return {
+    ok: false,
+    json: async () => ({
+      ok: false, code: 'SESSION_SCOPE_UNAVAILABLE', message: 'session is unavailable or has no workspace',
+    }),
+  }
+}
+
+/** A runtime answer carrying a Viewer target and a live Gateway. */
+function attached(): unknown {
+  return { ok: true, json: async () => ({ viewerUrl: '/univer-gw/?file=x', gatewayRunning: true }) }
+}
+
+/** A fetch double answering one queued response per call, then repeating the last. */
+function fetchQueue(...answers: readonly unknown[]) {
+  let call = 0
+  const mock = vi.fn(async () => {
+    const answer = answers[Math.min(call, answers.length - 1)]
+    call += 1
+    return answer
+  })
+  vi.stubGlobal('fetch', mock)
+  return mock
+}
+
+describe('office state read', () => {
+  it('waits out a session the host has not attached yet, and answers as soon as it lands', async () => {
+    const fetchMock = fetchQueue(scopeUnavailable(), attached())
+    await expect(instantReader()(SESSION, '/p/w/b.univer')).resolves.toEqual({
+      ok: true, viewerUrl: '/univer-gw/?file=x', gatewayRunning: true,
+    } satisfies OfficeStateOutcome)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('still answers when the attach lands on the last read of the schedule', async () => {
+    const fetchMock = fetchQueue(scopeUnavailable(), scopeUnavailable(), scopeUnavailable(), attached())
+    await expect(instantReader()(SESSION, '/p/w/b.univer')).resolves.toEqual({
+      ok: true, viewerUrl: '/univer-gw/?file=x', gatewayRunning: true,
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('states the runtime unavailable once the attach schedule is spent', async () => {
+    const fetchMock = fetchQueue(scopeUnavailable())
+    await expect(instantReader()(SESSION, '/p/w/b.univer')).resolves.toEqual({ ok: false })
+    // One read per schedule entry, plus the first: the reader never loops on.
+    expect(fetchMock).toHaveBeenCalledTimes(SCOPE_ATTACH_RETRY_DELAYS_MS.length + 1)
+  })
+
+  it('reads once for a rejection that is the runtime own answer', async () => {
+    const rejected = fetchQueue({ ok: false, json: async () => ({ ok: false, code: 'INVALID_FILE_PATH' }) })
+    await expect(instantReader()(SESSION, '/p/w/b.univer')).resolves.toEqual({ ok: false })
+    expect(rejected).toHaveBeenCalledTimes(1)
+
+    // A rejection body that carries no code at all is equally final.
+    const bodiless = fetchQueue({ ok: false, json: async () => null })
+    await expect(instantReader()(SESSION, '/p/w/b.univer')).resolves.toEqual({ ok: false })
+    expect(bodiless).toHaveBeenCalledTimes(1)
+  })
+
+  it('publishes one reader identity, so the frame does not re-query on every render', async () => {
+    const b = await bench()
+    b.declare()
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    expect(faceOf(b.slots).officeState).toBe(faceOf(b.slots).officeState)
   })
 })
 
