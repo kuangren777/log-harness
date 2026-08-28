@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-client-connection'
+import { VIEWER_ASSETS_ROOT } from '../artifacts/paths.ts'
 import type { ResolvedConfig } from '../config.ts'
 import type {} from '../service/univer-service.ts'
 import {
@@ -12,6 +13,7 @@ import {
   type RequestTrustCheck,
 } from './gateway-proxy.ts'
 import { createUniverRouter } from './router.ts'
+import { registerViewerAssets } from './viewer-assets.ts'
 
 /**
  * Services required by the browser API consumer.
@@ -64,4 +66,8 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
     path: GATEWAY_FILE_PREFIX,
     handler: createGatewayUpgradeBridge(ctx.univer, options),
   }), 'univer: gateway websocket bridge')
+  // The prefixes above cover everything the Viewer's markup asks for. Its
+  // JavaScript asks for more, at absolute `/assets/<name>` paths no rewrite
+  // reaches, so those exact names are claimed from the bundled directory.
+  registerViewerAssets(ctx, VIEWER_ASSETS_ROOT, isTrusted)
 }

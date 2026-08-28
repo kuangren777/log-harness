@@ -7,8 +7,10 @@
  */
 
 import { once } from 'node:events'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { request as httpRequest } from 'node:http'
 import { connect } from 'node:net'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context, Service } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -25,6 +27,10 @@ import { UniverService } from '../src/host/service/univer-service.ts'
 import * as toolsPlugin from '../src/host/tools/plugin.ts'
 import * as webPlugin from '../src/host/webServer/plugin.ts'
 import { GATEWAY_FILE_PREFIX, GATEWAY_PROXY_PREFIX } from '../src/host/webServer/gateway-proxy.ts'
+import { VIEWER_ASSETS_ROOT } from '../src/host/artifacts/paths.ts'
+
+/** The Viewer is fetched, not committed, so a clean checkout has no chunks to claim. */
+const whenFetched = existsSync(VIEWER_ASSETS_ROOT) ? it : it.skip
 
 /** Nothing in these tests reaches a document operation; only registration is observed. */
 function unreachable(): never {
@@ -155,9 +161,46 @@ describe('web route registration', () => {
     expect(() => server.registerUpgrade({ kind: 'prefix', path: GATEWAY_FILE_PREFIX, handler: () => {} }))
       .toThrow(/duplicate prefix upgrade route/)
 
-    // `/assets` stays unclaimed: the harness web app owns it, and the proxy's
-    // body rewrite is what keeps the Viewer off it.
+    // The `/assets` PREFIX stays unclaimed: the harness web app owns it, and
+    // the proxy's body rewrite is what keeps the Viewer's markup off it.
     expect(() => server.register({ kind: 'prefix', path: '/assets', handler: () => {} })).not.toThrow()
+  })
+
+  whenFetched('claims the exact /assets path of every bundled Viewer chunk', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
+    await ctx.plugin(Connection)
+    await ctx.plugin(StubUniverService, resolveConfig({}))
+    await ctx.plugin(StubSessions)
+    // What the harness web app registers: one prefix owning the `/assets/*`
+    // paths it serves out of its own dist.
+    const server = ctx.get('webServer')
+    if (server === undefined) throw new Error('webServer service did not activate')
+    server.register({
+      kind: 'prefix',
+      path: '/assets',
+      handler: (_request, response) => {
+        response.writeHead(200, { 'content-type': 'text/javascript' })
+        response.end('web-app-dist')
+      },
+    })
+    await ctx.plugin(webPlugin, resolveConfig({}))
+
+    // The Viewer's module-preload helper asks for these by absolute path, in
+    // JavaScript no body rewrite reaches. The exact table answers first, so a
+    // bundled name reaches the bundled file...
+    const bundled = readdirSync(VIEWER_ASSETS_ROOT).filter(name => name.endsWith('.js'))
+    expect(bundled.length).toBeGreaterThan(0)
+    const chunk = await fetch(`http://127.0.0.1:${String(server.port)}/assets/${bundled[0] ?? ''}`)
+    expect(chunk.status).toBe(200)
+    expect(chunk.headers.get('content-type')).toBe('text/javascript; charset=utf-8')
+    expect(chunk.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+    expect(await chunk.text()).toBe(readFileSync(join(VIEWER_ASSETS_ROOT, bundled[0] ?? ''), 'utf8'))
+
+    // ...while every other `/assets/*` path still falls to the web app.
+    const app = await fetch(`http://127.0.0.1:${String(server.port)}/assets/index-DeadBeef.js`)
+    expect(await app.text()).toBe('web-app-dist')
   })
 
   it('releases every route when the fiber is disposed', async () => {

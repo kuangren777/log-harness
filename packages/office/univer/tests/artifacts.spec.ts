@@ -14,6 +14,7 @@ import {
   PLUGIN_NODE_MODULES,
   RENDER_MACHINE_ROOT,
   UNIT_CONTENT_WORKER_ENTRY,
+  VIEWER_ASSETS_ROOT,
   VIEWER_ROOT,
 } from '../src/host/artifacts/paths.ts'
 
@@ -25,7 +26,7 @@ const whenFetched = fetched ? it : it.skip
 
 describe('artifact paths', () => {
   it('anchors every artifact on the package root, not on the importing module', () => {
-    for (const path of [GATEWAY_ENTRY, VIEWER_ROOT, UNIT_CONTENT_WORKER_ENTRY, RENDER_MACHINE_ROOT]) {
+    for (const path of [GATEWAY_ENTRY, VIEWER_ROOT, VIEWER_ASSETS_ROOT, UNIT_CONTENT_WORKER_ENTRY, RENDER_MACHINE_ROOT]) {
       const within = relative(PACKAGE_ROOT, path)
       expect(within.startsWith('..')).toBe(false)
       // Reaching the artifacts through `src/host/artifacts/` would mean the
@@ -40,7 +41,9 @@ describe('artifact paths', () => {
     expect(statSync(UNIT_CONTENT_WORKER_ENTRY).isFile()).toBe(true)
     expect(statSync(VIEWER_ROOT).isDirectory()).toBe(true)
     expect(statSync(RENDER_MACHINE_ROOT).isDirectory()).toBe(true)
-    // The Viewer's entry document is what the reverse proxy serves first.
+    // The Viewer's entry document is what the reverse proxy serves first, and
+    // its chunk directory is what the host claims `/assets/<name>` for.
     expect(existsSync(`${VIEWER_ROOT}index.html`)).toBe(true)
+    expect(statSync(VIEWER_ASSETS_ROOT).isDirectory()).toBe(true)
   })
 })

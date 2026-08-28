@@ -18,8 +18,12 @@
  * - `/uf` is NOT stripped, because the Viewer builds those paths itself at
  *   runtime and the Gateway expects to see them verbatim.
  *
- * Nothing registers at `/assets`: the harness web app owns that path, and the
- * rewrite above is what keeps the Viewer from needing it.
+ * The `/assets` PREFIX stays the harness web app's — this proxy claims none of
+ * it, and the rewrite above is what keeps the Viewer's markup off it. The
+ * Viewer's JavaScript is a separate problem this module does not solve: its
+ * module-preload helper builds absolute `/assets/<name>` URLs that no body
+ * rewrite reaches, so `viewer-assets.ts` claims those exact names from the
+ * bundled directory instead.
  *
  * Every route here is a browser-reachable surface in front of a local service
  * that performs destructive operations, so all three carry the same
