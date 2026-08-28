@@ -34,9 +34,13 @@ interface Workspace {
   readonly id: WorkspaceId
 
   /**
-   * Canonical directory path: the `fs.realpath` of the path given at create
-   * time (trailing slashes, `..`, and symlinks all resolved). Never rewritten
-   * afterwards, even when the directory disappears (see {@link status}).
+   * Canonical directory path in the filesystem the tools execute in: the
+   * composed filesystem seam's canon (`fs.resolve` then `processPath`) when a
+   * filesystem service is mounted, else the Host `fs.realpath` of the path
+   * given at create time (trailing slashes, `..`, and symlinks all resolved).
+   * Never rewritten afterwards, even when the directory disappears (see
+   * {@link status}). A record stamped under one world only validates under the
+   * same world: a sandbox path is not a Host path.
    */
   readonly path: string
 
@@ -105,7 +109,7 @@ interface Workspace {
 
   /**
    * Live directory check, uncached: whether {@link path} currently exists and
-   * is a directory. A missing directory never mutates the record — the
+   * is a directory in the filesystem the tools execute in. A missing directory never mutates the record — the
    * directory may only be temporarily moved.
    * @returns `'ok'` when the directory exists, `'missing-dir'` otherwise.
    */
