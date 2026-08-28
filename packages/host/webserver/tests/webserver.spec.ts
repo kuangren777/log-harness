@@ -7,9 +7,11 @@
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { once } from 'node:events'
+import type { IncomingMessage } from 'node:http'
 import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { Duplex } from 'node:stream'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -67,11 +69,11 @@ async function request(port: number, path: string, init?: RequestInit): Promise<
   return { status: response.status, body: (await response.text()).slice(0, 80) }
 }
 
-/** Open one raw upgrade request and return after the handler writes its response. */
-async function upgrade(port: number, path: string): Promise<ReturnType<typeof connect>> {
+/** Open one raw upgrade request and return once the handler has written its response. */
+async function upgrade(port: number, path: string): Promise<{ socket: ReturnType<typeof connect>; response: string }> {
   const socket = connect(port, '127.0.0.1')
   await once(socket, 'connect')
-  const response = once(socket, 'data')
+  const first = once(socket, 'data')
   socket.write([
     `GET ${path} HTTP/1.1`,
     `Host: 127.0.0.1:${String(port)}`,
@@ -80,9 +82,10 @@ async function upgrade(port: number, path: string): Promise<ReturnType<typeof co
     '',
     '',
   ].join('\r\n'))
-  const [data] = await response as [Buffer]
-  expect(String(data)).toContain('101 Switching Protocols')
-  return socket
+  const [data] = await first as [Buffer]
+  const response = String(data)
+  expect(response).toContain('101 Switching Protocols')
+  return { socket, response }
 }
 
 describe('real Loader composition', () => {
@@ -164,10 +167,43 @@ describe('real Loader composition', () => {
       },
     })
     expect(() => server.registerUpgrade({ path: '/events', handler: () => {} }))
-      .toThrow(/duplicate upgrade route/)
-    const upgraded = await upgrade(port, '/events?stream=mux')
+      .toThrow(/duplicate exact upgrade route/)
+    const { socket: upgraded } = await upgrade(port, '/events?stream=mux')
     disposeUpgrade()
     expect(() => server.registerUpgrade({ path: '/events', handler: () => {} })).not.toThrow()
+
+    // Upgrade routing mirrors the request tables: a prefix route owns every
+    // path below it, exact beats prefix on the same pathname, the longest
+    // prefix wins, and (kind, path) is what duplicate ownership is keyed on.
+    const accept = (marker: string) => (_req: IncomingMessage, socket: Duplex): void => {
+      socket.write(`HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\nX-Route: ${marker}\r\n\r\n`)
+    }
+    const disposePrefix = server.registerUpgrade({ kind: 'prefix', path: '/uf', handler: accept('PREFIX') })
+    server.registerUpgrade({ kind: 'prefix', path: '/uf/deep', handler: accept('DEEP') })
+    server.registerUpgrade({ kind: 'exact', path: '/uf/exact', handler: accept('EXACT') })
+    expect(() => server.registerUpgrade({ kind: 'prefix', path: '/uf', handler: () => {} }))
+      .toThrow(/duplicate prefix upgrade route/)
+    // The same path under the other kind is a distinct owner, not a duplicate.
+    expect(() => server.registerUpgrade({ kind: 'exact', path: '/uf', handler: accept('EXACT-ROOT') })).not.toThrow()
+    for (const [path, marker] of [
+      ['/uf/file-key', 'PREFIX'],
+      ['/uf/deep/leaf', 'DEEP'],
+      ['/uf/exact', 'EXACT'],
+      ['/uf', 'EXACT-ROOT'],
+    ] as const) {
+      const { socket, response } = await upgrade(port, path)
+      socket.destroy()
+      expect(response).toContain(`X-Route: ${marker}`)
+    }
+    // A pathname no upgrade table claims is still refused.
+    const unclaimed = connect(port, '127.0.0.1')
+    unclaimed.on('error', () => { /* The server-side reset is the fixture outcome. */ })
+    await once(unclaimed, 'connect')
+    const unclaimedClosed = once(unclaimed, 'close')
+    unclaimed.write(`GET /not-upgradable HTTP/1.1\r\nHost: 127.0.0.1:${String(port)}\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\n\r\n`)
+    await unclaimedClosed
+    disposePrefix()
+    expect(() => server.registerUpgrade({ kind: 'prefix', path: '/uf', handler: () => {} })).not.toThrow()
 
     // The webserver contains raw-socket errors even before an upgrade handler
     // has installed its protocol implementation.

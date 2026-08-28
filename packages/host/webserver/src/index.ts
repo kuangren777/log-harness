@@ -47,12 +47,42 @@ export interface WebRoute {
   handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
 }
 
-/** One exact-path HTTP upgrade registration. */
+/** One HTTP upgrade registration. */
 export interface WebUpgradeRoute {
+  /**
+   * Match kind, defaulting to 'exact'. A 'prefix' route owns every upgrade
+   * below its path, which a reverse proxy needs when the upgrading client
+   * chooses the sub-path (a per-resource WebSocket endpoint).
+   */
+  kind?: WebRouteKind
   /** Absolute pathname, no trailing slash. */
   path: string
   /** Owns protocol negotiation and the upgraded socket after dispatch. */
   handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void | Promise<void>
+}
+
+/**
+ * Resolve one pathname against an exact table and a prefix table: the exact
+ * match wins, otherwise the longest matching prefix. Shared by the request and
+ * upgrade dispatchers so both surfaces answer the same pathname identically.
+ * @param exact - routes matching their pathname verbatim.
+ * @param prefixes - routes owning their path and everything below it.
+ * @param pathname - the request pathname.
+ * @returns the owning route, or undefined when no table claims the pathname.
+ */
+function matchRoute<T extends { path: string }>(
+  exact: ReadonlyMap<string, T>,
+  prefixes: ReadonlyMap<string, T>,
+  pathname: string,
+): T | undefined {
+  const matched = exact.get(pathname)
+  if (matched !== undefined) return matched
+  let best: T | undefined
+  for (const [prefix, route] of prefixes) {
+    if (pathname !== prefix && !pathname.startsWith(`${prefix}/`)) continue
+    if (best === undefined || prefix.length > best.path.length) best = route
+  }
+  return best
 }
 
 /** Gateway config: the listen address. */
@@ -78,7 +108,8 @@ export class WebServer extends Service {
 
   private readonly exact = new Map<string, WebRoute>()
   private readonly prefixes = new Map<string, WebRoute>()
-  private readonly upgrades = new Map<string, WebUpgradeRoute>()
+  private readonly upgradeExact = new Map<string, WebUpgradeRoute>()
+  private readonly upgradePrefixes = new Map<string, WebUpgradeRoute>()
   private readonly upgradedSockets = new Set<Duplex>()
   private readonly indexTaps: ((html: string) => string)[] = []
   private fallback: WebRoute['handler'] | undefined
@@ -115,17 +146,21 @@ export class WebServer extends Service {
   }
 
   /**
-   * Register an exact-path HTTP upgrade route. Duplicate paths throw because
-   * one socket can have only one protocol owner.
-   * @param route - pathname and handler owning negotiation plus socket use.
+   * Register an HTTP upgrade route. Duplicate (kind, path) throws because one
+   * socket can have only one protocol owner. Dispatch mirrors {@link register}:
+   * the exact table answers first, then longest-prefix-wins.
+   * @param route - match kind (default 'exact'), pathname, and the handler
+   * owning negotiation plus socket use.
    * @returns the disposer removing the route.
    */
   registerUpgrade(route: WebUpgradeRoute): () => void {
-    if (this.upgrades.has(route.path)) {
-      throw new Error(`webserver: duplicate upgrade route "${route.path}"`)
+    const kind = route.kind ?? 'exact'
+    const table = kind === 'exact' ? this.upgradeExact : this.upgradePrefixes
+    if (table.has(route.path)) {
+      throw new Error(`webserver: duplicate ${kind} upgrade route "${route.path}"`)
     }
-    this.upgrades.set(route.path, route)
-    return () => { this.upgrades.delete(route.path) }
+    table.set(route.path, route)
+    return () => { table.delete(route.path) }
   }
 
   /**
@@ -206,7 +241,7 @@ export class WebServer extends Service {
       let route: WebUpgradeRoute | undefined
       try {
         /* v8 ignore next -- node:http always sets url on server requests. */
-        route = this.upgrades.get(new URL(req.url ?? '/', 'http://x').pathname)
+        route = matchRoute(this.upgradeExact, this.upgradePrefixes, new URL(req.url ?? '/', 'http://x').pathname)
       } catch (error) {
         this.ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
         socket.destroy()
@@ -255,14 +290,7 @@ export class WebServer extends Service {
 
   /** Longest-prefix-wins over the prefix table after an exact-table miss. */
   private match(pathname: string): WebRoute | undefined {
-    const exact = this.exact.get(pathname)
-    if (exact !== undefined) return exact
-    let best: WebRoute | undefined
-    for (const [prefix, route] of this.prefixes) {
-      if (pathname !== prefix && !pathname.startsWith(`${prefix}/`)) continue
-      if (best === undefined || prefix.length > best.path.length) best = route
-    }
-    return best
+    return matchRoute(this.exact, this.prefixes, pathname)
   }
 
   /**
