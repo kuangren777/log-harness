@@ -15,7 +15,7 @@ export interface Config {
   gatewayRequestTimeoutMs?: number
   /** HTTP timeout used for Gateway mutations. */
   gatewayMutationTimeoutMs?: number
-  /** Deadline for one proxied browser request or WebSocket handshake reaching the Gateway. */
+  /** Idle deadline for one proxied browser request or WebSocket handshake; each byte restarts it. */
   proxyTimeoutMs?: number
   /** Maximum lifetime of a one-shot content worker process. */
   unitContentOperationTimeoutMs?: number

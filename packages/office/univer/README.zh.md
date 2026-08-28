@@ -37,7 +37,7 @@ host 发出的每个 Viewer 目标（`viewerUrl`，以及各 worktree 的 `openU
 | `gatewayStartupTimeoutMs` | `10_000` | 等待 Gateway 变为健康的时间上限。 |
 | `gatewayRequestTimeoutMs` | `3_000` | Gateway 状态读取的 HTTP 超时。 |
 | `gatewayMutationTimeoutMs` | `60_000` | Gateway 变更操作的 HTTP 超时。 |
-| `proxyTimeoutMs` | `30_000` | 单次代理浏览器请求或 WebSocket 握手的截止时间；Gateway 超时未响应则回 504。 |
+| `proxyTimeoutMs` | `30_000` | 单次代理浏览器请求或 WebSocket 握手的**空闲**截止时间——每收到一个字节即重新计时，因此只有真正停摆的 Gateway 才会触发并回 504。对单次响应不设总时长上限。 |
 | `unitContentOperationTimeoutMs` | `120_000` | 单个内容 worker 进程的最长存活时间。 |
 | `screenshotOperationTimeoutMs` | `120_000` | 单次浏览器截图操作的最长存活时间。 |
 | `screenshotMaxPages` | `30` | 单次截图调用最多捕获的页数。 |

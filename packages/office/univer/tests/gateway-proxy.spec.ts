@@ -630,6 +630,13 @@ describe('header hygiene across the hop', () => {
         'x-forwarded-for': '203.0.113.9',
         'x-forwarded-proto': 'https',
         'x-forwarded-host': 'evil.example',
+        'x-real-ip': '203.0.113.9',
+        'true-client-ip': '203.0.113.9',
+        'x-client-ip': '203.0.113.9',
+        'x-cluster-client-ip': '203.0.113.9',
+        'cf-connecting-ip': '203.0.113.9',
+        'fastly-client-ip': '203.0.113.9',
+        'via': '1.1 evil-proxy',
         'x-keep-me': 'yes',
       },
     })
@@ -641,6 +648,9 @@ describe('header hygiene across the hop', () => {
     for (const withheld of [
       'cookie', 'authorization', 'proxy-authorization', 'forwarded',
       'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-host',
+      // Client-address and proxy-provenance names a caller must not assert.
+      'x-real-ip', 'true-client-ip', 'x-client-ip', 'x-cluster-client-ip',
+      'cf-connecting-ip', 'fastly-client-ip', 'via',
     ]) {
       expect(seen.headers[withheld]).toBeUndefined()
     }

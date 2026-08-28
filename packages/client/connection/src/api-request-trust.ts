@@ -108,7 +108,9 @@ export function isTrustedApiRequest(request: ApiTrustRequest, trustedHosts: read
   if (!isLoopbackHostname(hostUrl.hostname) && !isTrustedAuthority(hostUrl, trustedHosts)) return false
   // Cross-site fence: modern browsers label the initiator relationship on
   // every fetch; an explicit cross-site marker is refused regardless of Origin.
-  if (header(request.headers, 'sec-fetch-site') === 'cross-site') return false
+  // Lowercased before comparing: the token is case-insensitive, and a browser
+  // or intermediary that sent `Cross-Site` must not slip past this fence.
+  if (header(request.headers, 'sec-fetch-site')?.toLowerCase() === 'cross-site') return false
   // Origin fence: when a browser attaches an Origin it must be exactly this
   // authority (compared through the same normalization as the Host). Absent
   // Origin is fine — the Host fence above already bound the request. The

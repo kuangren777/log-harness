@@ -54,6 +54,10 @@ describe('isTrustedApiRequest', () => {
     expect(isTrustedApiRequest(request({ host: '127.0.0.1:3080', origin: 'http://evil.example' }), [])).toBe(false)
     // Explicit cross-site label → refused regardless of Origin.
     expect(isTrustedApiRequest(request({ host: '127.0.0.1:3080', 'sec-fetch-site': 'cross-site' }), [])).toBe(false)
+    // The token is case-insensitive, so a different spelling is the same label.
+    for (const spelling of ['Cross-Site', 'CROSS-SITE', 'cRoSs-SiTe']) {
+      expect(isTrustedApiRequest(request({ host: '127.0.0.1:3080', 'sec-fetch-site': spelling }), [])).toBe(false)
+    }
     // Opaque origin (sandboxed iframe, file: page) parses to no authority.
     expect(isTrustedApiRequest(request({ host: '127.0.0.1:3080', origin: 'null' }), [])).toBe(false)
   })

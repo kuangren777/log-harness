@@ -83,16 +83,33 @@ const HOP_BY_HOP = new Set([
  * the proxy must not hand it the browser's ambient credentials for the harness
  * origin (`cookie`, `authorization`) — a Viewer request would otherwise carry
  * the operator's session into a process that has no notion of it. The
- * forwarding headers are dropped because a client controls them end to end: a
- * Gateway that trusted `x-forwarded-for` would be reading an attacker-chosen
- * address. This proxy states none of them itself; the Gateway derives every URL
+ * The forwarding, client-address, and proxy-provenance headers are dropped
+ * because a client controls them end to end: a Gateway that trusted
+ * `x-forwarded-for`, `x-real-ip`, or `via` would be reading attacker-chosen
+ * values. This proxy states none of them itself; the Gateway derives every URL
  * it builds from `host`, which is set explicitly below.
+ *
+ * A denylist rather than an allowlist, deliberately. The Gateway is a 43 MB
+ * prebuilt bundle this repository cannot rebuild or fully enumerate, and a
+ * missing allowlist entry would silently break a Viewer request with no e2e
+ * coverage to catch it. The names withheld here are the ones a caller must not
+ * be able to assert; searching the pinned bundle finds no quoted occurrence of
+ * any of them, while headers it does consult (`content-type`, `accept-encoding`,
+ * `sec-websocket-key`) appear as literals — so withholding these removes trust
+ * inputs without removing anything the Gateway reads.
  */
 const WITHHELD_REQUEST_HEADERS = new Set([
   'authorization',
+  'cf-connecting-ip',
   'cookie',
+  'fastly-client-ip',
   'forwarded',
   'proxy-authorization',
+  'true-client-ip',
+  'via',
+  'x-client-ip',
+  'x-cluster-client-ip',
+  'x-real-ip',
 ])
 
 /**
@@ -139,7 +156,12 @@ export interface GatewayProxyOptions {
   readonly autoStartGateway: boolean
   /** The browser-trust fence; a request it refuses is answered 403 and never forwarded. */
   readonly isTrusted: RequestTrustCheck
-  /** Deadline for the upstream hop, applied to both the HTTP proxy and the upgrade handshake. */
+  /**
+   * Idle deadline for the upstream hop, applied to both the HTTP proxy and the
+   * upgrade handshake: the socket must produce activity within it, and each
+   * byte restarts the clock. A slow but progressing transfer is therefore never
+   * cut off, and a total cap on one response is deliberately not imposed.
+   */
   readonly proxyTimeoutMs: number
 }
 
@@ -343,8 +365,10 @@ export function createGatewayHttpProxy(
         upstreamResponse.once('error', () => { failResponse(response, settle, 502, GATEWAY_UNAVAILABLE_BODY) })
         pipeBack(upstreamResponse, response, settle)
       })
-      // A Gateway that accepts the connection and then stalls would otherwise
-      // hold this request, its socket, and the handler promise open forever.
+      // Idle deadline, not a total one: node restarts this clock on every byte,
+      // so a slow transfer survives and only a genuinely stalled Gateway trips
+      // it. Without it a stall would hold the request, its socket, and the
+      // handler promise open forever.
       proxied.setTimeout(options.proxyTimeoutMs, () => {
         failResponse(response, settle, 504, GATEWAY_TIMEOUT_BODY)
         proxied.destroy()

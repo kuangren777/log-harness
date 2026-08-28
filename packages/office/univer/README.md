@@ -37,7 +37,7 @@ Every Viewer target the host emits (`viewerUrl`, and each worktree's `openUrl` /
 | `gatewayStartupTimeoutMs` | `10_000` | Time allowed for the Gateway to become healthy. |
 | `gatewayRequestTimeoutMs` | `3_000` | HTTP timeout for Gateway state reads. |
 | `gatewayMutationTimeoutMs` | `60_000` | HTTP timeout for Gateway mutations. |
-| `proxyTimeoutMs` | `30_000` | Deadline for one proxied browser request or WebSocket handshake; a Gateway that stalls past it answers 504. |
+| `proxyTimeoutMs` | `30_000` | Idle deadline for one proxied browser request or WebSocket handshake — each byte restarts it, so only a stalled Gateway trips it and answers 504. There is no total cap on one response. |
 | `unitContentOperationTimeoutMs` | `120_000` | Maximum lifetime of one content-worker process. |
 | `screenshotOperationTimeoutMs` | `120_000` | Maximum lifetime of one browser-backed screenshot. |
 | `screenshotMaxPages` | `30` | Maximum pages captured by one screenshot call. |
