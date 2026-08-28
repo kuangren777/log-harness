@@ -692,8 +692,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'e2b',
-    summary: 'Creates one lazily consumable E2B SDK handle and deletes the sandbox at timeout or disposal.',
-    description: 'Creates one lazily consumable E2B SDK handle and deletes the sandbox at timeout or disposal. Creation begins at plugin construction; adapters await getSandbox before their first operation.',
+    summary: 'Abstract owner of one shared E2B sandbox.',
+    description: 'Abstract owner of one shared E2B sandbox. Subclass, implement getSandbox, and load the subclass as a plugin — it registers as `ctx.e2b` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior). Filesystem and subprocess adapters await the one handle, so they inhabit the same remote Linux world.\n\nImplementations must honor these semantics:\n\n- getSandbox resolves only after cwd and runtimeRoot exist in the sandbox, so an adapter\'s first operation needs no setup.\n- runtimeRoot is adapter-private: a real directory, never a symlink, reachable only by its owner.\n- Acquisition is shared and repeatable: concurrent callers await one attempt and receive the same handle.\n- Acquisition failure is reported to every caller; providers never hand back a half-prepared sandbox.\n- Disposal first refuses new handle acquisition; whether it also deletes the sandbox is the provider\'s lifetime policy.',
     methods: [
       {
         signature: 'readonly cwd: string',
@@ -706,11 +706,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
-        signature: 'async getSandbox(): Promise<Sandbox>',
+        signature: 'abstract getSandbox(): Promise<Sandbox>',
         description: 'Return the shared live SDK handle.',
         parameters: [],
-        returns: 'the created sandbox after the configured cwd exists.',
-        throws: ['when E2B rejects creation or the service is disposing.'],
+        returns: 'the acquired sandbox after {@link cwd} and {@link runtimeRoot} exist.',
+        throws: ['when acquisition fails or the service is disposing.'],
       },
     ],
   },
@@ -1135,6 +1135,33 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'referencedText',
+    summary: 'Registry of named referenced-text stores plus the model-request resolution that turns `referenced-text` blocks into `text` blocks.',
+    description: 'Registry of named referenced-text stores plus the model-request resolution that turns `referenced-text` blocks into `text` blocks.\n\nThe registry owns digest verification for every store: a store returns bytes, and this service decides whether those bytes are the ones the logged reference named.',
+    methods: [
+      {
+        signature: 'registerStore(name: string, store: ReferencedTextStore): () => void',
+        description: 'Register one borrowed same-process store under a unique name. Disposing the calling fiber, or calling the returned disposer, removes it.',
+        parameters: [{ name: 'name', description: 'store name that logged references address; a duplicate throws.' }, { name: 'store', description: 'the borrowed store implementation.' }],
+        returns: 'the disposer that unregisters this store.',
+      },
+      {
+        signature: 'async read(ref: ReferencedTextRef, signal?: AbortSignal): Promise<string>',
+        description: 'Read one reference and verify the returned text against its recorded digest.',
+        parameters: [{ name: 'ref', description: 'the logged reference to resolve.' }, { name: 'signal', description: 'optional cancellation passed to the owning store.' }],
+        returns: 'the exact stored text.',
+        throws: ['{ReferencedTextError} `STORE_MISSING` when no store owns `ref.store`, `DIGEST_MISMATCH` when the returned text hashes to another digest, or the store\'s own failure, such as `NOT_FOUND`.'],
+      },
+      {
+        signature: 'async resolveMessages(messages: readonly Message[], signal?: AbortSignal): Promise<readonly Message[]>',
+        description: 'Replace every `referenced-text` block, including blocks nested in tool-result content, with the verified `text` block it names. Input messages are never mutated: only messages that carry a reference are rebuilt, and each distinct reference is read once per call.',
+        parameters: [{ name: 'messages', description: 'the assembled request messages, possibly deep-frozen.' }, { name: 'signal', description: 'optional cancellation passed to each owning store.' }],
+        returns: 'resolved messages, or the exact input array when it holds no reference.',
+        throws: ['the first failure {@link ReferencedTextRegistry.read} raises; no partial result is returned.'],
+      },
+    ],
+  },
+  {
     key: 'sandbox',
     summary: 'Abstract process-sandbox service.',
     description: 'Abstract process-sandbox service. confine must return enforcing argv or fail closed at wrap or runner-execution time; silent unconfined passthrough is forbidden. Functional probes arbitrate multi-runner chains and may be skipped for a sole candidate, whose own refusal remains the fail-closed end.',
@@ -1173,6 +1200,120 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Read the session override without applying the deployment default.',
         parameters: [{ name: 'session', description: 'session whose log supplies the override.' }],
         returns: 'the last logged mode, or `undefined` without one.',
+      },
+    ],
+  },
+  {
+    key: 'sciAudit',
+    summary: 'The audit projection, its cold rebuild, and the per-session summary.',
+    description: 'The audit projection, its cold rebuild, and the per-session summary.\n\nThe service reads the session log and writes only its own three tables; it never creates, resumes, or drives an Agent or Session.',
+    methods: [
+      {
+        signature: 'rebuild(sessionIds: readonly SessionId[]): Promise<RebuildReport>',
+        description: 'Truncate the three owned tables for the named sessions and re-project them from their logs.\n\nThe cold read goes through `sessionQuery`, which is live-preferred, so a session still in memory is replayed from the same events the live fold saw and the two paths produce identical rows. Truncation runs for every session before any re-projection so a `sci_plan` row a later session claimed is not deleted after being rewritten.',
+        parameters: [{ name: 'sessionIds', description: 'the sessions to re-project, in the order they were requested.' }],
+        returns: 'how many rows were deleted and written.',
+        throws: ['SessionQueryError when the corpus does not hold one of the ids.'],
+      },
+      {
+        signature: 'async summarize(sessionId: SessionId): Promise<AuditSummary>',
+        description: 'Compute one session\'s audit summary from the committed rows and its log.',
+        parameters: [{ name: 'sessionId', description: 'the session to summarize.' }],
+        returns: 'the summary.',
+        throws: ['SessionQueryError when the corpus does not hold the id.'],
+      },
+      {
+        signature: 'auditRows(sessionId: SessionId): readonly AuditRecord[]',
+        description: 'Snapshot one session\'s committed `sci_audit` rows in log order.',
+        parameters: [{ name: 'sessionId', description: 'the session to read.' }],
+        returns: 'the rows, ascending by the log coordinate they were projected from.',
+      },
+      {
+        signature: 'deliveryRows(): readonly DeliveryRecord[]',
+        description: 'Snapshot every committed `sci_delivery` row.',
+        parameters: [],
+        returns: 'the rows, in table order.',
+      },
+      {
+        signature: 'planRows(): readonly PlanRecord[]',
+        description: 'Snapshot every committed `sci_plan` row.',
+        parameters: [],
+        returns: 'the rows, in table order.',
+      },
+    ],
+  },
+  {
+    key: 'sciMemory',
+    summary: 'Memory observation, its durable index, and the recall endpoints over past sessions.',
+    description: 'Memory observation, its durable index, and the recall endpoints over past sessions. The service reads and repairs memory nodes; it never creates, resumes, or drives an Agent or Session.',
+    methods: [
+      {
+        signature: '@Remote(\'index\') async index(): Promise<RecallIndexValue>',
+        description: 'List every session in the logical corpus as one recall row.',
+        parameters: [],
+        returns: 'newest-first rows carrying the opening request and delivered titles.',
+      },
+      {
+        signature: '@Remote(\'session\') async session(request: RecallSessionRequest): Promise<RecallSessionResult>',
+        description: 'Read one past session\'s dialogue with tool traffic stripped.',
+        parameters: [{ name: 'request', description: 'the session to transcribe.' }],
+        returns: 'the transcript, or `session-not-found` for an id the corpus does not hold.',
+      },
+      {
+        signature: 'memoryIndex(): readonly MemoryIndexRecord[]',
+        description: 'Snapshot the memory index.\n\nThe rows are the package\'s durable output: `sci audit rebuild` replays the log into a fresh medium and compares the result against this snapshot.',
+        parameters: [],
+        returns: 'one immutable row per indexed slug.',
+      },
+      {
+        signature: 'timingScore(): number | undefined',
+        description: 'Score how early the indexed memory nodes were written in their sessions.',
+        parameters: [],
+        returns: 'the score in `[0, 1]`, or `undefined` while nothing is indexed.',
+      },
+    ],
+  },
+  {
+    key: 'sciRemoteHosts',
+    summary: 'Host registration, key custody, and the managed `~/.ssh/config` block.',
+    description: 'Host registration, key custody, and the managed `~/.ssh/config` block.\n\nThe service never reads a private key back out for a caller: `list` reports only the path of the key an entry uses, so no endpoint of this package can return key material to whoever asks.',
+    methods: [
+      {
+        signature: '@Remote(\'list\') async list(): Promise<HostsResult<HostsListValue>>',
+        description: 'List every registered host, switched-off entries included.',
+        parameters: [],
+        returns: 'the roster with each entry\'s key path, or `malformed-config` when the file\'s markers cannot be paired.',
+      },
+      {
+        signature: '@Remote(\'upsert\') async upsert(request: UpsertHostRequest): Promise<HostsResult<HostsListValue>>',
+        description: 'Register one machine, replacing any entry that already carries its alias.\n\nThe three writes commit in custody order: the credential record, then the key file the entry will point at, then the block entry itself. An interruption therefore leaves at worst a key nothing references, never an entry naming a key that was never written.',
+        parameters: [{ name: 'request', description: 'the host to register and the private key it authenticates with.' }],
+        returns: 'the roster as it stands after the write, or the refusal.',
+      },
+      {
+        signature: '@Remote(\'remove\') async remove(request: RemoveHostRequest): Promise<HostsResult<HostsListValue>>',
+        description: 'Deregister one machine.\n\nThe entry goes first, so no live entry ever points at a key that has been emptied. The key file is then overwritten with nothing rather than removed: `ctx.fs` has no unlink verb, and leaving the material readable would keep the machine reachable from a sandbox the user just revoked it from.',
+        parameters: [{ name: 'request', description: 'the alias to remove.' }],
+        returns: 'the roster as it stands after the removal, or the refusal.',
+      },
+      {
+        signature: '@Remote(\'toggle\') async toggle(request: ToggleHostRequest): Promise<HostsResult<HostsListValue>>',
+        description: 'Switch one registered machine on or off.\n\nA switched-off host keeps its entry, commented out, and keeps its key: the archived skill defines a commented entry inside the block as a host the user turned off, and switching it back on must not require the key again.',
+        parameters: [{ name: 'request', description: 'the alias and the state to leave it in.' }],
+        returns: 'the roster as it stands after the switch, or the refusal.',
+      },
+    ],
+  },
+  {
+    key: 'sciTierFork',
+    summary: 'The upgrade fork endpoint.',
+    description: 'The upgrade fork endpoint. It creates and opens sessions; it never runs one, and it reads nothing but the source session\'s own log.',
+    methods: [
+      {
+        signature: '@Remote(\'fork\') fork(request: SciTierForkRequest): SciTierForkResult',
+        description: 'Continue one session\'s work at another tier, in a new session.',
+        parameters: [{ name: 'request', description: 'the session to continue from and the tier to continue at.' }],
+        returns: 'the new session\'s identity and preset, or why the fork was refused.',
       },
     ],
   },
@@ -2319,7 +2460,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'async create(path: string, title?: string): Promise<Workspace>',
-        description: 'Create or reuse a workspace for an existing directory. The path is canonicalized through `fs.realpath`; a nonexistent path rejects with the original error and a non-directory rejects. Repeated calls for the same canonical path return the existing entity without changing its title. A newly created workspace is prepended to the durable registry order. Different canonical paths may share a display title.',
+        description: 'Create or reuse a workspace for an existing directory. The path is canonicalized in the filesystem the tools execute in (the composed filesystem seam when one is mounted, else the Host filesystem); a path absent there rejects with that world\'s error and a non-directory rejects. Repeated calls for the same canonical path return the existing entity without changing its title. A newly created workspace is prepended to the durable registry order. Different canonical paths may share a display title.',
         parameters: [{ name: 'path', description: 'Existing directory to own, in any path spelling.' }, { name: 'title', description: 'Display title used only when a new record is created.' }],
         returns: 'the existing or newly durable workspace.',
       },
@@ -2355,7 +2496,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async resolveByPath(path: string): Promise<Workspace | undefined>',
-        description: 'Resolve by canonical directory path without creating or mutating a workspace. A missing path rejects during `realpath`; an existing unowned directory returns `undefined`.',
+        description: 'Resolve by canonical directory path without creating or mutating a workspace. A path absent from the execution world\'s filesystem rejects during canonicalization; an existing unowned directory returns `undefined`.',
         parameters: [{ name: 'path', description: 'Existing directory path in any spelling.' }],
         returns: 'the workspace owning the canonical path, when one exists.',
       },
@@ -2950,6 +3091,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AttachmentId = Branded<\'AttachmentId\'>;',
   },
   {
+    name: 'AuditActor',
+    declaration: 'export type AuditActor = string;',
+  },
+  {
+    name: 'AuditKind',
+    declaration: 'export type AuditKind = \'tool-call\' | \'tool-result\' | \'tool-denied\' | \'fs-denied\' | \'delivered\' | \'delivery-failed\' | \'authorized\' | \'authorization-denied\' | \'approval-decided\' | \'plan-declared\' | \'tier-resolved\' | \'tier-upgrade-suggested\' | \'memory-written\' | \'skills-synced\' | \'workflow-run-start\' | \'workflow-agent-start\' | \'workflow-agent-end\' | \'workflow-run-end\' | \'turn-end\' | \'request-context\';',
+  },
+  {
+    name: 'AuditRecord',
+    declaration: 'export interface AuditRecord {\n    readonly sessionId: SessionId;\n    readonly seq: number;\n    readonly ts: number;\n    readonly kind: AuditKind;\n    readonly actor: AuditActor;\n    readonly toolName?: string;\n    readonly target?: string;\n    readonly rule?: string;\n    readonly reason?: string;\n    readonly sha256?: string;\n}',
+  },
+  {
+    name: 'AuditSummary',
+    declaration: 'export interface AuditSummary {\n    readonly sessionId: SessionId;\n    readonly denied: number;\n    readonly delivered: number;\n    readonly authorized: number;\n    readonly memoryTimingScore?: number;\n    readonly citationMissing: boolean;\n}',
+  },
+  {
     name: 'AuthorizationEntry',
     declaration: 'export interface AuthorizationEntry {\n    key: CredentialKey;\n    label: string;\n    methods: readonly AuthorizationMethod[];\n    inFlight: boolean;\n}',
   },
@@ -3446,6 +3603,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface GrantRecord {\n    readonly kind: \'grant\';\n    readonly payload: unknown;\n}',
   },
   {
+    name: 'HostsFailure',
+    declaration: 'export interface HostsFailure {\n    readonly code: HostsFailureCode;\n    readonly alias?: string;\n    readonly detail: string;\n}',
+  },
+  {
+    name: 'HostsFailureCode',
+    declaration: 'export type HostsFailureCode = \'invalid-alias\' | \'invalid-field\' | \'unknown-alias\' | \'malformed-config\';',
+  },
+  {
+    name: 'HostsListValue',
+    declaration: 'export interface HostsListValue {\n    readonly hosts: readonly RemoteHostView[];\n}',
+  },
+  {
+    name: 'HostsResult',
+    declaration: 'export type HostsResult<T> = {\n    readonly ok: true;\n    readonly value: T;\n} | {\n    readonly ok: false;\n    readonly error: HostsFailure;\n};',
+  },
+  {
     name: 'ImageAttachmentLimits',
     declaration: 'export interface ImageAttachmentLimits {\n    maxImageBytes: number;\n    maxImagesPerMessage: number;\n    maxMessageImageBytes: number;\n    maxImagePixels: number;\n    maxImageDimension: number;\n    mediaTypes: readonly ImageMediaType[];\n}',
   },
@@ -3694,6 +3867,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ManualCompactAgentContext extends CompactionAgentContext {\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n}',
   },
   {
+    name: 'MemoryIndexRecord',
+    declaration: 'export interface MemoryIndexRecord {\n    readonly slug: string;\n    readonly originSessionId: SessionId;\n    readonly type?: MemoryNodeType;\n    readonly description?: string;\n    readonly writtenAtTurn: number;\n    readonly turnsTotal: number;\n}',
+  },
+  {
+    name: 'MemoryNodeType',
+    declaration: 'export type MemoryNodeType = \'user\' | \'feedback\' | \'project\' | \'reference\';',
+  },
+  {
     name: 'Message',
     declaration: 'export interface Message {\n    readonly id: MessageId;\n    readonly role: \'system\' | \'user\' | \'assistant\';\n    readonly content: ContentBlock[];\n    readonly source: MessageSource;\n}',
   },
@@ -3810,6 +3991,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface PermissionSelect {\n    options: PresetOption[];\n    currentValue: string;\n}',
   },
   {
+    name: 'PlanRecord',
+    declaration: 'export interface PlanRecord {\n    readonly planId: string;\n    readonly sessionId: SessionId;\n    readonly agentsJson: string;\n    readonly edgesJson: string;\n    readonly workflowRunId?: string;\n    readonly ts: number;\n}',
+  },
+  {
     name: 'PostToolDecision',
     declaration: 'export type PostToolDecision = {\n    kind: \'accept\';\n    content?: ContentBlock[];\n    value?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'accept\';\n    value: JsonValue;\n    content?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'block\';\n    feedback: ContentBlock[];\n    additionalContexts?: UserMessage[];\n};',
   },
@@ -3910,8 +4095,76 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ReasoningEffortId = Branded<\'ReasoningEffortId\'>;',
   },
   {
+    name: 'RebuildReport',
+    declaration: 'export interface RebuildReport {\n    readonly sessionIds: readonly SessionId[];\n    readonly removed: number;\n    readonly written: number;\n}',
+  },
+  {
+    name: 'RecallCompactionEntry',
+    declaration: 'export interface RecallCompactionEntry {\n    readonly kind: \'compaction\';\n    readonly at: number;\n    readonly shadowedEvents: number;\n}',
+  },
+  {
+    name: 'RecallIndexRow',
+    declaration: 'export interface RecallIndexRow {\n    readonly sessionId: SessionId;\n    readonly startedAt: number;\n    readonly cwd?: string;\n    readonly openingRequest: string;\n    readonly deliveries: readonly string[];\n}',
+  },
+  {
+    name: 'RecallIndexValue',
+    declaration: 'export interface RecallIndexValue {\n    readonly sessions: readonly RecallIndexRow[];\n}',
+  },
+  {
+    name: 'RecallMessageEntry',
+    declaration: 'export interface RecallMessageEntry {\n    readonly kind: \'message\';\n    readonly role: \'user\' | \'assistant\';\n    readonly at: number;\n    readonly text: string;\n}',
+  },
+  {
+    name: 'RecallRejected',
+    declaration: 'export interface RecallRejected<E> {\n    readonly ok: false;\n    readonly error: E;\n}',
+  },
+  {
+    name: 'RecallSessionNotFound',
+    declaration: 'export interface RecallSessionNotFound {\n    readonly code: \'session-not-found\';\n    readonly sessionId: SessionId;\n}',
+  },
+  {
+    name: 'RecallSessionRequest',
+    declaration: 'export interface RecallSessionRequest {\n    readonly sessionId: SessionId;\n}',
+  },
+  {
+    name: 'RecallSessionResult',
+    declaration: 'export type RecallSessionResult = RecallSuccess<RecallSessionValue> | RecallRejected<RecallSessionNotFound>;',
+  },
+  {
+    name: 'RecallSessionValue',
+    declaration: 'export interface RecallSessionValue {\n    readonly sessionId: SessionId;\n    readonly startedAt: number;\n    readonly entries: readonly RecallTranscriptEntry[];\n}',
+  },
+  {
+    name: 'RecallSuccess',
+    declaration: 'export interface RecallSuccess<T> {\n    readonly ok: true;\n    readonly value: T;\n}',
+  },
+  {
+    name: 'RecallTranscriptEntry',
+    declaration: 'export type RecallTranscriptEntry = RecallMessageEntry | RecallCompactionEntry;',
+  },
+  {
     name: 'RedactedSecret',
     declaration: 'export interface RedactedSecret {\n    path: string[];\n    set: boolean;\n}',
+  },
+  {
+    name: 'ReferencedTextRef',
+    declaration: 'export interface ReferencedTextRef {\n    readonly store: string;\n    readonly id: string;\n    readonly sha256: string;\n}',
+  },
+  {
+    name: 'ReferencedTextStore',
+    declaration: 'export interface ReferencedTextStore {\n    readonly read: (ref: ReferencedTextRef, signal?: AbortSignal) => Promise<string>;\n}',
+  },
+  {
+    name: 'RemoteHost',
+    declaration: 'export interface RemoteHost {\n    readonly alias: string;\n    readonly hostName: string;\n    readonly user: string;\n    readonly port?: number;\n    readonly enabled: boolean;\n}',
+  },
+  {
+    name: 'RemoteHostView',
+    declaration: 'export interface RemoteHostView extends RemoteHost {\n    readonly identityFile: string;\n}',
+  },
+  {
+    name: 'RemoveHostRequest',
+    declaration: 'export interface RemoveHostRequest {\n    readonly alias: string;\n}',
   },
   {
     name: 'ReplayEnvelope',
@@ -4032,6 +4285,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ScheduledToolPreparation',
     declaration: 'export type ScheduledToolPreparation = {\n    kind: \'dispatch\';\n    exec: ToolRunContext;\n} | {\n    kind: \'post-result\';\n    exec: ToolRunContext;\n    result: ToolExecutionResult;\n} | {\n    kind: \'final-result\';\n    exec: ToolRunContext;\n    result: ToolExecutionResult;\n};',
+  },
+  {
+    name: 'SciTier',
+    declaration: 'export type SciTier = \'balanced\' | \'cluster\';',
+  },
+  {
+    name: 'SciTierForkError',
+    declaration: 'export interface SciTierForkError {\n    readonly code: \'session-not-found\' | \'same-tier\';\n    readonly sessionId: SessionId;\n}',
+  },
+  {
+    name: 'SciTierForkRequest',
+    declaration: 'export interface SciTierForkRequest {\n    readonly sessionId: SessionId;\n    readonly tier: SciTier;\n}',
+  },
+  {
+    name: 'SciTierForkResult',
+    declaration: 'export type SciTierForkResult = {\n    readonly ok: true;\n    readonly value: SciTierForkValue;\n} | {\n    readonly ok: false;\n    readonly error: SciTierForkError;\n};',
+  },
+  {
+    name: 'SciTierForkValue',
+    declaration: 'export interface SciTierForkValue {\n    readonly sessionId: SessionId;\n    readonly presetName: string;\n}',
   },
   {
     name: 'Scoped',
@@ -4379,7 +4652,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SkillDefinition',
-    declaration: 'export interface SkillDefinition extends SkillSummary {\n    readonly content: string;\n    readonly path?: string;\n    readonly metadata?: Readonly<Record<string, unknown>>;\n}',
+    declaration: 'export interface SkillDefinition extends SkillSummary {\n    readonly content: string;\n    readonly path?: string;\n    readonly metadata?: Readonly<Record<string, unknown>>;\n    readonly reference?: ReferencedTextRef;\n}',
   },
   {
     name: 'SkillInvocationPolicy',
@@ -4730,6 +5003,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TodoItem {\n    content: string;\n    status: \'pending\' | \'in_progress\' | \'completed\';\n}',
   },
   {
+    name: 'ToggleHostRequest',
+    declaration: 'export interface ToggleHostRequest {\n    readonly alias: string;\n    readonly enabled: boolean;\n}',
+  },
+  {
     name: 'TokenMeasurement',
     declaration: 'export interface TokenMeasurement {\n    readonly logRevision: number;\n    readonly baseline: TokenMeasurementBaseline;\n    readonly surfaceDeltaTokens: number;\n    readonly totalTokens: number;\n    readonly surfaceTokens: number;\n    readonly nodes: readonly TokenSurfaceNode[];\n}',
   },
@@ -4928,6 +5205,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'UpdateTeamTaskRequest',
     declaration: 'export interface UpdateTeamTaskRequest {\n    readonly taskId: TeamTaskId;\n    readonly expectedRevision: number;\n    readonly action: TeamTaskAction;\n    readonly subject?: string;\n    readonly description?: string;\n    readonly blockedBy?: readonly TeamTaskId[];\n    readonly writeScopes?: readonly string[];\n    readonly owner?: string;\n}',
+  },
+  {
+    name: 'UpsertHostRequest',
+    declaration: 'export interface UpsertHostRequest {\n    readonly alias: string;\n    readonly hostName: string;\n    readonly user: string;\n    readonly port?: number;\n    readonly privateKey: string;\n    readonly enabled?: boolean;\n}',
   },
   {
     name: 'UserMessage',

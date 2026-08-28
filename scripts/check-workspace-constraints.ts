@@ -161,6 +161,23 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // SQLite loads every statement from immutable package resources at runtime.
   '@deepseek-ai/dsh-session-persistence-sqlite': ['resources/sql/**/*.sql'],
   '@deepseek-ai/dsh-skill-badge': ['assets'],
+  // The bundled skill tree is a runtime package resource: Config.skillRoot
+  // defaults to <pkg>/skills, which the provider scans at load.
+  '@deepseek-ai/dsh-sci-skills': ['skills/**', 'lib/*.js'],
+  // tsdown extracts a shared chunk whenever a package's two entries (index and
+  // invariant) import the same module, and names it by content hash. The chunk
+  // is real published code — `lib/index.js` imports it by name — but no fixed
+  // `files` entry can spell a hashed name, so the whole emitted directory is
+  // allowed for the packages that split.
+  '@deepseek-ai/dsh-sci-audit': ['lib/*.js'],
+  '@deepseek-ai/dsh-sci-memory': ['lib/*.js'],
+  // The bundle's patch layer is useless without the trees it points at: the
+  // two agent presets are the roster root `cordis.patch.yml` declares, and the
+  // persona charters are Config.agentsRoot's default.
+  '@deepseek-ai/dsh-sci-profile': ['config/**'],
+  '@deepseek-ai/dsh-sci-remote-hosts': ['lib/*.js'],
+  '@deepseek-ai/dsh-sci-tier': ['lib/*.js'],
+  '@deepseek-ai/dsh-sci-workspace': ['lib/*.js'],
   '@deepseek-ai/dsh-subprocess-local': ['scripts/ensure-spawn-helper.mjs'],
 }
 

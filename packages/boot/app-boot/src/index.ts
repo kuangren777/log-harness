@@ -20,15 +20,24 @@ import { createLaunchEnvironmentSnapshot, type LaunchEnvironmentSnapshot } from 
 import type {} from '@deepseek-ai/cordis-plugin-hmr'
 // Side-effect type import: resolves `ctx.get('systemPrompt')` to the service.
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import type { BundlePathResolver } from './profile.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Harness-home path resolver available to Loader `!!js` config expressions. */
     dshHomePath?: typeof dshHomePath
+    /**
+     * Bundle-shipped path resolver available to Loader `!!js` config
+     * expressions. Provided by the launcher that loaded the profile, so a
+     * composition booted without one (a bare `boot()` over a plain
+     * `cordis.yml`) leaves it undefined and an expression using it fails loud.
+     */
+    dshBundlePath?: BundlePathResolver
   }
 }
 
 export {
+  bundlePathResolver,
   composeEntries,
   DEFAULT_PROFILE_BUNDLES,
   healProfilesModuleFallback,
@@ -41,6 +50,7 @@ export {
   resolveBundleDir,
   resolveProfileDir,
   writeProfileManifest,
+  type BundlePathResolver,
   type DshBundleManifest,
   type DshManifestSection,
   type DshProfileManifest,

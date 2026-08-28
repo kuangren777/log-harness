@@ -19,6 +19,7 @@ import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import {
   boot,
+  bundlePathResolver,
   composeEntries,
   healProfilesModuleFallback,
   installFailLoud,
@@ -55,6 +56,9 @@ export const INSTALL_ANCHOR = fileURLToPath(new URL('../package.json', import.me
 
 /** The session-telemetry row id the DSH_TELEMETRY_DISABLED switch targets. */
 const TELEMETRY_ROW_ID = 'session-telemetry-otel'
+
+/** The preset-roster row id whose shipped root this launcher supplies. */
+const PRESET_ROW_ID = 'agent-presets'
 
 /** The empty root entry list every profile tree patches over. */
 const PROFILE_ROOT_CONFIG = `# dsh profile root — an empty entry list. The tree is composed as patches:
@@ -100,6 +104,31 @@ export function prepareProfile(name: string, userLayer = true): Profile {
   const profile = loadProfile(NAME, name, INSTALL_ANCHOR, undefined, { userLayer })
   writeFileSync(join(profile.dir, PROFILE_ROOT_FILENAME), PROFILE_ROOT_CONFIG)
   return profile
+}
+
+/**
+ * Resolve the shipped-preset-root overlay for one composed `agent-presets` row.
+ *
+ * The shipped root is the part of the roster only this app can resolve: it sits
+ * beside this app's own config, in both the source and built layouts. A profile
+ * that DECLARES its own roots keeps them — a bundle points the roster at a
+ * preset tree it ships (`dshBundlePath`), and appending this app's presets would
+ * put four compositions that bundle never mounted in front of the user. The
+ * writable root the roster appends is `dsh-agent-presets`' own, so a launcher
+ * that never reaches this patch still finds a person's presets.
+ * @param row - the composed roster row, or `undefined` when the tree has none.
+ * @returns the last-wins overlay carrying the shipped root, or `undefined` when
+ *   the composition mounts no roster or already declares its roots.
+ */
+export function resolvePresetRootPatch(row: EntryOptions | undefined): PatchOptions | undefined {
+  if (row === undefined) return undefined
+  const config = (row.config ?? {}) as Record<string, unknown>
+  const declared = config['roots']
+  if (Array.isArray(declared) && declared.length > 0) return undefined
+  return {
+    id: PRESET_ROW_ID,
+    config: { ...config, roots: [{ path: SHIPPED_PRESET_ROOT, trust: 'system' }] },
+  }
 }
 
 /** One profile's patch layers (application order) and the row index of its pre-flag composition. */
@@ -152,19 +181,8 @@ function composeProfile(
     if (typeof row.id === 'string') rows.set(row.id, row)
   }
   const composedOverlays = [...overlays]
-  // The SHIPPED root is the part of the roster only this app can resolve: it
-  // sits beside this app's own config, in both the source and built layouts.
-  // The writable root the roster appends is `dsh-agent-presets`' own, so a
-  // launcher that never reaches this patch still finds a person's presets.
-  if (rows.has('agent-presets')) {
-    composedOverlays.push({
-      id: 'agent-presets',
-      config: {
-        ...(rows.get('agent-presets')?.config ?? {}) as Record<string, unknown>,
-        roots: [{ path: SHIPPED_PRESET_ROOT, trust: 'system' }],
-      },
-    })
-  }
+  const presetRootPatch = resolvePresetRootPatch(rows.get(PRESET_ROW_ID))
+  if (presetRootPatch !== undefined) composedOverlays.push(presetRootPatch)
   const telemetryPatch = resolveTelemetryPatch(process.env.DSH_TELEMETRY_DISABLED, rows.has(TELEMETRY_ROW_ID))
   if (telemetryPatch !== undefined) composedOverlays.push(telemetryPatch)
   return { profile, bundlePatches, homePatches, overlays: composedOverlays, rows }
@@ -250,6 +268,10 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
     // Before any config-tree entry mounts, so plugins resolve all launch-time
     // environment values from the same immutable provenance snapshot.
     hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, options.environment)
+    // Before any entry mounts, because a bundle's own patch layer may point a
+    // config field at a directory that bundle ships and the row carrying it
+    // interpolates the expression as it mounts.
+    hostCtx.provide('dshBundlePath', bundlePathResolver(NAME, composed.profile, INSTALL_ANCHOR))
     // The command line and bounded exit request are launcher facts available
     // to every app plugin that injects the argument snapshot.
     provideCmdline(hostCtx, {

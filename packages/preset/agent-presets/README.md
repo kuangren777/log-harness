@@ -95,6 +95,8 @@ An absent root supplies no presets rather than failing: the user root does not e
 
 `<dshHome>/.agent-presets` is where a person's own presets live, the way `<dshHome>/skills` is where their own skills live ([`dsh-skill-filesystem`](../../skill/skill-filesystem/README.md)), so the roster derives it rather than waiting for a deployment to remember it — a launcher that configures nothing still finds and authors presets. It is appended AFTER every configured root, which keeps an earlier root winning a duplicate id: a shipped `standard` still shadows a home directory that claimed the name, and `copy()` refuses that id rather than landing a preset nothing would resolve.
 
+A shipped root is the launcher's to supply only while the composition names none: `dsh` appends its own installed preset tree exactly when the composed row declares an empty `roots` (`apps/cli/src/profile-boot.ts::resolvePresetRootPatch`), so a bundle that ships the presets its profile is about — `@deepseek-ai/dsh-sci-profile` — declares that root itself and the launcher adds nothing.
+
 The roots are resolved once, when the service is constructed. A root set that changed between a `list()` and the `copy()` acting on its answer would author into a directory the caller never saw.
 
 `includeUserRoot: false` mounts a roster over `roots` alone. A deployment that confines presets to its own directories needs it, and so does any test pinning an exact roster — otherwise the machine's real `<dshHome>` decides what the roster contains.

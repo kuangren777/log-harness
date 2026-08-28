@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  bundlePathResolver,
   composeEntries,
   healProfilesModuleFallback,
   initProfile,
@@ -114,6 +115,29 @@ describe('resolveBundleDir', () => {
     writeFileSync(join(dir, 'index.js'), '')
     writeFileSync(join(dir, 'cordis.patch.yml'), '[]\n')
     expect(resolveBundleDir('t', 'sealed-bundle', anchor, profileDir)).toBe(dir)
+  })
+})
+
+describe('bundlePathResolver', () => {
+  it('resolves a listed bundle from its own layer and an unlisted package from the anchors', () => {
+    const anchor = stageInstallation({
+      'bundle-a': { patch: '- insert:\n    - id: a\n      name: pkg-a\n' },
+      'ships-presets': {},
+    })
+    const home = tmp()
+    const dir = resolveProfileDir('demo', home)
+    initProfile(dir, ['bundle-a'])
+    const profile = loadProfile('t', 'demo', anchor, home)
+
+    const resolve = bundlePathResolver('t', profile, anchor)
+
+    expect(resolve('bundle-a', 'config/agent-presets'))
+      .toBe(join(profile.layers[0]?.packageDir ?? '', 'config', 'agent-presets'))
+    // Not in dsh.profile.bundles: a bundle may ship its files in a package it
+    // depends on, and the two anchors answer for that one too.
+    expect(resolve('ships-presets', 'config')).toBe(join(anchor, '..', 'node_modules', 'ships-presets', 'config'))
+    expect(resolve('bundle-a')).toBe(profile.layers[0]?.packageDir)
+    expect(() => resolve('absent', 'config')).toThrow('cannot resolve profile bundle')
   })
 })
 

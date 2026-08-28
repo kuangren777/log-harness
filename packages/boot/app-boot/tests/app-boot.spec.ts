@@ -687,6 +687,36 @@ describe('boot', () => {
     }
   })
 
+  it('carries a launcher-provided dshBundlePath into Loader config expressions', async () => {
+    // The resolver itself is the launcher's (`profile-boot` builds it from the
+    // profile's resolved layers); what this pins is that a bundle's own patch
+    // layer can point a config field at a directory the bundle ships.
+    const dir = tmp()
+    writeFileSync(join(dir, 'capture.mjs'), [
+      'export const name = "capture"',
+      'export function apply(ctx, config) {',
+      '  ctx.provide("capturedPath", config.path)',
+      '}',
+      '',
+    ].join('\n'))
+    writeFileSync(join(dir, 'cordis.yml'), [
+      '- id: capture',
+      '  name: ./capture.mjs',
+      '  config:',
+      "    path: !!js dshBundlePath('@scope/bundle', 'config/agent-presets')",
+      '',
+    ].join('\n'))
+    let ctx: Context | undefined
+    try {
+      ctx = await boot(NAME, join(dir, 'cordis.yml'), undefined, (hostCtx) => {
+        hostCtx.provide('dshBundlePath', (packageName, ...segments) => join(dir, packageName, ...segments))
+      })
+      expect(ctx.get('capturedPath')).toBe(join(dir, '@scope/bundle', 'config', 'agent-presets'))
+    } finally {
+      await ctx?.fiber.dispose()
+    }
+  })
+
   it('returns instead of asserting over a tree a surface disposed mid-startup', async () => {
     // A surface can dispose the root fiber while boot() is still awaiting the
     // Loader, before the last entry settles. The Loader service goes with the

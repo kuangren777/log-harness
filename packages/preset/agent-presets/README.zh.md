@@ -95,6 +95,8 @@ description: 仅提供持久 bash 与 str_replace_editor 的双工具编码 Agen
 
 `<dshHome>/.agent-presets` 是个人自有 preset 的所在，正如 `<dshHome>/skills` 是其自有 skill 的所在（[`dsh-skill-filesystem`](../../skill/skill-filesystem/README.zh.md)），因此 roster 自行推导它，而不等某个部署记得配置——一个什么都没配的启动器同样能发现并创作 preset。它追加在全部已配置根目录**之后**，从而保持靠前的根目录赢得重复 id：随附的 `standard` 仍然遮蔽一个占用该名字的家目录目录，而 `copy()` 会拒绝该 id，不会落下一个无人解析得到的 preset。
 
+随附根目录只在组合本身一个根都没写时才由启动器提供：`dsh` 恰好在组合出的那一行 `roots` 为空时，才追加它自己随安装发布的 preset 树（`apps/cli/src/profile-boot.ts::resolvePresetRootPatch`），因此一个自带本 profile 主题 preset 的组合包——`@deepseek-ai/dsh-sci-profile`——自己声明那个根，启动器什么都不加。
+
 根目录在服务构造时解析一次。若根目录集合在一次 `list()` 与依据其答案执行的 `copy()` 之间发生变化，写入的将是调用方从未见过的目录。
 
 `includeUserRoot: false` 使 roster 只覆盖 `roots`。把 preset 限制在自有目录内的部署需要它，任何钉住确切 roster 的测试同样需要——否则将由这台机器真实的 `<dshHome>` 决定 roster 的内容。

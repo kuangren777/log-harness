@@ -114,6 +114,9 @@ export function resolveProfileDir(name: string, home: string = resolveDshHome())
 export const PROFILE_TEMPLATES: Record<string, readonly string[]> = {
   web: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'],
   headless: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless'],
+  // The science-research profile carries the web app because its packages
+  // resolve `storageDomain` and `sessionQuery`, which that bundle owns.
+  sci: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-sci-profile'],
 }
 
 /** Installation-owned bundle tuples normalized to the shipped template. */
@@ -351,6 +354,40 @@ export function resolveBundleDir(
   throw new Error(
     `${binName}: cannot resolve profile bundle ${JSON.stringify(packageName)} from the dsh installation or ${profileDir}; `
     + `run 'dsh plugin --profile ${basename(profileDir)} install' if its dependency is not installed`,
+  )
+}
+
+/**
+ * Resolver of a path inside a bundle package, as Loader `!!js` config
+ * expressions call it: `dshBundlePath('@scope/bundle', 'config/agent-presets')`.
+ * @param packageName - the bundle's package name.
+ * @param segments - path segments under the package directory.
+ * @returns the absolute path.
+ */
+export type BundlePathResolver = (packageName: string, ...segments: string[]) => string
+
+/**
+ * Build the {@link BundlePathResolver} a launcher provides as `dshBundlePath`.
+ *
+ * It is what lets a bundle's patch layer point a config field at a directory
+ * the bundle SHIPS — a preset root, a skills tree — instead of the launcher
+ * assembling that path on the bundle's behalf: only a resolver that can find
+ * the package knows where its files are, and the launcher already resolved
+ * every listed bundle. A package the profile does not list resolves through
+ * {@link resolveBundleDir} from the same anchors, which covers a bundle listed
+ * under a different name than the package that ships the directory.
+ * @param binName - the diagnostic prefix on the thrown error.
+ * @param profile - the loaded profile whose layers are already resolved.
+ * @param installAnchor - absolute path of the dsh app's package.json, for an unlisted package.
+ * @returns the resolver, which throws when the package cannot be resolved at all.
+ */
+export function bundlePathResolver(
+  binName: string, profile: Profile, installAnchor: string,
+): BundlePathResolver {
+  const layerDirs = new Map(profile.layers.map(layer => [layer.packageName, layer.packageDir]))
+  return (packageName, ...segments) => join(
+    layerDirs.get(packageName) ?? resolveBundleDir(binName, packageName, installAnchor, profile.dir),
+    ...segments,
   )
 }
 

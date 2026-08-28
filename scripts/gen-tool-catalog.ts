@@ -61,6 +61,9 @@ import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
 import type TeamService from '@deepseek-ai/dsh-experimental-agent-team'
 import * as ToolTeam from '@deepseek-ai/dsh-experimental-tool-agent-team'
 import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
+import * as SciDeliver from '@deepseek-ai/dsh-sci-deliver'
+import * as SciPlan from '@deepseek-ai/dsh-sci-plan'
+import * as SciTierSuggest from '@deepseek-ai/dsh-sci-tier/suggest'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
 import VmWorkflowEngine from '@deepseek-ai/dsh-workflow-worker-thread'
@@ -186,6 +189,51 @@ export interface ToolPackage {
  * guard proves it is exhaustive against the on-disk glob.
  */
 const TOOL_PACKAGES: ToolPackage[] = [
+  {
+    pkg: '@deepseek-ai/dsh-sci-tier',
+    dir: 'sci-tier',
+    source: 'packages/sci/sci-tier/src/suggest-tool.ts',
+    requires: ['ctx.tools'],
+    writes: ['tool/call', 'sci/tier-upgrade-suggested', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(SciTierSuggest)
+    },
+    note:
+      'suggest_tier_upgrade is the balanced tier\'s only fan-out-adjacent tool: it records that the task outgrew a single pass and leaves the choice to the user, instead of the agent quietly starting a swarm.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-sci-plan',
+    dir: 'sci-plan',
+    source: 'packages/sci/sci-plan/src/index.ts',
+    requires: ['ctx.tools'],
+    writes: ['tool/call', 'sci/plan-declared', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(SciPlan)
+    },
+    note:
+      'declare_research_plan names the parallel lines of work before a fan-out; the tier gate consumes its sci/plan-declared event and refuses a fan-out tool until one is declared.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-sci-deliver',
+    dir: 'sci-deliver',
+    source: 'packages/sci/sci-deliver/src/index.ts',
+    requires: ['ctx.tools', 'ctx.fs', 'ctx.systemPrompt'],
+    writes: ['tool/call', 'sci/delivered', 'sci/delivery-failed', 'tool/result'],
+    async mount(ctx) {
+      // The tool needs `fs`; the bare local provider is sufficient because the
+      // schema does not depend on what the delivery root contains. The three
+      // required roots are catalog placeholders: they are only interpolated into
+      // the description, never opened at registration.
+      await ctx.plugin(LocalFileSystem)
+      await ctx.plugin(SciDeliver, {
+        projectRoot: '/home/user/sci/projects',
+        spoolDir: '/home/user/sci/.sci/spool',
+        snapshotDir: '/home/user/sci/.sci/deliveries',
+      } as SciDeliver.Config)
+    },
+    note:
+      'deliver_files is the only way a file reaches the user; the in-sandbox `sci deliver` CLI writes the same request into the spool the plugin drains at turn start, through the same validation.',
+  },
   {
     pkg: '@deepseek-ai/dsh-tool-ask-user',
     dir: 'tool-ask-user',
