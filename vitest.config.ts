@@ -283,8 +283,9 @@ export default defineConfig({
         // src/client/viewer-locale.ts, src/host/config.ts, src/host/index.ts,
         // src/host/artifacts/paths.ts, src/host/provider/plugin.ts,
         // src/host/service/univer-service.ts, src/host/tools/names.ts,
-        // src/host/tools/plugin.ts, src/host/webServer/gateway-proxy.ts, and
-        // src/host/webServer/plugin.ts.
+        // src/host/tools/plugin.ts, src/host/webServer/gateway-proxy.ts,
+        // src/host/webServer/plugin.ts, and
+        // src/host/webServer/viewer-assets.ts.
         'packages/office/univer/src/client/index.ts',
         'packages/office/univer/src/client/*/**',
         'packages/office/univer/src/host/adapters/**',
@@ -295,7 +296,7 @@ export default defineConfig({
         'packages/office/univer/src/host/tools/definitions/**',
         'packages/office/univer/src/host/tools/!(names|plugin).ts',
         'packages/office/univer/src/host/webServer/routes/**',
-        'packages/office/univer/src/host/webServer/!(gateway-proxy|plugin).ts',
+        'packages/office/univer/src/host/webServer/!(gateway-proxy|plugin|viewer-assets).ts',
         'packages/office/univer/src/shared/**',
         'packages/office/univer/src/workers/**',
         ...windowsUnsupportedCoveragePackages.map(path => `${path}/src/**/*.ts`),

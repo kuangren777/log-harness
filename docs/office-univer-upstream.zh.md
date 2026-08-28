@@ -32,6 +32,7 @@
 上游运行在浏览器可直接访问 Gateway loopback 源的部署形态里。本仓库由 harness web 服务器向浏览器提供页面，因此 Gateway 必须移到一个同源反向代理之后。
 
 - **`src/host/webServer/gateway-proxy.ts`（新增）。** 把 `/univer-gw`（剥离前缀）与 `/uf`（原样）转发给 Gateway，以 socket 对 socket 的方式桥接 `/uf` 的 WebSocket，将 HTML 与 CSS 响应体中的绝对 `/assets/` 引用改写为 `/univer-gw/assets/`，并在没有可达 Gateway 且 `autoStartGateway` 关闭时回应 `503 {"error":"gateway-unavailable"}`。
+- **`src/host/webServer/viewer-assets.ts`（新增）。** 为 `artifacts/viewer/assets/` 下每个文件注册一条精确路由 `/assets/<name>`（流式回字节、按扩展名给 content type、`cache-control: public, max-age=31536000, immutable`，同样过浏览器信任围栏）：Viewer 的 Vite preload 辅助函数用绝对路径 `/assets/<hash>.js` 拉懒加载 chunk，HTML/CSS 改写够不到它。精确路由优先于 web app 的 `/assets` 前缀；内容哈希名不会与之相撞。
 - **`src/host/webServer/plugin.ts`。** 接收 `ResolvedConfig`，在既有的 `/univer-api` route 旁注册三条代理 route。
 - **`src/host/provider/gateway-univer-service.ts`。** `viewerUrl` 以及各 worktree 的 `openUrl` / `worktreeUrl` / `mergeUrl` 改由 `GATEWAY_PROXY_PREFIX` 而非 Gateway 源构造，因此浏览器收到的每个目标都是同源路径。query string 不变。
 - **`src/client/viewer-url.ts`（新增）** 及其在 `src/client/viewer-locale.ts` 与 `src/client/components/review-panel.tsx` 中的调用方。上游用 `new URL(url)` 编辑 Viewer 目标，而它会拒绝没有源的路径。三处调用现在共用一个 helper：针对占位 base 解析，输入为相对路径时返回相对结果。

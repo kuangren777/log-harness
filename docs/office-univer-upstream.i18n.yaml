@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/office-univer-upstream.md
-office-univer-upstream.md: c337aa4a96cca37899da2926fdf00c1a7600e8ee
-office-univer-upstream.zh.md: 57c1b7acb9d700b4c76dd8bf83f66ea96bedb1ed
+office-univer-upstream.md: 87c28acd8a48e5064ece00fed9833d413b5be161
+office-univer-upstream.zh.md: 58caabff9ee5dcca5603e1b5a6ce96f98f3e412d
