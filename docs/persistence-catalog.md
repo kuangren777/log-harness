@@ -90,7 +90,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }[T]
 ```
 
-Sources: [`packages/core/session/src/types.ts:340`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:347`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:376`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:408`](../packages/core/session/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:340`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:347`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:376`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:426`](../packages/core/session/src/types.ts)
 
 ## Events
 
@@ -603,6 +603,223 @@ Source: [`packages/sandbox/sandbox-policy/src/session-mode.ts:33`](../packages/s
 Types: [ScheduleChange](subsystems/schedule.md)
 
 Source: [`packages/schedule/schedule/src/types.ts:219`](../packages/schedule/schedule/src/types.ts)
+
+### `sci/*`
+
+<a id="sciauthorized--log-only"></a>
+
+#### `sci/authorized` — log-only
+
+```ts persistence-catalog
+/**
+ * One irreversible-action question reached a decision: log-only,
+ * non-surface, one record per approval this gate asked for. The model
+ * already learned the outcome from the tool result or from the call
+ * running, and nothing later in the log is interpreted differently by this
+ * event's presence — it exists so an audit projection can count
+ * authorizations and refusals per session — so the producer appends it
+ * with the envelope's `ignorable` marker and a reader that does not know
+ * the type skips it instead of refusing the log.
+ */
+'sci/authorized': SciAuthorizedData
+```
+
+Source: [`packages/sci/sci-guard/src/types.ts:107`](../packages/sci/sci-guard/src/types.ts)
+
+<a id="scicredit-charged--log-only"></a>
+
+#### `sci/credit-charged` — log-only
+
+```ts persistence-catalog
+/**
+ * One model call was priced and its charge handed to the gate. Log-only
+ * and non-surface: the model never reads it, nothing later in the log is
+ * interpreted differently by its presence, and it exists so an audit
+ * projection can reconcile the session against the tenant's ledger. The
+ * producer appends it with the envelope's `ignorable` marker, so a reader
+ * that does not know the type skips it instead of refusing the log.
+ * @param data - the idempotency key, the model, the token counts, the
+ *   computed micro-USD, the rate-card version, whether the request started
+ *   in a peak window, whether the payload is waiting in the local spool,
+ *   and whether the model was priced by the fallback row.
+ */
+'sci/credit-charged': SciCreditChargedData
+```
+
+Source: [`packages/sci/sci-credit/src/types.ts:144`](../packages/sci/sci-credit/src/types.ts)
+
+<a id="scidelivered--log-only"></a>
+
+#### `sci/delivered` — log-only
+
+```ts persistence-catalog
+/**
+ * One file reached the user, through the `deliver_files` tool or through
+ * the shell spool. Log-only and non-surface: the card a user interface
+ * renders is projected from this record, and nothing later in the log is
+ * interpreted differently by its presence, so the producer appends it with
+ * the envelope's `ignorable` marker and a reader that does not know the
+ * type skips it instead of refusing the log. Within one session it is also
+ * the authoritative record of which manifests were already delivered.
+ * @param data - the delivery identity, the delivered bytes' digest and
+ *   size, the card text, what kind of file it was, and which channel
+ *   produced it.
+ */
+'sci/delivered': SciDeliveredData
+```
+
+Source: [`packages/sci/sci-deliver/src/types.ts:89`](../packages/sci/sci-deliver/src/types.ts)
+
+<a id="scidelivery-failed--log-only"></a>
+
+#### `sci/delivery-failed` — log-only
+
+```ts persistence-catalog
+/**
+ * One spool entry was rejected. Log-only, non-surface, and appended with
+ * the envelope's `ignorable` marker for the same reason as
+ * `sci/delivered`: the model learns of the rejection through the prompt
+ * context this package materialises once, not by re-reading the log.
+ * @param data - the always-`spool` channel marker, the path the entry
+ *   named, and the reason the validation chain produced.
+ */
+'sci/delivery-failed': SciDeliveryFailedData
+```
+
+Source: [`packages/sci/sci-deliver/src/types.ts:98`](../packages/sci/sci-deliver/src/types.ts)
+
+<a id="scifs-denied--log-only"></a>
+
+#### `sci/fs-denied` — log-only
+
+```ts persistence-catalog
+/**
+ * The workspace gate refused one tool call before dispatch: log-only,
+ * non-surface, one record per refusal. The model already learned of the
+ * refusal from the tool result, and nothing later in the log is interpreted
+ * differently by this event's presence — it exists so an audit projection
+ * can count refusals per session — so the producer appends it with the
+ * envelope's `ignorable` marker and a reader that does not know the type
+ * skips it instead of refusing the log.
+ */
+'sci/fs-denied': SciFsDeniedData
+```
+
+Source: [`packages/sci/sci-workspace/src/types.ts:126`](../packages/sci/sci-workspace/src/types.ts)
+
+<a id="scimemory-written--log-only"></a>
+
+#### `sci/memory-written` — log-only
+
+```ts persistence-catalog
+/**
+ * The model wrote or edited a memory node under the configured memory
+ * directory: log-only, non-surface, one record per accepted write. Purely
+ * a projection source — nothing later in the log is interpreted
+ * differently by its presence — so the producer appends it with the
+ * envelope's `ignorable` marker and a reader that does not know the type
+ * skips it instead of refusing the log.
+ */
+'sci/memory-written': SciMemoryWrittenData
+```
+
+Source: [`packages/sci/sci-memory/src/types.ts:153`](../packages/sci/sci-memory/src/types.ts)
+
+<a id="sciplan-declared--log-only"></a>
+
+#### `sci/plan-declared` — log-only
+
+```ts persistence-catalog
+/**
+ * The model announced how it intends to split the work before fanning out.
+ * This record is the authorization `sci-tier`'s G1 gate spends: a `workflow`
+ * or `subagent` call is admitted only when a plan was declared and not yet
+ * consumed, and a process that restarts mid-session rebuilds that latch by
+ * replaying the log. A reader that skipped this event would therefore admit
+ * a fan-out the deployment refused, so it is required-on-read and carries no
+ * `ignorable` marker. It is also what a user interface draws the named
+ * progress cards from.
+ * @param data - the plan identity, the declared agents with their card text
+ *   and icons, and the dependency pairs ordering them.
+ */
+'sci/plan-declared': SciPlanDeclaredData
+```
+
+Source: [`packages/sci/sci-plan/src/types.ts:108`](../packages/sci/sci-plan/src/types.ts)
+
+<a id="sciskills-synced--log-only"></a>
+
+#### `sci/skills-synced` — log-only
+
+```ts persistence-catalog
+/**
+ * The bundled skill tree was reconciled into the sandbox before this
+ * session could load a skill: log-only, non-surface, one record per sync
+ * round replayed into every session opened after it. Purely informational
+ * — nothing later in the log is interpreted differently by its presence —
+ * so the producer appends it with the envelope's `ignorable` marker and a
+ * reader that does not know the type skips it instead of refusing the log.
+ */
+'sci/skills-synced': SciSkillsSyncedData
+```
+
+Source: [`packages/sci/sci-skills/src/types.ts:83`](../packages/sci/sci-skills/src/types.ts)
+
+<a id="scitier-resolved--log-only"></a>
+
+#### `sci/tier-resolved` — log-only
+
+```ts persistence-catalog
+/**
+ * The tier and preset this session runs at, appended as the session's first
+ * `sci/*` event. Every later `sci/*` record is read against it: an audit
+ * projection counts a denied fan-out differently depending on the tier that
+ * denied it, and `./invariant` asserts that a balanced session never
+ * reaches a fan-out tool at all. A reader that skipped this event would
+ * therefore attribute the rest of the session to no tier, so it is
+ * required-on-read and carries no `ignorable` marker.
+ * @param data - the tier and the agent preset carrying it.
+ */
+'sci/tier-resolved': SciTierResolvedData
+```
+
+Source: [`packages/sci/sci-tier/src/types.ts:73`](../packages/sci/sci-tier/src/types.ts)
+
+<a id="scitier-upgrade-suggested--log-only"></a>
+
+#### `sci/tier-upgrade-suggested` — log-only
+
+```ts persistence-catalog
+/**
+ * The model asked, from a balanced session, that the work continue in the
+ * cluster tier. Log-only, non-surface, and appended with the envelope's
+ * `ignorable` marker: the model already knows it made the suggestion, and
+ * the record exists so a user interface can offer the upgrade fork and so
+ * the fork can quote the reason into the new session's opening message.
+ * @param data - the model's one-sentence account of what the cluster would add.
+ */
+'sci/tier-upgrade-suggested': SciTierUpgradeSuggestedData
+```
+
+Source: [`packages/sci/sci-tier/src/types.ts:82`](../packages/sci/sci-tier/src/types.ts)
+
+<a id="scitool-denied--log-only"></a>
+
+#### `sci/tool-denied` — log-only
+
+```ts persistence-catalog
+/**
+ * One tool call was refused by a tier gate. Log-only, non-surface, and
+ * appended with the envelope's `ignorable` marker: the refusal reached the
+ * model as the tool result, and nothing later in the log is interpreted
+ * differently by this event's presence — it exists so an audit projection
+ * can count refusals per rule.
+ * @param data - the refused tool's name, the gate that refused it, and the refusal text.
+ */
+'sci/tool-denied': SciToolDeniedData
+```
+
+Source: [`packages/sci/sci-tier/src/types.ts:91`](../packages/sci/sci-tier/src/types.ts)
 
 ### `session/*`
 

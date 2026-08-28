@@ -312,7 +312,7 @@ interface SurfaceIntent {
 }
 ```
 
-Required for `SurfaceEventType` events — every message-producing event must declare how it joins the surface, the sole source of derived model history. A human-facing transcript is the other projection and reads the log's append-origin events instead, because the surface deliberately shadows the ranges a replacement summarizes (`isAppendSurfaceEvent` in [dsh-session](../../packages/core/session/README.md)). Non-surface types reject it at compile time.
+Required for `SurfaceEventType` events — every message-producing event must declare how it joins the surface, the sole source of derived model history. A human-facing transcript is the other projection and reads the log's append-origin events instead, because the surface deliberately shadows the ranges a replacement summarizes (`isAppendSurfaceEvent` in [dsh-session](../../packages/core/session/README.md)). Non-surface types reject it at compile time and take the optional `AppendOptions` instead, whose `ignorable: true` writes the envelope's skip marker.
 
 Only `assistant/message` may carry a present empty `sourceEventSeqs`; when the field is absent, the event does not record which earlier events produced the message, and the provider may still have emitted chunks.
 
@@ -448,14 +448,22 @@ declare class Session {
    *
    * @param type - The event type (key of {@link SessionEventMap}).
    * @param data - The event payload; must be JSON-serializable.
-   * @param opts - Surface metadata: `surfaceOp` controls how the event enters
-   *   the ordered surface; `sourceEventSeqs` lists the seq numbers of earlier
-   *   events this one derives from. REQUIRED for
+   * @param opts - Surface metadata for a {@link SurfaceEventType} event,
+   *   {@link AppendOptions} for any other type. `surfaceOp` controls how the
+   *   event enters the ordered surface; `sourceEventSeqs` lists the seq numbers
+   *   of earlier events this one derives from. Both are REQUIRED for
    *   {@link SurfaceEventType} events (every message-producing event must
    *   declare how it joins the surface, the sole source of derived model
    *   history) and
-   *   rejected by the compiler for non-surface types like `turn/start` or
-   *   `assistant/chunk`.
+   *   rejected by the compiler for a literal non-surface type like
+   *   `turn/start` or `assistant/chunk`, which instead accept the optional
+   *   `ignorable: true`. The conditional distributes, so a caller generic over
+   *   a union of types (a relay or replay forwarder) may pass either member of
+   *   the union; the marker is inert on a surface event regardless, because a
+   *   reader consults it only for a type outside its known set and the surface
+   *   types are a closed set every build knows
+   *   to write {@link SessionEvent.ignorable} into the envelope. Omitting it
+   *   writes no marker, so the event stays required-on-read.
    * @returns the logged event — its assigned `seq`/`time` plus the SNAPSHOT of
    *   `data` that entered the log, so reading `event.data` back sees the logged
    *   value, never the caller's still-mutable input.
@@ -476,7 +484,7 @@ declare class Session {
   append<T extends SessionEventType>(
     type: T,
     data: SessionEventMap[T],
-    ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent] : []
+    ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent] : [opts?: AppendOptions]
   ): SessionEvent<T>;
   /**
    * The {@link EpochHeader} in force after the log's last header event — the

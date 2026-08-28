@@ -314,7 +314,7 @@ interface SurfaceIntent {
 }
 ```
 
-对 `SurfaceEventType` 事件必填：每个产生消息的事件都必须声明它如何加入 surface（派生模型历史的唯一来源）。面向人类的 transcript（文本记录）是另一个投影，读取的是日志中追加来源的事件，因为 surface 会有意遮蔽替换所概括的范围（见 [dsh-session](../../packages/core/session/README.zh.md) 的 `isAppendSurfaceEvent`）。非 surface 类型在编译期拒绝此参数。
+对 `SurfaceEventType` 事件必填：每个产生消息的事件都必须声明它如何加入 surface（派生模型历史的唯一来源）。面向人类的 transcript（文本记录）是另一个投影，读取的是日志中追加来源的事件，因为 surface 会有意遮蔽替换所概括的范围（见 [dsh-session](../../packages/core/session/README.zh.md) 的 `isAppendSurfaceEvent`）。非 surface 类型在编译期拒绝此参数，改为接受可选的 `AppendOptions`，其 `ignorable: true` 会写入信封上的跳过标记。
 
 只有 `assistant/message` 可以携带存在但为空的 `sourceEventSeqs`；字段不存在时，该事件没有记录这条消息由哪些早期事件产生，但提供方仍可能发出过分片。
 
@@ -450,14 +450,22 @@ declare class Session {
    *
    * @param type - The event type (key of {@link SessionEventMap}).
    * @param data - The event payload; must be JSON-serializable.
-   * @param opts - Surface metadata: `surfaceOp` controls how the event enters
-   *   the ordered surface; `sourceEventSeqs` lists the seq numbers of earlier
-   *   events this one derives from. REQUIRED for
+   * @param opts - Surface metadata for a {@link SurfaceEventType} event,
+   *   {@link AppendOptions} for any other type. `surfaceOp` controls how the
+   *   event enters the ordered surface; `sourceEventSeqs` lists the seq numbers
+   *   of earlier events this one derives from. Both are REQUIRED for
    *   {@link SurfaceEventType} events (every message-producing event must
    *   declare how it joins the surface, the sole source of derived model
    *   history) and
-   *   rejected by the compiler for non-surface types like `turn/start` or
-   *   `assistant/chunk`.
+   *   rejected by the compiler for a literal non-surface type like
+   *   `turn/start` or `assistant/chunk`, which instead accept the optional
+   *   `ignorable: true`. The conditional distributes, so a caller generic over
+   *   a union of types (a relay or replay forwarder) may pass either member of
+   *   the union; the marker is inert on a surface event regardless, because a
+   *   reader consults it only for a type outside its known set and the surface
+   *   types are a closed set every build knows
+   *   to write {@link SessionEvent.ignorable} into the envelope. Omitting it
+   *   writes no marker, so the event stays required-on-read.
    * @returns the logged event — its assigned `seq`/`time` plus the SNAPSHOT of
    *   `data` that entered the log, so reading `event.data` back sees the logged
    *   value, never the caller's still-mutable input.
@@ -478,7 +486,7 @@ declare class Session {
   append<T extends SessionEventType>(
     type: T,
     data: SessionEventMap[T],
-    ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent] : []
+    ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent] : [opts?: AppendOptions]
   ): SessionEvent<T>;
   /**
    * The {@link EpochHeader} in force after the log's last header event — the

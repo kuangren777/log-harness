@@ -7,6 +7,15 @@ A service can be a core spine service, a swappable capability seam, or a bundle/
 
 ```mermaid
 flowchart LR
+  pkg_sci_audit["sci-audit"]
+  svc_sciAudit["ctx.sciAudit<br/>Science-research audit projection"]
+  pkg_sci_profile["sci-profile"]
+  pkg_sci_memory["sci-memory"]
+  svc_sciMemory["ctx.sciMemory<br/>Science-research memory nodes and recall"]
+  pkg_sci_remote_hosts["sci-remote-hosts"]
+  svc_sciRemoteHosts["ctx.sciRemoteHosts<br/>Science-research managed SSH hosts"]
+  pkg_sci_tier["sci-tier"]
+  svc_sciTierFork["ctx.sciTierFork<br/>Science-research tier upgrade"]
   pkg_attachment["attachment"]
   svc_attachments["ctx.attachments<br/>Durable binary attachment storage"]
   pkg_attachment_local["attachment-local"]
@@ -183,6 +192,7 @@ flowchart LR
   svc_directoryPicker["ctx.directoryPicker<br/>Workspace-directory picking seam"]
   pkg_directory_picker_native["directory-picker-native"]
   pkg_directory_picker_browse["directory-picker-browse"]
+  pkg_directory_picker_e2b["directory-picker-e2b"]
   pkg_webserver["webserver"]
   svc_webServer["ctx.webServer<br/>HTTP route registration"]
   pkg_connection["connection"]
@@ -227,6 +237,7 @@ flowchart LR
   pkg_credentials_local --> svc_credentials
   pkg_directory_picker --> svc_directoryPicker
   pkg_directory_picker_browse --> svc_directoryPicker
+  pkg_directory_picker_e2b --> svc_directoryPicker
   pkg_directory_picker_native --> svc_directoryPicker
   pkg_e2b --> svc_e2b
   pkg_file_reference --> svc_fileReferences
@@ -253,6 +264,10 @@ flowchart LR
   pkg_sandbox --> svc_sandbox
   pkg_sandbox_local --> svc_sandbox
   pkg_sandbox_policy --> svc_sandboxPolicy
+  pkg_sci_audit --> svc_sciAudit
+  pkg_sci_memory --> svc_sciMemory
+  pkg_sci_remote_hosts --> svc_sciRemoteHosts
+  pkg_sci_tier --> svc_sciTierFork
   pkg_session --> svc_sessions
   pkg_session_persistence --> svc_sessionPersistence
   pkg_session_persistence_jsonl --> svc_sessionPersistence
@@ -347,6 +362,10 @@ flowchart LR
   svc_sandboxPolicy --> pkg_bash_sandbox
   svc_sandboxPolicy --> pkg_fs_sandbox
   svc_sandboxPolicy --> pkg_terminal_bash
+  svc_sciAudit --> pkg_sci_profile
+  svc_sciMemory --> pkg_sci_profile
+  svc_sciRemoteHosts --> pkg_sci_profile
+  svc_sciTierFork --> pkg_sci_profile
   svc_sessionPersistence --> pkg_agent_loop
   svc_sessionPersistence --> pkg_hooks_claude_code
   svc_sessionPersistence --> pkg_hooks_codex
@@ -425,6 +444,10 @@ flowchart LR
 
 | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.sciAudit` | `core` | [`sci-audit`](../packages/sci/sci-audit) | - | [`sci-profile`](../packages/sci/sci-profile) | - | Folds the session log into three owned tables and reads the tables sci-skills and sci-memory own; rebuildable because the log is the only input. |
+| `ctx.sciMemory` | `core` | [`sci-memory`](../packages/sci/sci-memory) | - | [`sci-profile`](../packages/sci/sci-profile) | - | Observes accepted memory-directory writes, backfills the originating session, and serves recall over the projected log. |
+| `ctx.sciRemoteHosts` | `core` | [`sci-remote-hosts`](../packages/sci/sci-remote-hosts) | - | [`sci-profile`](../packages/sci/sci-profile) | - | Owns one delimited block of the sandbox ssh config; bytes outside the block are preserved and private keys stay in the credential seam. |
+| `ctx.sciTierFork` | `core` | [`sci-tier`](../packages/sci/sci-tier) | - | [`sci-profile`](../packages/sci/sci-profile) | - | Creates a cluster-tier session seeded from the balanced session it replaces, rather than forking its conversation. |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | `host-runtime`, [`llm-pi-ai`](../packages/llm/llm-pi-ai) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |
 | `ctx.tokenMeter` | `core` | [`token-meter`](../packages/llm/token-meter) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Owns isolated per-session replay folds; pressure consumers share immutable revisioned measurements. |
@@ -476,7 +499,7 @@ flowchart LR
 | `ctx.jobs` | `seam` | [`jobs`](../packages/jobs/jobs) | [`jobs-local`](../packages/jobs/jobs-local) | [`tool-bash`](../packages/shell/tool-bash), [`tool-terminal`](../packages/terminal/tool-terminal), [`tool-subagent`](../packages/subagent/tool-subagent), [`tool-jobs`](../packages/jobs/tool-jobs) | - | Producers (background bash, PTY sends, and subagent delegations) register running work; tool-jobs is the model-facing controller that reads, lists, and kills it; jobs-local is the process-local registry. |
 | `ctx.web` | `seam` | [`web`](../packages/web/web) | [`web-search-exa`](../packages/web/web-search-exa), [`web-search-perplexity`](../packages/web/web-search-perplexity), [`web-search-deepseek`](../packages/web/web-search-deepseek), [`web-fetch-http`](../packages/web/web-fetch-http) | [`tool-web`](../packages/web/tool-web) | - | Search and fetch providers register into one ctx.web seam; tool-web owns the stable model-facing names. |
 | `ctx.spillStore` | `seam` | [`spill`](../packages/spill/spill) | [`spill-local`](../packages/spill/spill-local) | [`spill-policy`](../packages/spill/spill-policy) | - | The backend saves oversized tool text and returns a model-facing locator plus retrieval hint; spill-policy is the tools/post-execute consumer that decides when to spill. |
-| `ctx.directoryPicker` | `seam` | `directory-picker` | `directory-picker-native`, `directory-picker-browse` | `apiproxy` | - | Discriminated interaction capability: the native backend opens one OS chooser on the host display, the browse backend serves listing/creation primitives for the in-app browser; dual-face backends fill ui-workspace directory-flow slots from their browser halves (no wire advertisement). |
+| `ctx.directoryPicker` | `seam` | `directory-picker` | `directory-picker-native`, `directory-picker-browse`, `directory-picker-e2b` | `apiproxy` | - | Discriminated interaction capability: the native backend opens one OS chooser on the host display, the browse backend serves listing/creation primitives for the in-app browser, and the e2b backend serves those same primitives from inside the sandbox the tools run in; dual-face backends fill ui-workspace directory-flow slots from their browser halves (no wire advertisement). |
 | `ctx.webServer` | `core` | `webserver` | - | `connection`, `modules`, `hmr` | - | Plain node:http carrier: named-route registry, index transform taps, and the static dist fallback; web-transport plugins register their own routes. |
 | `ctx.clientModules` | `core` | `modules` | - | `hmr` | - | Composes the __DSH_BOOT__ entry graph from an incremental dsh.client scan, serves plugin bundles, and notifies rebuilt/graph-changed subscribers. |
 | `ctx.workflowEngine` | `seam` | [`workflow`](../packages/workflow/workflow) | [`workflow-worker-thread`](../packages/workflow/workflow-worker-thread) | [`tool-workflow`](../packages/workflow/tool-workflow), [`tool-ralph`](../packages/workflow/tool-ralph) | - | One engine per context, as in bash, with no named-provider registry; the general workflow and fixed Ralph consumers start runs whose agent() calls fan out through ctx.subagents. |

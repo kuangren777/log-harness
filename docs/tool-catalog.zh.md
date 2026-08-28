@@ -19,6 +19,9 @@
 
 | 工具包 | 模型可见名称 | 依赖 | 写入／影响 | 随产品发布的别名 | 部署说明 |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-sci-tier` | `suggest_tier_upgrade` | `ctx.tools` | `tool/call`、`sci/tier-upgrade-suggested`、`tool/result` | - | suggest_tier_upgrade 是均衡档位唯一与扇出相关的工具：它记录任务已超出单次处理的范围，把选择权留给用户，而不是让 agent 悄悄启动蜂群。 |
+| `@deepseek-ai/dsh-sci-plan` | `declare_research_plan` | `ctx.tools` | `tool/call`、`sci/plan-declared`、`tool/result` | - | declare_research_plan 在扇出前点名各条并行工作线；档位门禁消费其 sci/plan-declared 事件，在声明之前拒绝扇出工具。 |
+| `@deepseek-ai/dsh-sci-deliver` | `deliver_files` | `ctx.tools`、`ctx.fs`、`ctx.systemPrompt` | `tool/call`、`sci/delivered`、`sci/delivery-failed`、`tool/result` | - | deliver_files 是文件送达用户的唯一途径；沙箱内的 `sci deliver` CLI 把同一份请求写进 spool，插件在轮次开始时拾取，走同一条校验链。 |
 | `@deepseek-ai/dsh-tool-ask-user` | `ask_user_question` | `ctx.tools`、`ctx.userQuestions` | `tool/call`、`tool/result after a UI/provider answers the question` | - | ask_user_question 会暂停工具调用，直到当前 UI 提供方返回人类答案。 |
 | `@deepseek-ai/dsh-tools` | `run_code` | `ctx.tools`、`ctx.codeRuntime (execution time)`、`ctx.systemPrompt` | `tool/call`、`one tool/code-dispatch-start + tool/code-dispatch pair per bridged sub-call`、`tool/result` | - | 在 `mode: code`／`mode: both` 下，它由工具注册表所有，作为可过滤能力层之外的保留传输机制（参见 Code Mode Agent Note）。在 `code` 下，它是注册表对协议格式（wire format）的唯一贡献；其他可见能力在使用已加载运行时语言生成的 SDK 章节中声明。程序通过 binding 调用这些能力，调用按照原生并发约定调度：启动顺序和策略遵循提交顺序，并发安全的函数体最多重叠执行 `maxParallelSubCalls` 个。调用会重新进入完整且受守卫保护的工具流水线，并将每个嵌套执行关联到此外层结果。 |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`、`ctx.systemPrompt`、`ctx.userQuestions (execution time, opportunistic)` | `tool/call`、`plan/mode inactive on an approved review`、`tool/result` | - | 规划未激活时，exit_plan_mode 仍保留在面向模型的 schema 中，这样状态转换不会在规划策略变更之外额外造成工具目录变动。其执行路径会拒绝规划模式之外的调用；在规划模式下，它通过用户交互 seam 提交计划（批准／根据反馈继续规划），批准后会在步骤边界记录规划模式已停用。 |
@@ -45,6 +48,154 @@
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`、`owning Agent session` | `tool/call`、`todo/write`、`tool/result` | - | todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为检查清单。`allowParallelInProgress` 是没有默认值的必填项，因此本目录明确选择 `true`，对应描述允许同时存在多个 `in_progress` 项。选择 `false` 的部署会获得同一工具，但描述会要求只能有 1 个活动任务。 |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
+
+<a id="deepseek-aidsh-sci-tier"></a>
+
+## `@deepseek-ai/dsh-sci-tier`
+
+### `suggest_tier_upgrade`
+
+告诉用户这项任务用 Swarm 模式（把工作扇出给多个并行 subagent）会更合适。此调用不会改变当前会话：它只是记录这条建议供用户决定，用户接受后会在新会话中继续。只有在你已经交付了单次诚实处理所能覆盖的内容之后才调用它，并用一句话说明 swarm 能补上什么这一遍做不到的东西——哪些角度还没覆盖，哪些来源还没读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "reason": {
+      "type": "string",
+      "description": "One sentence on what a swarm would add that this single pass could not."
+    }
+  },
+  "required": [
+    "reason"
+  ]
+}
+```
+
+来源：[`packages/sci/sci-tier/src/suggest-tool.ts`](../packages/sci/sci-tier/src/suggest-tool.ts)
+
+suggest_tier_upgrade 是均衡档位唯一与扇出相关的工具：它记录任务已超出单次处理的范围，把选择权留给用户，而不是让 agent 悄悄启动蜂群。
+
+<a id="deepseek-aidsh-sci-plan"></a>
+
+## `@deepseek-ai/dsh-sci-plan`
+
+### `declare_research_plan`
+
+在扇出到 swarm 之前，宣布你打算如何拆分工作。为每条并行工作线声明一个 agent，各带一个供 `edges` 引用的短 id、一个卡片标题、一个图标，以及一句话说明它做什么。图标决定运行该步骤的 subagent 人格：`web` → `researcher`，`search` → `scout`，`security` → `adversary`，`code` → `writer`，`check` → `deliverer`。`edges` 只用于真正的顺序约束——`[["installer", "verifier"]]` 表示 verifier 要等 installer；两个 agent 之间没有边就并行运行。计划必须无环，且每条边都必须指向一个已声明的 agent。一次声明只授权一次扇出：下一次扇出前要重新声明。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "agents": {
+      "type": "array",
+      "description": "One entry per parallel line of work, in the order you want them shown.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Short unique id for this agent; `edges` refers to it."
+          },
+          "name": {
+            "type": "string",
+            "description": "Card title naming what this agent is."
+          },
+          "icon": {
+            "type": "string",
+            "description": "Card icon, which also selects the persona that runs the step.",
+            "enum": [
+              "web",
+              "search",
+              "security",
+              "code",
+              "check"
+            ]
+          },
+          "task": {
+            "type": "string",
+            "description": "One sentence on what this agent does."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "icon",
+          "task"
+        ]
+      }
+    },
+    "edges": {
+      "type": "array",
+      "description": "Ordering constraints as [from, to] pairs. Omit when every agent runs independently.",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "required": [
+    "agents"
+  ]
+}
+```
+
+来源：[`packages/sci/sci-plan/src/index.ts`](../packages/sci/sci-plan/src/index.ts)
+
+declare_research_plan 在扇出前点名各条并行工作线；档位门禁消费其 sci/plan-declared 事件，在声明之前拒绝扇出工具。
+
+<a id="deepseek-aidsh-sci-deliver"></a>
+
+## `@deepseek-ai/dsh-sci-deliver`
+
+### `deliver_files`
+
+把完成的文件交付给用户，用户会看到每个文件各一张卡片。可交付路径是项目 workspace/ 目录下的任何内容，外加 paper 或 figure bundle 自己的 .paper / .sciplot manifest。其他任何东西——构建产物、临时文件、下载的 PDF——都必须先以能说明内容的名字拷贝进 workspace/，再从那里交付。bundle manifest 只交付一次：之后的编辑会实时反映到用户已经打开的工作台，所以后续改动请在聊天里说明，不要再次交付该 manifest。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "files": {
+      "type": "array",
+      "description": "The files to deliver, in the order the user should see them.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path of the file to deliver."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short card title naming what this file is."
+          },
+          "description": {
+            "type": "string",
+            "description": "One sentence on what the file contains. Omit when the title says it."
+          }
+        },
+        "required": [
+          "path",
+          "title"
+        ]
+      }
+    }
+  },
+  "required": [
+    "files"
+  ]
+}
+```
+
+来源：[`packages/sci/sci-deliver/src/index.ts`](../packages/sci/sci-deliver/src/index.ts)
+
+deliver_files 是文件送达用户的唯一途径；沙箱内的 `sci deliver` CLI 把同一份请求写进 spool，插件在轮次开始时拾取，走同一条校验链。
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 

@@ -256,19 +256,27 @@ The abstract [`SubprocessRuntime`](../../packages/subprocess/subprocess/src/inde
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
-<a id="ctxe2b--e2bruntime"></a>
+<a id="ctxe2b--e2bruntime-abstract-seam"></a>
 
-### `ctx.e2b` — `E2BRuntime`
+### `ctx.e2b` — `E2BRuntime` (abstract seam)
 
-Creates one lazily consumable E2B SDK handle and deletes the sandbox at timeout or disposal. Creation begins at plugin construction; adapters await getSandbox before their first operation.
+Abstract owner of one shared E2B sandbox. Subclass, implement getSandbox, and load the subclass as a plugin — it registers as `ctx.e2b` (one implementation per context; loading a second throws, which is cordis' standard duplicate-service behavior). Filesystem and subprocess adapters await the one handle, so they inhabit the same remote Linux world.
+
+Implementations must honor these semantics:
+
+- getSandbox resolves only after cwd and runtimeRoot exist in the sandbox, so an adapter's first operation needs no setup.
+- runtimeRoot is adapter-private: a real directory, never a symlink, reachable only by its owner.
+- Acquisition is shared and repeatable: concurrent callers await one attempt and receive the same handle.
+- Acquisition failure is reported to every caller; providers never hand back a half-prepared sandbox.
+- Disposal first refuses new handle acquisition; whether it also deletes the sandbox is the provider's lifetime policy.
 
 ```ts cordis-catalog
 /**
  * Return the shared live SDK handle.
- * @returns the created sandbox after the configured cwd exists.
- * @throws when E2B rejects creation or the service is disposing.
+ * @returns the acquired sandbox after {@link cwd} and {@link runtimeRoot} exist.
+ * @throws when acquisition fails or the service is disposing.
  */
-async getSandbox(): Promise<Sandbox>
+abstract getSandbox(): Promise<Sandbox>
 ```
 
 Source: [`packages/e2b/e2b/src/index.ts`](../../packages/e2b/e2b/src/index.ts)

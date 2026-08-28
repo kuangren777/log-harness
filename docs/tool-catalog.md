@@ -15,6 +15,9 @@ This table connects model-visible tool names to the plugin package and service s
 
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-sci-tier` | `suggest_tier_upgrade` | `ctx.tools` | `tool/call`, `sci/tier-upgrade-suggested`, `tool/result` | - | suggest_tier_upgrade is the balanced tier's only fan-out-adjacent tool: it records that the task outgrew a single pass and leaves the choice to the user, instead of the agent quietly starting a swarm. |
+| `@deepseek-ai/dsh-sci-plan` | `declare_research_plan` | `ctx.tools` | `tool/call`, `sci/plan-declared`, `tool/result` | - | declare_research_plan names the parallel lines of work before a fan-out; the tier gate consumes its sci/plan-declared event and refuses a fan-out tool until one is declared. |
+| `@deepseek-ai/dsh-sci-deliver` | `deliver_files` | `ctx.tools`, `ctx.fs`, `ctx.systemPrompt` | `tool/call`, `sci/delivered`, `sci/delivery-failed`, `tool/result` | - | deliver_files is the only way a file reaches the user; the in-sandbox `sci deliver` CLI writes the same request into the spool the plugin drains at turn start, through the same validation. |
 | `@deepseek-ai/dsh-tool-ask-user` | `ask_user_question` | `ctx.tools`, `ctx.userQuestions` | `tool/call`, `tool/result after a UI/provider answers the question` | - | ask_user_question pauses the tool call until the active UI provider returns a human answer. |
 | `@deepseek-ai/dsh-tools` | `run_code` | `ctx.tools`, `ctx.codeRuntime (execution time)`, `ctx.systemPrompt` | `tool/call`, `one tool/code-dispatch-start + tool/code-dispatch pair per bridged sub-call`, `tool/result` | - | Owned by the tool registry as a reserved transport outside filterable capability layers under `mode: code` / `mode: both` (see the Code Mode Agent Note). Under `code` it is the registry's only wire contribution; the other visible capabilities are declared in a generated SDK section in the loaded runtime's language, and a program calls them through bindings scheduled under the native concurrency contract (submission-ordered starts and policy; concurrency-safe bodies overlap up to `maxParallelSubCalls`) that re-enter the complete guarded tool pipeline and link each nested execution to this outer result. |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`, `ctx.systemPrompt`, `ctx.userQuestions (execution time, opportunistic)` | `tool/call`, `plan/mode inactive on an approved review`, `tool/result` | - | exit_plan_mode stays in the model-facing schema while planning is inactive so transitions add no tool-catalog churn on top of the plan-policy change. Its execute path rejects calls outside plan mode; in plan mode it presents the plan over the user-questions seam (approve / keep planning with feedback), and approval logs plan mode inactive at the step boundary. |
@@ -41,6 +44,154 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`, `owning Agent session` | `tool/call`, `todo/write`, `tool/result` | - | todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task. |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
+
+<a id="deepseek-aidsh-sci-tier"></a>
+
+## `@deepseek-ai/dsh-sci-tier`
+
+### `suggest_tier_upgrade`
+
+Tell the user this task would be better served by Swarm mode, which fans the work out across parallel subagents. This does not change the current session: it records the suggestion so the user can decide, and they continue in a new session if they accept. Call it only after you have delivered what a single honest pass covers, and say in one sentence what the swarm would add that this pass could not — which angles stay uncovered, which sources stay unread.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "reason": {
+      "type": "string",
+      "description": "One sentence on what a swarm would add that this single pass could not."
+    }
+  },
+  "required": [
+    "reason"
+  ]
+}
+```
+
+Source: [`packages/sci/sci-tier/src/suggest-tool.ts`](../packages/sci/sci-tier/src/suggest-tool.ts)
+
+suggest_tier_upgrade is the balanced tier's only fan-out-adjacent tool: it records that the task outgrew a single pass and leaves the choice to the user, instead of the agent quietly starting a swarm.
+
+<a id="deepseek-aidsh-sci-plan"></a>
+
+## `@deepseek-ai/dsh-sci-plan`
+
+### `declare_research_plan`
+
+Announce how you intend to split the work before you fan out to a swarm. Declare one agent per parallel line of work, each with a short id that `edges` refers to, a card title, an icon, and one sentence saying what it does. Icons select the subagent persona that runs the step: web runs as researcher, search runs as scout, security runs as adversary, code runs as writer, check runs as deliverer. Use `edges` only for real ordering constraints — `[["installer", "verifier"]]` means the verifier waits for the installer; agents with no edge between them run in parallel. The plan must be acyclic and every edge must name a declared agent. One declaration authorizes one fan-out: declare again before the next one.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "agents": {
+      "type": "array",
+      "description": "One entry per parallel line of work, in the order you want them shown.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Short unique id for this agent; `edges` refers to it."
+          },
+          "name": {
+            "type": "string",
+            "description": "Card title naming what this agent is."
+          },
+          "icon": {
+            "type": "string",
+            "description": "Card icon, which also selects the persona that runs the step.",
+            "enum": [
+              "web",
+              "search",
+              "security",
+              "code",
+              "check"
+            ]
+          },
+          "task": {
+            "type": "string",
+            "description": "One sentence on what this agent does."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "icon",
+          "task"
+        ]
+      }
+    },
+    "edges": {
+      "type": "array",
+      "description": "Ordering constraints as [from, to] pairs. Omit when every agent runs independently.",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "required": [
+    "agents"
+  ]
+}
+```
+
+Source: [`packages/sci/sci-plan/src/index.ts`](../packages/sci/sci-plan/src/index.ts)
+
+declare_research_plan names the parallel lines of work before a fan-out; the tier gate consumes its sci/plan-declared event and refuses a fan-out tool until one is declared.
+
+<a id="deepseek-aidsh-sci-deliver"></a>
+
+## `@deepseek-ai/dsh-sci-deliver`
+
+### `deliver_files`
+
+Deliver finished files to the user, who sees one card per file. Deliverable paths are anything inside a project's workspace/ directory, plus a paper or figure bundle's own .paper / .sciplot manifest. Anything else — a build product, a scratch file, a downloaded PDF — must be copied into workspace/ under a descriptive name and delivered from there. Deliver a bundle manifest once: later edits reach the workbench the user already has open, so describe further changes in chat instead of delivering the manifest again.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "files": {
+      "type": "array",
+      "description": "The files to deliver, in the order the user should see them.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path of the file to deliver."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short card title naming what this file is."
+          },
+          "description": {
+            "type": "string",
+            "description": "One sentence on what the file contains. Omit when the title says it."
+          }
+        },
+        "required": [
+          "path",
+          "title"
+        ]
+      }
+    }
+  },
+  "required": [
+    "files"
+  ]
+}
+```
+
+Source: [`packages/sci/sci-deliver/src/index.ts`](../packages/sci/sci-deliver/src/index.ts)
+
+deliver_files is the only way a file reaches the user; the in-sandbox `sci deliver` CLI writes the same request into the spool the plugin drains at turn start, through the same validation.
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 

@@ -9,6 +9,15 @@
 
 ```mermaid
 flowchart LR
+  pkg_sci_audit["sci-audit"]
+  svc_sciAudit["ctx.sciAudit<br/>Science-research audit projection"]
+  pkg_sci_profile["sci-profile"]
+  pkg_sci_memory["sci-memory"]
+  svc_sciMemory["ctx.sciMemory<br/>Science-research memory nodes and recall"]
+  pkg_sci_remote_hosts["sci-remote-hosts"]
+  svc_sciRemoteHosts["ctx.sciRemoteHosts<br/>Science-research managed SSH hosts"]
+  pkg_sci_tier["sci-tier"]
+  svc_sciTierFork["ctx.sciTierFork<br/>Science-research tier upgrade"]
   pkg_attachment["attachment"]
   svc_attachments["ctx.attachments<br/>Durable binary attachment storage"]
   pkg_attachment_local["attachment-local"]
@@ -185,6 +194,7 @@ flowchart LR
   svc_directoryPicker["ctx.directoryPicker<br/>Workspace-directory picking seam"]
   pkg_directory_picker_native["directory-picker-native"]
   pkg_directory_picker_browse["directory-picker-browse"]
+  pkg_directory_picker_e2b["directory-picker-e2b"]
   pkg_webserver["webserver"]
   svc_webServer["ctx.webServer<br/>HTTP route registration"]
   pkg_connection["connection"]
@@ -229,6 +239,7 @@ flowchart LR
   pkg_credentials_local --> svc_credentials
   pkg_directory_picker --> svc_directoryPicker
   pkg_directory_picker_browse --> svc_directoryPicker
+  pkg_directory_picker_e2b --> svc_directoryPicker
   pkg_directory_picker_native --> svc_directoryPicker
   pkg_e2b --> svc_e2b
   pkg_file_reference --> svc_fileReferences
@@ -255,6 +266,10 @@ flowchart LR
   pkg_sandbox --> svc_sandbox
   pkg_sandbox_local --> svc_sandbox
   pkg_sandbox_policy --> svc_sandboxPolicy
+  pkg_sci_audit --> svc_sciAudit
+  pkg_sci_memory --> svc_sciMemory
+  pkg_sci_remote_hosts --> svc_sciRemoteHosts
+  pkg_sci_tier --> svc_sciTierFork
   pkg_session --> svc_sessions
   pkg_session_persistence --> svc_sessionPersistence
   pkg_session_persistence_jsonl --> svc_sessionPersistence
@@ -349,6 +364,10 @@ flowchart LR
   svc_sandboxPolicy --> pkg_bash_sandbox
   svc_sandboxPolicy --> pkg_fs_sandbox
   svc_sandboxPolicy --> pkg_terminal_bash
+  svc_sciAudit --> pkg_sci_profile
+  svc_sciMemory --> pkg_sci_profile
+  svc_sciRemoteHosts --> pkg_sci_profile
+  svc_sciTierFork --> pkg_sci_profile
   svc_sessionPersistence --> pkg_agent_loop
   svc_sessionPersistence --> pkg_hooks_claude_code
   svc_sessionPersistence --> pkg_hooks_codex
@@ -427,6 +446,10 @@ flowchart LR
 
 | ctx 键 | 角色 | 所属包 | 实现 | 直接消费方 | 配套插件 | 说明 |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.sciAudit` | `core` | [`sci-audit`](../packages/sci/sci-audit) | - | [`sci-profile`](../packages/sci/sci-profile) | - | 将会话日志折叠进本包拥有的三张表，并读取 sci-skills 与 sci-memory 拥有的表；由于日志是唯一输入，可重建。 |
+| `ctx.sciMemory` | `core` | [`sci-memory`](../packages/sci/sci-memory) | - | [`sci-profile`](../packages/sci/sci-profile) | - | 观察已接受的记忆目录写入，回填来源会话，并基于投影后的日志提供 recall。 |
+| `ctx.sciRemoteHosts` | `core` | [`sci-remote-hosts`](../packages/sci/sci-remote-hosts) | - | [`sci-profile`](../packages/sci/sci-profile) | - | 拥有沙箱 ssh config 中一段有界的托管块；块外字节保持不变，私钥留在凭据 seam 内。 |
+| `ctx.sciTierFork` | `core` | [`sci-tier`](../packages/sci/sci-tier) | - | [`sci-profile`](../packages/sci/sci-profile) | - | 创建一个以其所替换的均衡档位会话为种子的集群档位会话，而非 fork 该会话的对话。 |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | `host-runtime`, [`llm-pi-ai`](../packages/llm/llm-pi-ai) | - | 宿主会在会话事件之前提交已接受的图片；提供方适配器将已授权的持久引用解析为提供方原生内容。 |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | 适配器注册提供方实现；agent loop（智能体循环）与压缩功能调用提供方无关的流服务。 |
 | `ctx.tokenMeter` | `core` | [`token-meter`](../packages/llm/token-meter) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | 拥有按会话隔离的回放折叠区；压力消费方共享不可变且带修订版本的测量结果。 |
@@ -478,7 +501,7 @@ flowchart LR
 | `ctx.jobs` | `seam` | [`jobs`](../packages/jobs/jobs) | [`jobs-local`](../packages/jobs/jobs-local) | [`tool-bash`](../packages/shell/tool-bash), [`tool-terminal`](../packages/terminal/tool-terminal), [`tool-subagent`](../packages/subagent/tool-subagent), [`tool-jobs`](../packages/jobs/tool-jobs) | - | 生产方（后台 bash、PTY 发送和 subagent 委派）登记正在运行的工作；tool-jobs 是面向模型的控制器，用于读取、列出和终止这些工作；jobs-local 是进程本地注册表。 |
 | `ctx.web` | `seam` | [`web`](../packages/web/web) | [`web-search-exa`](../packages/web/web-search-exa), [`web-search-perplexity`](../packages/web/web-search-perplexity), [`web-search-deepseek`](../packages/web/web-search-deepseek), [`web-fetch-http`](../packages/web/web-fetch-http) | [`tool-web`](../packages/web/tool-web) | - | 搜索和抓取提供方注册到同一个 ctx.web seam；tool-web 负责稳定的面向模型名称。 |
 | `ctx.spillStore` | `seam` | [`spill`](../packages/spill/spill) | [`spill-local`](../packages/spill/spill-local) | [`spill-policy`](../packages/spill/spill-policy) | - | 后端保存过大的工具文本，并返回面向模型的定位信息和取回提示；spill-policy 是 tools/post-execute 消费方，负责决定何时 spill。 |
-| `ctx.directoryPicker` | `seam` | `directory-picker` | `directory-picker-native`, `directory-picker-browse` | `apiproxy` | - | 带判别标记的交互能力：原生后端在 Host 显示设备上打开一个操作系统选择器，浏览后端为应用内浏览器提供列表与创建原语；双端后端通过其浏览器侧填充 ui-workspace 目录流程的 slot（不通过协议发布）。 |
+| `ctx.directoryPicker` | `seam` | `directory-picker` | `directory-picker-native`, `directory-picker-browse`, `directory-picker-e2b` | `apiproxy` | - | 带判别标记的交互能力：原生后端在 Host 显示设备上打开一个操作系统选择器，浏览后端为应用内浏览器提供列表与创建原语，e2b 后端在工具实际运行的沙箱内部提供同样的原语；双端后端通过其浏览器侧填充 ui-workspace 目录流程的 slot（不通过协议发布）。 |
 | `ctx.webServer` | `core` | `webserver` | - | `connection`, `modules`, `hmr` | - | 普通的 node:http 载体：具名路由注册表、索引转换 tap，以及静态 dist 回退；Web 传输插件注册自己的路由。 |
 | `ctx.clientModules` | `core` | `modules` | - | `hmr` | - | 通过增量 `dsh.client` 扫描组合 __DSH_BOOT__ 入口图，提供插件组合包，并通知重建／图变更订阅方。 |
 | `ctx.workflowEngine` | `seam` | [`workflow`](../packages/workflow/workflow) | [`workflow-worker-thread`](../packages/workflow/workflow-worker-thread) | [`tool-workflow`](../packages/workflow/tool-workflow), [`tool-ralph`](../packages/workflow/tool-ralph) | - | 每个上下文使用一个引擎，与 bash 相同，且没有具名提供方注册表；通用工作流与固定 Ralph 消费方启动运行，其中的 agent() 调用通过 ctx.subagents 扇出。 |

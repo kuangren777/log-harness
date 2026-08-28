@@ -413,12 +413,23 @@ export interface ConnectionConfig {
    * that is not a bare, canonical authority fails the plugin load.
    */
   trustedHosts?: string[]
+  /**
+   * Whether the privileged method set and `authority: 'loopback'` RPC channels
+   * accept the same {@link ConnectionConfig.trustedHosts} list as ordinary
+   * methods. Only for a deployment where an authenticating reverse proxy fronts
+   * this process and forwards the public `Host`: the fence itself is not
+   * authentication, so opting in without that proxy publishes the
+   * configuration plane to everyone who can reach a declared authority. It
+   * never grants anything to a host outside `trustedHosts`, and is a no-op
+   * while that list is empty.
+   */
+  privilegedTrustedHosts?: boolean
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
   maxRequestBodyBytes?: number
 }
 ```
 
-Source: [`packages/client/connection/src/index.ts:50`](../packages/client/connection/src/index.ts)
+Source: [`packages/client/connection/src/index.ts:52`](../packages/client/connection/src/index.ts)
 
 <a id="deepseek-aidsh-client-hmr"></a>
 
@@ -575,12 +586,54 @@ export interface Config {
 
 Source: [`packages/credentials/credentials-local/src/index.ts:64`](../packages/credentials/credentials-local/src/index.ts)
 
-<a id="deepseek-aidsh-e2b"></a>
+<a id="deepseek-aidsh-dormice"></a>
 
-## `@deepseek-ai/dsh-e2b`
+## `@deepseek-ai/dsh-dormice`
 
 ```ts config-catalog
-/** Configuration for the shared E2B sandbox owner. */
+/** Configuration for the Dormice-backed sandbox owner. */
+export interface Config {
+  /** Base URL of the Dormice daemon, without a trailing path. */
+  endpoint?: string
+  /** Daemon API token; omission reads `DORMICE_API_TOKEN`. It is never forwarded into the sandbox. */
+  token?: string
+  /** Sandbox address to acquire. The same key always returns the same sandbox with its files intact. */
+  userKey: string
+  /** Registered Dormice template to create the sandbox from; omission uses the daemon's base image. */
+  image?: string
+  /** Shared remote working directory, created before adapters receive the sandbox. */
+  cwd?: string
+  /** Lifecycle thresholds applied only when this acquire creates the sandbox; omission leaves every threshold to the daemon. */
+  policy?: DormiceLifecyclePolicy
+  /** Deadline in milliseconds for the whole acquisition, archive restore included. */
+  acquireTimeoutMs?: number
+  /** Delay between acquire polls while an archived sandbox is being restored. */
+  restorePollIntervalMs?: number
+}
+
+/**
+ * Per-sandbox lifecycle override sent at acquire time. Every threshold is
+ * optional and an omitted one falls back to the daemon's own default, which
+ * is the daemon's single arbiter of the merged result; `null` means never.
+ */
+export interface DormiceLifecyclePolicy {
+  /** Idle seconds until an active sandbox freezes. */
+  freezeAfterSeconds?: number
+  /** Idle seconds until a frozen sandbox stops; `null` parks it frozen forever. */
+  stopAfterSeconds?: number | null
+  /** Idle seconds until a stopped sandbox archives; `null` never archives. A number requires a non-null `stopAfterSeconds`. */
+  archiveAfterSeconds?: number | null
+}
+```
+
+Source: [`packages/e2b/dormice/src/index.ts:35`](../packages/e2b/dormice/src/index.ts)
+
+<a id="deepseek-aidsh-e2b-cloud"></a>
+
+## `@deepseek-ai/dsh-e2b-cloud`
+
+```ts config-catalog
+/** Configuration for the E2B Cloud sandbox owner. */
 export interface Config {
   /** API key; omission reads `E2B_API_KEY`. It is never forwarded into the sandbox. */
   apiKey?: string
@@ -591,7 +644,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/e2b/e2b/src/index.ts:43`](../packages/e2b/e2b/src/index.ts)
+Source: [`packages/e2b/e2b-cloud/src/index.ts:19`](../packages/e2b/e2b-cloud/src/index.ts)
 
 <a id="deepseek-aidsh-experimental-agent-team"></a>
 
@@ -820,6 +873,14 @@ export interface Config {
    * @default 1024
    */
   coldBlankProbeMaxBytes?: number
+  /**
+   * Skill providers whose catalog descriptions are withheld from every client
+   * copy of the `<available_skills>` message (live frames and history pages).
+   * The session log keeps the full text the model saw. A deployment that
+   * serves protected built-in skills names their provider here.
+   * @default []
+   */
+  redactSkillCatalogProviders?: string[]
 }
 ```
 
@@ -838,6 +899,22 @@ export interface Config {
 ```
 
 Source: [`packages/host/directory-picker-browse/src/index.ts:181`](../packages/host/directory-picker-browse/src/index.ts)
+
+<a id="deepseek-aidsh-host-directory-picker-e2b"></a>
+
+## `@deepseek-ai/dsh-host-directory-picker-e2b`
+
+Requires: `e2b`
+
+```ts config-catalog
+/** Validated plugin configuration. */
+export interface Config {
+  /** Complete-result bound of one listing level; see {@link E2BDirectoryPicker.Config}. */
+  maxEntries: number
+}
+```
+
+Source: [`packages/e2b/directory-picker-e2b/src/index.ts:70`](../packages/e2b/directory-picker-e2b/src/index.ts)
 
 <a id="deepseek-aidsh-host-frontend-static"></a>
 
@@ -987,7 +1064,7 @@ export interface DeepSeekCatalogModel {
 
 Depends on: [`ModelModality`](../packages/llm/llm/src/index.ts) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts)
 
-Source: [`packages/llm/llm-deepseek/src/index.ts:106`](../packages/llm/llm-deepseek/src/index.ts)
+Source: [`packages/llm/llm-deepseek/src/index.ts:109`](../packages/llm/llm-deepseek/src/index.ts)
 
 <a id="deepseek-aidsh-llm-pi-ai"></a>
 
@@ -1682,6 +1759,576 @@ Depends on: [`SandboxMode`](subsystems/sandbox.md)
 
 Source: [`packages/sandbox/sandbox-policy/src/index.ts:67`](../packages/sandbox/sandbox-policy/src/index.ts)
 
+<a id="deepseek-aidsh-sci-audit"></a>
+
+## `@deepseek-ai/dsh-sci-audit`
+
+Requires: `commands` · `sessionQuery` · `storageDomain`
+
+```ts config-catalog
+/** Deployment-varying choices of the science-research audit projection. */
+export interface Config {
+  /**
+   * Registered names of the tools that consult the web, used by the
+   * citation-missing figure of a summary. Tool registration is a composition
+   * choice — a deployment may rename or replace `web_search` / `web_fetch` —
+   * so the names cannot be fixed in this package.
+   */
+  webToolNames: string[]
+}
+```
+
+Source: [`packages/sci/sci-audit/src/index.ts:75`](../packages/sci/sci-audit/src/index.ts)
+
+<a id="deepseek-aidsh-sci-credit"></a>
+
+## `@deepseek-ai/dsh-sci-credit`
+
+Requires: `llm` · `sessions`
+
+```ts config-catalog
+/** Deployment-varying choices for credit metering. */
+export interface Config {
+  /** Base URL of the gate that keeps this tenant's ledger. */
+  gateUrl: string
+  /**
+   * Bearer token identifying this VM to the gate. Required and has no default:
+   * it names WHOSE ledger every charge lands in, and a guess would bill another
+   * tenant. A deployment with no gate removes this row rather than blanking it.
+   */
+  vmToken: string
+  /**
+   * What happens when the balance cannot be read. `closed` refuses the model
+   * call, `open` runs it unmetered-but-charged and logs. Deployments that would
+   * rather lose a request than lose money keep the default.
+   */
+  failMode: FailMode
+  /**
+   * How long one balance answer may be reused. A tool loop issues many model
+   * calls a second apart, and asking the gate for each would add a round trip
+   * per step to answer the same question.
+   */
+  balanceTtlMs: number
+  /**
+   * `gate` fetches the published price list at boot and refreshes it, falling
+   * back to the built-in official table when the fetch fails. An explicit row
+   * list prices from configuration alone and never asks the gate.
+   */
+  pricing: PricingSource
+  /** How often a `gate` rate card is re-fetched. */
+  pricingRefreshMs: number
+  /** HTTP deadline for one gate call, after which it counts as unreachable. */
+  requestTimeoutMs: number
+  /** Delay before the first spool-drain retry; each further attempt doubles it. */
+  spoolRetryBaseMs: number
+  /** Ceiling the doubling spool-retry delay stops at. */
+  spoolRetryMaxMs: number
+  /**
+   * How often `failMode: 'open'` may report that it is admitting calls
+   * unmetered. Fail-open metering admits every call while the gate is down, so
+   * one line per model call would bury the outage in its own symptoms; a
+   * deployment that wants each occurrence lowers this to zero.
+   */
+  degradedLogIntervalMs: number
+  /**
+   * File the undelivered charges wait in. Omitted resolves to
+   * `$DSH_HOME/.sci/credit-spool.jsonl` through {@link resolveSpoolPath}, which
+   * reads the harness home at mount time rather than at module load.
+   */
+  spoolPath?: string
+  /** Page the refusal message sends the user to; a gate-relative path or an absolute URL. */
+  creditUrl: string
+}
+
+/** What metering does when the gate cannot answer whether the tenant has credit. */
+export type FailMode = 'closed' | 'open'
+
+/** Where the rate card comes from: the gate's published price list, or configuration. */
+export type PricingSource = 'gate' | PriceRow[]
+
+/** One model's official list price, in micro-USD per 1M tokens at the PEAK rate. */
+export interface PriceRow {
+  /** Provider model id the charge is priced under. */
+  readonly model: string
+  /** Cached-input price: what a `cacheReadTokens` token costs. */
+  readonly hitMicros: number
+  /** Uncached-input price: what an `inputTokens` or `cacheWriteTokens` token costs. */
+  readonly missMicros: number
+  /** Output price: what an `outputTokens` token costs. */
+  readonly outMicros: number
+  /**
+   * Peak multiplier in thousandths. The stored price already IS the peak
+   * price, so the gate seeds `1000`; a deployment that discounts its peak rate
+   * lowers this instead of restating every row.
+   */
+  readonly peakMultiplierX1000: number
+}
+```
+
+Source: [`packages/sci/sci-credit/src/config.ts:51`](../packages/sci/sci-credit/src/config.ts)
+
+<a id="deepseek-aidsh-sci-deliver"></a>
+
+## `@deepseek-ai/dsh-sci-deliver`
+
+Requires: `tools` · `fs` · `systemPrompt`
+
+```ts config-catalog
+/** Deployment-varying choices for the science-research delivery layer. */
+export interface Config {
+  /**
+   * Absolute sandbox path holding one directory per project. Required: the home
+   * layout differs per sandbox image, and a wrong guess would refuse every
+   * delivery the agent attempts.
+   */
+  projectRoot: string
+  /** Directory name of the delivery area inside one project — the only freely deliverable location. */
+  deliveryDir: string
+  /** Directory names of the two bundle trees inside one project. */
+  bundleDirs: BundleDirs
+  /**
+   * Absolute sandbox path of the delivery spool, holding `pending/`, `done/`,
+   * and `failed/`. Required: `pending/` is the one path under `.sci/` the
+   * in-sandbox `sci` command and the model can write, and it must be the same
+   * directory on both sides or shell deliveries are silently never read.
+   */
+  spoolDir: string
+  /**
+   * Absolute sandbox path holding one directory per delivery, into which the
+   * delivered bytes are copied. Required for the same reason as `spoolDir`: a
+   * wrong root writes snapshots where no card can find them.
+   */
+  snapshotDir: string
+  /**
+   * Whether the spool is drained at the start of every turn. The intended
+   * deployment has no directory watcher, so this is how a shell delivery is
+   * noticed; a deployment that adds one turns it off.
+   */
+  pollOnTurnStart: boolean
+  /** How many directory levels below a canvas manifest are walked for the assets its nodes reference. */
+  canvasAssetDepth: number
+  /** Inclusive byte cap on a deliverable file; a larger file is refused rather than truncated. */
+  maxDeliveryBytes: number
+}
+
+/** Directory names of the two bundle trees inside one project. */
+export interface BundleDirs {
+  /** Directory holding `<slug>/<slug>.paper` manuscript bundles. */
+  readonly papers: string
+  /** Directory holding `<slug>/<slug>.sciplot` figure bundles. */
+  readonly sciplots: string
+}
+```
+
+Source: [`packages/sci/sci-deliver/src/index.ts:101`](../packages/sci/sci-deliver/src/index.ts)
+
+<a id="deepseek-aidsh-sci-guard"></a>
+
+## `@deepseek-ai/dsh-sci-guard`
+
+Requires: `tools` · `fs` · `systemPrompt`
+
+```ts config-catalog
+/** Deployment-varying choices for the irreversible-action gate. */
+export interface Config {
+  /**
+   * Absolute directory holding one subdirectory per project. Required: the
+   * home layout differs per sandbox image, and a wrong guess would place every
+   * region outside the gate and silently disable two of its four categories.
+   */
+  projectRoot: string
+  /**
+   * Project-relative directories an executed file is unsigned in. A binary the
+   * agent downloaded, compiled, or unpacked lands here, so a command word
+   * resolving below one of these is the case the user must decide.
+   */
+  execRoots: string[]
+  /**
+   * Project-relative directories whose recursive deletion needs a decision.
+   * The scratch region is deliberately absent: `rm -rf tmp/...` is the
+   * intended way to clean up and asking about it would train the user to
+   * approve without reading.
+   */
+  destructiveRoots: string[]
+  /** Which categories are live; a category switched off is classified as no risk at all. */
+  categories: CategorySwitches
+  /**
+   * Largest candidate the gate reads back to identify and hash. A larger file
+   * is not probed, which classifies it as an unsigned script and still asks —
+   * the safe direction, at the cost of a question about a large signed binary.
+   */
+  probeMaxBytes: number
+  /** The mounted shell-class tools, and the argument each keeps its command line in. */
+  shellTools: ShellToolBinding[]
+}
+
+/** Which classes of irreversible action reach the user as a question. */
+export interface CategorySwitches {
+  /** Running an ELF or shebang-less script out of a scratch region. */
+  execUnsigned: boolean
+  /** Uploading or piping local content to an external endpoint. */
+  egress: boolean
+  /** Writing over SSH keys, `.netrc`, or a private key file. */
+  credential: boolean
+  /** Recursively deleting inside a region that holds work. */
+  destructive: boolean
+}
+
+/** Where one shell-class tool keeps the command text this gate classifies. */
+export interface ShellToolBinding {
+  /** Registered tool name, as `ctx.tools` knows it. */
+  name: string
+  /** Argument holding the command line to classify. */
+  command: string
+}
+```
+
+Source: [`packages/sci/sci-guard/src/config.ts:25`](../packages/sci/sci-guard/src/config.ts)
+
+<a id="deepseek-aidsh-sci-memory"></a>
+
+## `@deepseek-ai/dsh-sci-memory`
+
+Requires: `fs` · `sessionQuery` · `storageDomain` · `tools`
+
+```ts config-catalog
+/** Deployment-varying choices of the science-research memory layer. */
+export interface Config {
+  /**
+   * Absolute path of the memory directory inside the sandbox. Required: the
+   * home layout differs per sandbox image, and a wrong guess would index
+   * nothing while looking healthy.
+   */
+  memoryDir: string
+  /** Tools whose accepted calls the observer inspects. */
+  memoryTools: MemoryToolBinding[]
+  /** Maximum characters of the opening request kept in one recall index row. */
+  openingRequestLimit: number
+}
+
+/**
+ * One tool whose accepted calls may have written a memory node.
+ *
+ * The tool layer names its own arguments, so the observer cannot assume them:
+ * `@deepseek-ai/dsh-tool-fs` takes `file_path` while
+ * `@deepseek-ai/dsh-tool-str-replace-editor` takes `path` and multiplexes read
+ * and write behind a `command` argument.
+ */
+export interface MemoryToolBinding {
+  /** Registered tool name. */
+  name: string
+  /** Argument field holding the target path. */
+  pathArg: string
+  /** Argument field naming the sub-command, or empty when the tool has none. */
+  commandArg: string
+  /** Sub-command values that write; empty exactly when `commandArg` is empty. */
+  writeCommands: string[]
+}
+```
+
+Source: [`packages/sci/sci-memory/src/index.ts:85`](../packages/sci/sci-memory/src/index.ts)
+
+<a id="deepseek-aidsh-sci-plan"></a>
+
+## `@deepseek-ai/dsh-sci-plan`
+
+Requires: `tools`
+
+```ts config-catalog
+/** Deployment-varying choices for the science-research plan layer. */
+export interface Config {
+  /**
+   * Inclusive cap on how many agents one declaration may name. The plan is
+   * model-authored JSON and the cluster width a deployment can actually run
+   * varies with its machine, so a plan wider than that is refused at
+   * declaration — where the model still has the turn to narrow it — rather
+   * than accepted and then partly unrunnable.
+   */
+  maxAgents: number
+}
+```
+
+Source: [`packages/sci/sci-plan/src/index.ts:60`](../packages/sci/sci-plan/src/index.ts)
+
+<a id="deepseek-aidsh-sci-profile"></a>
+
+## `@deepseek-ai/dsh-sci-profile`
+
+Requires: `systemPrompt`
+
+```ts config-catalog
+/** Deployment-varying choices for the persona roster. */
+export interface Config {
+  /**
+   * Absolute path of the directory holding one `<persona>.md` charter per
+   * persona. Defaults to the tree shipped inside this package; a deployment
+   * overrides it to publish rewritten charters without forking the bundle.
+   */
+  agentsRoot: string
+}
+```
+
+Source: [`packages/sci/sci-profile/src/index.ts:68`](../packages/sci/sci-profile/src/index.ts)
+
+<a id="deepseek-aidsh-sci-prompt"></a>
+
+## `@deepseek-ai/dsh-sci-prompt`
+
+Requires: `systemPrompt`
+
+```ts config-catalog
+/** Deployment-varying choices for the science-research prompt layer. */
+export interface Config {
+  /**
+   * Whether to inject the Prose-rule standing reminder. The studied platform
+   * shipped the reminder set both with and without this one rule (the other
+   * three were always present), so whether a research reply should default to
+   * prose over bullets is a real per-deployment choice, not a fixed constant.
+   * The chapter itself ("Prose first") always renders; only the every-turn
+   * reminder is gated. Defaults to `true`, the represented majority.
+   */
+  includeProseReminder: boolean
+}
+```
+
+Source: [`packages/sci/sci-prompt/src/index.ts:225`](../packages/sci/sci-prompt/src/index.ts)
+
+<a id="deepseek-aidsh-sci-remote-hosts"></a>
+
+## `@deepseek-ai/dsh-sci-remote-hosts`
+
+Requires: `credentials` · `fs`
+
+```ts config-catalog
+/** Deployment-varying choices of the remote-host layer. */
+export interface Config {
+  /**
+   * Absolute path of the ssh client configuration inside the sandbox. Required:
+   * the home directory differs per sandbox image, and a wrong guess would write
+   * a block no ssh invocation ever reads.
+   */
+  sshConfigPath: string
+  /**
+   * Absolute directory the per-alias private keys are written to. Required for
+   * the same reason, and separate from {@link sshConfigPath} because an image
+   * may hold keys on a mount with different permissions.
+   */
+  identityDir: string
+  /** Seconds ssh waits for the TCP connection; the archived skill's value is 10. */
+  connectTimeoutSeconds: number
+  /** Seconds between keep-alive probes on an established connection. */
+  serverAliveIntervalSeconds: number
+}
+```
+
+Source: [`packages/sci/sci-remote-hosts/src/index.ts:105`](../packages/sci/sci-remote-hosts/src/index.ts)
+
+<a id="deepseek-aidsh-sci-skills"></a>
+
+## `@deepseek-ai/dsh-sci-skills`
+
+Requires: `skills` · `referencedText` · `fs` · `storageDomain`
+
+```ts config-catalog
+/** Deployment-varying choices for the science-research skill layer. */
+export interface Config {
+  /** Where skill metadata and bodies are read from. */
+  source: SciSkillSourceConfig
+  /**
+   * Absolute path the non-`SKILL.md` files are published to inside the sandbox.
+   * Required: the home layout differs per sandbox image, and a wrong guess would
+   * silently publish files where the model cannot open them.
+   */
+  sandboxRoot: string
+  /** Days of disuse after which an unpinned skill is listed by its first sentence only. */
+  staleAfterDays: number
+  /** Skill names exempt from ageing out, whatever their usage. */
+  pinned: string[]
+  /** Whether the tree is reconciled into the sandbox while the plugin loads. */
+  syncOnStart: boolean
+  /**
+   * Name of the tool whose recorded calls count as skill loads. Defaults to
+   * `skill`, the name `@deepseek-ai/dsh-tool-skill` registers; a deployment
+   * that renames or shadows that tool must say so here or usage stops ageing.
+   */
+  skillToolName: string
+  /** Unique name of this provider in the `ctx.skills` registry and of its referenced-text store. */
+  providerName: string
+}
+
+/** The skill source: a local directory for tests, or the loopback HTTP vault for deployment. */
+export interface SciSkillSourceConfig {
+  /** `directory` reads a local tree; `http` reads the loopback skill vault. */
+  readonly kind: string
+  /** Absolute path of the skill root, when `kind` is `directory`. */
+  readonly root: string
+  /** Base URL of the vault, when `kind` is `http`. */
+  readonly url: string
+  /** Environment variable holding the VM's vault bearer token, when `kind` is `http`. */
+  readonly tokenEnv: string
+  /** Per-request timeout in milliseconds, when `kind` is `http`. */
+  readonly timeoutMs: number
+}
+```
+
+Source: [`packages/sci/sci-skills/src/index.ts:132`](../packages/sci/sci-skills/src/index.ts)
+
+<a id="deepseek-aidsh-sci-tier"></a>
+
+## `@deepseek-ai/dsh-sci-tier`
+
+Requires: `tools` · `systemPrompt`
+
+```ts config-catalog
+/** Deployment-varying choices for the science-research tier layer. */
+export interface Config {
+  /**
+   * Which tier this composition runs at. Required and with no default: the
+   * value decides which prompt section the model reads and which of the two
+   * gates is live, and a guessed tier would either state a rule nothing
+   * enforces or enforce a rule the model was never told about.
+   */
+  tier: SciTier
+  /**
+   * Registered tool names that fan work out across subagents. Both gates read
+   * this one list: in the cluster tier a call to one of these names spends a
+   * declared plan, and in the balanced tier it is denied outright. It is
+   * configurable because the delegation tools a deployment mounts are its own
+   * choice — a composition carrying a differently named fan-out tool would
+   * otherwise walk straight past both gates.
+   */
+  fanoutTools: string[]
+}
+
+/**
+ * How much machinery one session is allowed to spend.
+ *
+ * - `balanced` — the ordinary single-threaded pass. No fan-out tool is mounted,
+ *   and `ctx.tools.guard()` denies one that reaches the registry anyway.
+ * - `cluster` — research-grade depth. Fan-out is available, but each fan-out
+ *   costs one `declare_research_plan` declaration.
+ *
+ * The value is fixed for a session because it is a property of the agent preset
+ * the session was composed from; changing tiers means the {@link SciTierForkRequest}
+ * fork into a session composed from the other preset.
+ */
+export type SciTier = 'balanced' | 'cluster'
+```
+
+Source: [`packages/sci/sci-tier/src/config.ts:12`](../packages/sci/sci-tier/src/config.ts)
+
+<a id="deepseek-aidsh-sci-workspace"></a>
+
+## `@deepseek-ai/dsh-sci-workspace`
+
+Requires: `tools` · `fs`
+
+```ts config-catalog
+/** Deployment-varying choices for the science-research workspace gate. */
+export interface Config {
+  /**
+   * Absolute directory holding one subdirectory per project. Required: the home
+   * layout differs per sandbox image, and a wrong guess would classify every
+   * science region as unmanaged and silently disable the gate.
+   */
+  projectRoot: string
+  /** Project-relative directory that is the only delivery area. */
+  deliveryDir: string
+  /** Project-relative directory for intermediate products, deliverable to nobody. */
+  scratchDir: string
+  /** Project-relative directories holding the two bundle kinds. */
+  bundleDirs: {
+    /** Directory holding paper bundles, one `<slug>/` per manuscript. */
+    papers: string
+    /** Directory holding sciplot bundles, one `<slug>/` per figure. */
+    sciplots: string
+  }
+  /** Sandbox-root-relative directory the harness synchronizes the skill tree into. */
+  skillsDir: string
+  /** Sandbox-root-relative directory owned by the harness user. */
+  privateDir: string
+  /** Sandbox-root-relative directory shell deliveries are queued in; the one writable place under {@link privateDir}. */
+  spoolPendingDir: string
+  /** Whether the shell pre-screen refuses recursive deletes reaching into a bundle. */
+  denyRecursiveDeleteInBundles: boolean
+  /**
+   * Command run once, in the execution world of the composed subprocess seam,
+   * to lay down the sandbox home skeleton this table classifies. Split on
+   * whitespace into argv with no shell interpretation; a blank value disables
+   * the bootstrap, which is what a deployment whose home is provisioned
+   * elsewhere sets.
+   */
+  bootstrapCommand: string
+  /** Deadline for {@link bootstrapCommand}; past it the command is terminated and the failure logged. */
+  bootstrapTimeoutMs: number
+  /**
+   * Largest file the read gate reads back to identify its format. A larger
+   * target passes the gate untouched: the read tool's own byte caps already
+   * refuse it, and probing it would mean buffering it twice.
+   */
+  binaryProbeMaxBytes: number
+  /** The mounted tools of each class, and the arguments the gate reads from each. */
+  fsTools: {
+    /** Tools that read a file; the gate classifies their path argument and probes binaries. */
+    read: FsToolBinding[]
+    /** Tools that create or overwrite a file; the gate classifies the path and checks manifest ownership on the new content. */
+    write: FsToolBinding[]
+    /** Tools that edit a file in place; the gate classifies the path and checks manifest ownership on the resulting content. */
+    edit: FsToolBinding[]
+    /** Tools that run a shell command; the gate pre-screens the command text for recursive deletes reaching a bundle. */
+    shell: ShellToolBinding[]
+  }
+}
+
+/**
+ * Where one filesystem tool keeps the arguments this gate reads.
+ *
+ * Tool names and argument names are deployment-varying because a deployment may
+ * mount a renamed or alternative filesystem tool set; the defaults describe the
+ * tools this repository ships.
+ */
+export interface FsToolBinding {
+  /** Registered tool name, as `ctx.tools` knows it. */
+  name: string
+  /** Argument holding the path the call acts on. */
+  path: string
+  /** Argument holding the complete new file content, when the tool has one. */
+  content?: string
+  /** Argument holding the literal text an edit replaces. */
+  oldText?: string
+  /** Argument holding the literal replacement text. */
+  newText?: string
+  /** Argument selecting whether every occurrence is replaced. */
+  replaceAll?: string
+  /** Argument selecting the sub-operation of a multi-command tool. */
+  commandArg?: string
+  /**
+   * Filesystem operation of each sub-operation of a multi-command tool. A value
+   * absent from this map leaves the call on the operation of the list the
+   * binding is declared in, which is the stricter reading.
+   */
+  commands?: Record<string, FsOp>
+}
+
+/** Where one shell-class tool keeps the command text the pre-screen reads. */
+export interface ShellToolBinding {
+  /** Registered tool name, as `ctx.tools` knows it. */
+  name: string
+  /** Argument holding the command line to screen. */
+  command: string
+}
+
+/**
+ * A filesystem operation the gate decides. Deletion is absent on purpose: the
+ * `ctx.fs` seam has no unlink, so removal reaches the sandbox only through a
+ * shell command and is governed by {@link ShellDenial} plus the sandbox's own
+ * directory ownership.
+ */
+export type FsOp = 'read' | 'write' | 'edit'
+```
+
+Source: [`packages/sci/sci-workspace/src/config.ts:17`](../packages/sci/sci-workspace/src/config.ts)
+
 <a id="deepseek-aidsh-sdk-jsonrpc-server"></a>
 
 ## `@deepseek-ai/dsh-sdk-jsonrpc-server`
@@ -2003,7 +2650,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/skill/skill/src/index.ts:279`](../packages/skill/skill/src/index.ts)
+Source: [`packages/skill/skill/src/index.ts:321`](../packages/skill/skill/src/index.ts)
 
 <a id="deepseek-aidsh-skill-filesystem"></a>
 
@@ -2595,10 +3242,19 @@ export interface Config {
    * `@deepseek-ai/dsh-tool-call-timeout-policy` through `exec.signal`.
    */
   timeoutMs?: number
+  /**
+   * The ripgrep command both tools spawn, used verbatim as the argv leader.
+   * Omitted, the tools spawn the binary packaged with `@vscode/ripgrep` by its
+   * absolute path — correct only when `ctx.subprocess` executes in this
+   * process's own filesystem. A deployment whose subprocess provider runs
+   * commands in a sandbox sets `rg` (or an absolute path inside that sandbox)
+   * so the argv leader exists on the far side.
+   */
+  rgPath?: string
 }
 ```
 
-Source: [`packages/fs/tool-fs-search/src/index.ts:73`](../packages/fs/tool-fs-search/src/index.ts)
+Source: [`packages/fs/tool-fs-search/src/index.ts:76`](../packages/fs/tool-fs-search/src/index.ts)
 
 <a id="deepseek-aidsh-tool-goal"></a>
 
@@ -2762,7 +3418,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/skill/tool-skill/src/index.ts:61`](../packages/skill/tool-skill/src/index.ts)
+Source: [`packages/skill/tool-skill/src/index.ts:68`](../packages/skill/tool-skill/src/index.ts)
 
 <a id="deepseek-aidsh-tool-str-replace-editor"></a>
 
@@ -3081,6 +3737,13 @@ export interface Config {
   surfaceContext: boolean
   /** Explicit `--trusted-host` authorities from this invocation. */
   trustedHosts: string[]
+  /**
+   * Whether this invocation opened the privileged method set (settings,
+   * credentials, preset authoring) to those authorities. Passed straight
+   * through to the connection row's own opt-in of the same name, which is
+   * only sound behind an authenticating reverse proxy.
+   */
+  privilegedTrustedHosts: boolean
 }
 ```
 
@@ -3107,6 +3770,14 @@ export interface Config {
   maxRedirects?: number
   /** `User-Agent` header sent on every request. */
   userAgent?: string
+  /**
+   * Allow fetching hosts that name the local machine or a private network
+   * (loopback, RFC 1918, link-local, `localhost`, `*.internal`, and their IPv6
+   * forms). Off by default: the model picks the target and the harness shares
+   * a network namespace with loopback-only services. Turn on only for local
+   * development against a loopback server.
+   */
+  allowPrivateHosts?: boolean
 }
 ```
 
@@ -3275,6 +3946,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-host-plugin-inventory` — requires `loader` ([`packages/host/plugin-inventory/src/index.ts`](../packages/host/plugin-inventory/src/index.ts))
 - `@deepseek-ai/dsh-llm` ([`packages/llm/llm/src/index.ts`](../packages/llm/llm/src/index.ts))
 - `@deepseek-ai/dsh-lsp` ([`packages/lsp/lsp/src/index.ts`](../packages/lsp/lsp/src/index.ts))
+- `@deepseek-ai/dsh-referenced-text` ([`packages/attachment/referenced-text/src/index.ts`](../packages/attachment/referenced-text/src/index.ts))
 - `@deepseek-ai/dsh-schedule` — requires `agents` · `sessions` · `tools` · `sessionPersistence` ([`packages/schedule/schedule/src/index.ts`](../packages/schedule/schedule/src/index.ts))
 - `@deepseek-ai/dsh-session` ([`packages/core/session/src/index.ts`](../packages/core/session/src/index.ts))
 - `@deepseek-ai/dsh-session-checkpoint-policy` — requires `llm` · `sessionPersistence` · `sessions` · `tools` ([`packages/session/session-checkpoint-policy/src/index.ts`](../packages/session/session-checkpoint-policy/src/index.ts))
@@ -3331,6 +4003,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-client-web` ([`packages/client/web/src/index.ts`](../packages/client/web/src/index.ts))
 - `@deepseek-ai/dsh-cmdline` ([`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts))
 - `@deepseek-ai/dsh-code-runtime-python` ([`packages/code-runtime/code-runtime-python/src/index.ts`](../packages/code-runtime/code-runtime-python/src/index.ts))
+- `@deepseek-ai/dsh-e2b` ([`packages/e2b/e2b/src/index.ts`](../packages/e2b/e2b/src/index.ts))
 - `@deepseek-ai/dsh-home-paths` ([`packages/util/home-paths/src/index.ts`](../packages/util/home-paths/src/index.ts))
 - `@deepseek-ai/dsh-hook-protocol` ([`packages/hooks/hook-protocol/src/index.ts`](../packages/hooks/hook-protocol/src/index.ts))
 - `@deepseek-ai/dsh-launch-environment` ([`packages/util/launch-environment/src/index.ts`](../packages/util/launch-environment/src/index.ts))
@@ -3339,6 +4012,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-native-command` ([`packages/util/native-command/src/index.ts`](../packages/util/native-command/src/index.ts))
 - `@deepseek-ai/dsh-output-retention` ([`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts))
 - `@deepseek-ai/dsh-sandbox-windows-acl` ([`packages/sandbox/sandbox-windows-acl/src/index.ts`](../packages/sandbox/sandbox-windows-acl/src/index.ts))
+- `@deepseek-ai/dsh-sci-manifest` ([`packages/sci/sci-manifest/src/index.ts`](../packages/sci/sci-manifest/src/index.ts))
 - `@deepseek-ai/dsh-scope` ([`packages/core/scope/src/index.ts`](../packages/core/scope/src/index.ts))
 - `@deepseek-ai/dsh-sdk-client` ([`packages/sdk/client/src/index.ts`](../packages/sdk/client/src/index.ts))
 - `@deepseek-ai/dsh-sdk-jsonrpc-demo` ([`packages/examples/jsonrpc-demo/src/index.ts`](../packages/examples/jsonrpc-demo/src/index.ts))
