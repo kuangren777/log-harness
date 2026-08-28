@@ -1,0 +1,24 @@
+# @deepseek-ai/dsh-host-directory-picker-e2b
+
+English | [中文](README.zh.md)
+
+The **sandbox browsing backend** of the [directory-picker seam](../../host/directory-picker/README.md): `E2BDirectoryPicker` registers `ctx.directoryPicker` with the same `browse` capability as [`dsh-host-directory-picker-browse`](../../host/directory-picker-browse/README.md), implemented against the [E2B sandbox seam](../e2b/README.md) instead of the host process filesystem. Mount a sandbox owner — [`dsh-e2b-cloud`](../e2b-cloud/README.md) or [`dsh-dormice`](../dormice/README.md) — first, then this backend in place of the `-browse` or `-auto` row, paired with the same browser surface [`dsh-client-ui-directory-picker-browse`](../../client/ui-directory-picker-browse/README.md) the host backend uses: the capability kind is unchanged, so the client, the RPC consumer, and the wire vocabulary are untouched and only the world being listed differs.
+
+Mounting this backend is what makes a picked workspace directory usable in a deployment whose filesystem and subprocess seams live in the sandbox. The two filesystems share nothing but their spelling: a directory the host backend offers (its process home, for instance) does not exist in the sandbox, and a session cwd set to one makes every sandbox command fail before it starts.
+
+Behavior facts: `home` is `ctx.e2b.cwd` — the shared remote working directory the sandbox owner creates before any adapter runs — and an absent `list` path lists it. Both primitives reject a path that is not POSIX-absolute; the remote world is Linux whatever the host runs, so the host's own platform rules (Windows drive qualification) never apply to a sandbox path, and a Windows-shaped path is simply a relative name here. Listings return **directories only**, name-sorted, with a host-owned `hidden` flag (dot convention) left for the client to act on; `crumbs` is the root-to-target ancestor chain with the root crumb labeled `/`. Symbolic links are followed by resolving each target against the link's own parent (envd reports a link's own metadata rather than its target's), for at most 8 hops per row — a broken, cyclic, or longer-chained link is skipped, because the metadata probe IS the enterability test. One `list` call returns at most `maxEntries` rows (config, default 1000, matching the host backend), with `truncated: true` flagging a cut level; the level arrives whole from the sandbox file API, so the bound governs what crosses to the client and only windowed candidates cost a link probe (a windowed row that turns out non-enterable is not backfilled — the level is already flagged truncated then). `createDirectory` keeps the seam's non-recursive contract over E2B's recursive `makeDir` by probing the parent first, so a missing parent is a real failure rather than a level to invent, and it validates the name as a single non-blank segment; `/` and NUL are the only separators in a Linux name, so `\` is accepted here although the host backend refuses it. `list` threads the caller's `AbortSignal` through acquisition, the level request, and every link probe, so a disconnect or timeout stops the scan with the caller's own reason. Every other failure — a missing level, a permission denial, an unreachable sandbox — throws the seam's typed `DirectoryPickerError` with `directory-unreadable`, `directory-exists`, or `directory-create-failed`.
+
+## Model Experience
+
+None, as the backend serves the GUI host's directory selection; nothing here reaches a model request.
+
+#### KV Cache effect
+
+None; this package neither assembles nor sends a provider request.
+
+## Known Limitations and Deferred Work
+
+- **The level is materialized whole on the host** — the sandbox file API answers a `list` with the complete level, so `maxEntries` bounds the rows put on the wire but not the response the host holds while cutting it; a directory with a hundred thousand children costs that response once per call. A server-side window would need an envd listing bound this SDK does not expose.
+- **No `..` normalization service-side** — a path is used as the client sent it (after POSIX resolution), so a level reached through a symbolic link reports that path rather than its canonical target. Canonicalizing would cost a remote `realpath` spawn per navigation, which the [command-slot cap](../fs-e2b/README.md) exists to avoid.
+- **Parent existence is checked, not held** — `createDirectory` probes the parent and then creates the child, so a parent removed inside that window is re-created by E2B's recursive `makeDir` instead of failing. No no-clobber remote primitive exists for a directory create.
+- **Whole-sandbox scope** — there is no per-deployment browse-root restriction, matching the host backend: `workspace.create` accepts arbitrary paths, so a root here would be UX scoping rather than a security boundary.

@@ -95,6 +95,8 @@
       "@deepseek-ai/dsh-tools/presentation": ["./packages/core/tools/src/presentation.ts"],
       "@deepseek-ai/dsh-tools/types": ["./packages/core/tools/src/types.ts"],
       "@deepseek-ai/dsh-tool-subagent-control/list-agents": ["./packages/subagent/tool-subagent-control/src/list-agents.ts"],
+      "@deepseek-ai/dsh-sci-tier/suggest": ["./packages/sci/sci-tier/src/suggest.ts"],
+      "@deepseek-ai/dsh-sci-tier/fork": ["./packages/sci/sci-tier/src/fork.ts"],
       "@deepseek-ai/dsh-user-approval/types": ["./packages/interaction/user-approval/src/types.ts"],
       "@deepseek-ai/dsh-user-questions/types": ["./packages/interaction/user-questions/src/types.ts"],
       "@deepseek-ai/dsh-agent/types": ["./packages/core/agent/src/types.ts"],
@@ -130,6 +132,7 @@
         "./packages/attachment/*/src/invariant.ts",
         "./packages/spill/*/src/invariant.ts",
         "./packages/todo/*/src/invariant.ts",
+        "./packages/sci/*/src/invariant.ts",
         "./packages/bundle/*/src/invariant.ts",
         "./packages/extensions/*/src/invariant.ts",
         "./packages/sandbox/*/src/invariant.ts",
@@ -173,6 +176,13 @@
       "@deepseek-ai/dsh-host-directory-picker-native/*": ["./packages/host/directory-picker-native/src/*"],
       "@deepseek-ai/dsh-host-directory-picker-auto": ["./packages/host/directory-picker-auto/src"],
       "@deepseek-ai/dsh-host-directory-picker-auto/*": ["./packages/host/directory-picker-auto/src/*"],
+      // The sandbox backend of the same seam lives in the e2b group (it injects
+      // `e2b`), so the group wildcard cannot map its directory-picker name.
+      "@deepseek-ai/dsh-host-directory-picker-e2b": ["./packages/e2b/directory-picker-e2b/src"],
+      "@deepseek-ai/dsh-host-directory-picker-e2b/*": ["./packages/e2b/directory-picker-e2b/src/*"],
+      // The browser face a composition names alongside a non-`-auto` backend;
+      // `-auto` mounts it itself, so only an explicit swap references it by name.
+      "@deepseek-ai/dsh-client-ui-directory-picker-browse": ["./packages/client/ui-directory-picker-browse/src"],
       "@deepseek-ai/dsh-host-apiproxy/client": ["./packages/host/apiproxy/src/fetch/client.ts"],
       "@deepseek-ai/dsh-host-apiproxy/*": ["./packages/host/apiproxy/src/*"],
       "@deepseek-ai/dsh-host-webserver": ["./packages/host/webserver/src"],
@@ -265,6 +275,7 @@
         "./packages/attachment/*/src",
         "./packages/spill/*/src",
         "./packages/todo/*/src",
+        "./packages/sci/*/src",
         "./packages/bundle/*/src",
         "./packages/extensions/*/src",
         "./packages/sandbox/*/src",

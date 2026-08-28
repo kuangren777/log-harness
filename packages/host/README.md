@@ -15,6 +15,6 @@ The host side of the dsh web GUI: the API gateway every client shape shares, and
 | [`directory-picker-auto/`](directory-picker-auto/README.md) | Host-adaptive picker composition | mounts a backend |
 | [`plugin-inventory/`](plugin-inventory/README.md) | Read-only projection of current Loader entries | Remote `pluginInventory/list` |
 
-`apiproxy` remains transport-independent; [`client/connection`](../client/connection/README.md) supplies the browser/HTTP carrier. Picker implementations replace one another behind the shared seam.
+`apiproxy` remains transport-independent; [`client/connection`](../client/connection/README.md) supplies the browser/HTTP carrier. Picker implementations replace one another behind the shared seam, including the out-of-group [`directory-picker-e2b`](../e2b/directory-picker-e2b/README.md), which serves the same `browse` capability from inside an E2B sandbox for a deployment whose tools run there.
 
 The subsystem references: [web-server.md](../../docs/subsystems/web-server.md) and [workspace.md](../../docs/subsystems/workspace.md) (the picker seam).

@@ -15,6 +15,6 @@ dsh Web GUI 的宿主侧：所有客户端形态共享的 API 网关，以及承
 | [`directory-picker-auto/`](directory-picker-auto/README.zh.md) | 宿主自适应选择器组合 | 挂载一个后端 |
 | [`plugin-inventory/`](plugin-inventory/README.zh.md) | 当前 Loader 条目的只读投影 | Remote `pluginInventory/list` |
 
-`apiproxy` 保持传输无关；[`client/connection`](../client/connection/README.zh.md) 提供浏览器／HTTP 载体。选择器实现可在共享 seam 后互相替换。
+`apiproxy` 保持传输无关；[`client/connection`](../client/connection/README.zh.md) 提供浏览器／HTTP 载体。选择器实现可在共享 seam 后互相替换，其中包括不在本组内的 [`directory-picker-e2b`](../e2b/directory-picker-e2b/README.zh.md)：对于工具运行在 E2B 沙箱中的部署，它从沙箱内部提供同一个 `browse` 能力。
 
 子系统参考：[web-server.md](../../docs/subsystems/web-server.zh.md) 与 [workspace.md](../../docs/subsystems/workspace.zh.md)（选择器 seam）。

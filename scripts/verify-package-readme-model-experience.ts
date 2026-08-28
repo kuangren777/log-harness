@@ -43,6 +43,12 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
  */
 const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/attachment/attachment': { kind: 'indirect', reason: 'The storage seam delegates model request rendering to provider adapters.' },
+  'packages/sci/sci-manifest': { kind: 'indirect', reason: 'Pure validators; the consuming gates (dsh-sci-workspace, dsh-sci-deliver) render every denial reason.' },
+  'packages/e2b/e2b-cloud': { kind: 'indirect', reason: 'The E2B cloud sandbox owner registers no model-visible context; fs-e2b/subprocess-e2b and their tool consumers own every rendered effect.' },
+  'packages/e2b/dormice': { kind: 'indirect', reason: 'The Dormice sandbox owner registers no model-visible context; fs-e2b/subprocess-e2b and their tool consumers own every rendered effect.' },
+  'packages/sci/sci-audit': { kind: 'indirect', reason: 'The audit projection reads the session log and writes storage tables only; the gates and tools it projects own every model-visible effect.' },
+  'packages/sci/sci-credit': { kind: 'none', reason: 'The metering registers no prompt, tool, or context; its balance refusal is an error finish the agent loop raises as an LlmError, so it reaches the user and never enters a model request.' },
+  'packages/sci/sci-remote-hosts': { kind: 'indirect', reason: 'The managed SSH block reaches the model only as ordinary shell state; the shell tools own every rendered effect.' },
   'packages/attachment/attachment-local': { kind: 'indirect', reason: 'The local backend delegates model request rendering to provider adapters.' },
   'packages/shell/shell': { kind: 'indirect', reason: 'The service interface delegates all model rendering to dsh-tool-bash.' },
   'packages/shell/shell-env': { kind: 'indirect', reason: 'The env service exposes managed DSH_* facts through the shell tools (dsh-tool-bash/dsh-tool-pwsh); it registers no prompt or schema of its own.' },
@@ -107,6 +113,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/host/directory-picker': { kind: 'none', reason: 'The GUI-host picking seam registers nothing model-facing.' },
   'packages/host/directory-picker-auto': { kind: 'none', reason: 'The GUI-host picking chooser only mounts a backend row; it registers nothing model-facing.' },
   'packages/host/directory-picker-browse': { kind: 'none', reason: 'The GUI-host picking backend registers nothing model-facing.' },
+  'packages/e2b/directory-picker-e2b': { kind: 'none', reason: 'The GUI-host picking backend registers nothing model-facing.' },
   'packages/host/directory-picker-native': { kind: 'none', reason: 'The GUI-host picking backend registers nothing model-facing.' },
   'packages/host/webserver': { kind: 'none', reason: 'The HTTP carrier bridges browser and API handler and registers nothing model-facing.' },
   'packages/host/frontend-static': { kind: 'none', reason: 'The SPA dist server answers browser asset requests and registers nothing model-facing.' },

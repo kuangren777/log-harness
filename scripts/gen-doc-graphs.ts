@@ -98,6 +98,38 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'sciAudit',
+    pkg: 'sci-audit',
+    title: 'Science-research audit projection',
+    mode: 'core',
+    consumers: ['sci-profile'],
+    note: 'Folds the session log into three owned tables and reads the tables sci-skills and sci-memory own; rebuildable because the log is the only input.',
+  },
+  {
+    key: 'sciMemory',
+    pkg: 'sci-memory',
+    title: 'Science-research memory nodes and recall',
+    mode: 'core',
+    consumers: ['sci-profile'],
+    note: 'Observes accepted memory-directory writes, backfills the originating session, and serves recall over the projected log.',
+  },
+  {
+    key: 'sciRemoteHosts',
+    pkg: 'sci-remote-hosts',
+    title: 'Science-research managed SSH hosts',
+    mode: 'core',
+    consumers: ['sci-profile'],
+    note: 'Owns one delimited block of the sandbox ssh config; bytes outside the block are preserved and private keys stay in the credential seam.',
+  },
+  {
+    key: 'sciTierFork',
+    pkg: 'sci-tier',
+    title: 'Science-research tier upgrade',
+    mode: 'core',
+    consumers: ['sci-profile'],
+    note: 'Creates a cluster-tier session seeded from the balanced session it replaces, rather than forking its conversation.',
+  },
+  {
     key: 'attachments',
     pkg: 'attachment',
     title: 'Durable binary attachment storage',
@@ -527,9 +559,9 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'directory-picker',
     title: 'Workspace-directory picking seam',
     mode: 'seam',
-    implementations: ['directory-picker-native', 'directory-picker-browse'],
+    implementations: ['directory-picker-native', 'directory-picker-browse', 'directory-picker-e2b'],
     consumers: ['apiproxy'],
-    note: 'Discriminated interaction capability: the native backend opens one OS chooser on the host display, the browse backend serves listing/creation primitives for the in-app browser; dual-face backends fill ui-workspace directory-flow slots from their browser halves (no wire advertisement).',
+    note: 'Discriminated interaction capability: the native backend opens one OS chooser on the host display, the browse backend serves listing/creation primitives for the in-app browser, and the e2b backend serves those same primitives from inside the sandbox the tools run in; dual-face backends fill ui-workspace directory-flow slots from their browser halves (no wire advertisement).',
   },
   {
     key: 'webServer',
