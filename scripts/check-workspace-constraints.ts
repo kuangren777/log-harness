@@ -158,7 +158,10 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // and the `./types` channel are their own bundles; `artifacts/` is the
   // prebuilt Gateway/Viewer fetched by `pnpm run fetch-artifacts`; `skills/`
   // are the upstream-published Univer skills the host row can register.
-  '@deepseek-ai/dsh-office-univer': ['lib/tools.js', 'lib/types.js', 'artifacts/**', 'skills/**'],
+  // `lib/*.js` also carries the shared `plugin-*.js` chunks tsdown extracts
+  // between the five entries — a named list drops them and the package fails
+  // to import at boot (2026-08-28 vm2 incident).
+  '@deepseek-ai/dsh-office-univer': ['lib/*.js', 'artifacts/**', 'skills/**'],
   // The argv-prefix runner entry ships beside the lib as its own bundle;
   // sandbox-local resolves it through the package's ./runner export. tsdown
   // also shares its generated FFI code through a hashed runtime chunk.
