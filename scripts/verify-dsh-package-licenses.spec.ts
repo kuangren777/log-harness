@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { inspectDshPackageLicenses } from './verify-dsh-package-licenses.ts'
+import { INHERITED_LICENSES, inspectDshPackageLicenses } from './verify-dsh-package-licenses.ts'
 
 const roots: string[] = []
 
@@ -54,6 +54,20 @@ describe('DSH package license gate', () => {
 
     expect(inspectDshPackageLicenses(root).failures).toEqual([
       'packages/core/agent/package.json: @deepseek-ai/dsh-agent must declare "license": "MIT"; found undefined.',
+    ])
+  })
+})
+
+describe('inherited licence declarations', () => {
+  it('requires the vendored package to declare its upstream licence, not MIT', () => {
+    const root = createWorkspace()
+    writeManifest(root, 'packages/office/univer/package.json', { name: '@deepseek-ai/dsh-office-univer', license: 'Apache-2.0' })
+    expect(inspectDshPackageLicenses(root).failures).toEqual([])
+    expect(INHERITED_LICENSES['@deepseek-ai/dsh-office-univer']).toBe('Apache-2.0')
+
+    writeManifest(root, 'packages/office/univer/package.json', { name: '@deepseek-ai/dsh-office-univer', license: 'MIT' })
+    expect(inspectDshPackageLicenses(root).failures).toEqual([
+      'packages/office/univer/package.json: @deepseek-ai/dsh-office-univer must declare its inherited "license": "Apache-2.0"; found "MIT".',
     ])
   })
 })

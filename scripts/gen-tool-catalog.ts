@@ -116,6 +116,7 @@ class CatalogUniverService extends Service {
     gatewayStartupTimeoutMs: 10_000,
     gatewayRequestTimeoutMs: 3_000,
     gatewayMutationTimeoutMs: 60_000,
+    proxyTimeoutMs: 30_000,
     unitContentOperationTimeoutMs: 120_000,
     screenshotOperationTimeoutMs: 120_000,
     screenshotMaxPages: 30,

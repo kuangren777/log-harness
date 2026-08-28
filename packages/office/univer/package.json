@@ -1,0 +1,117 @@
+{
+  "name": "@deepseek-ai/dsh-office-univer",
+  "description": "Univer office documents in the harness: Gateway-backed Service Provider, univer_* tools, bundled skills, and the browser Viewer behind a same-origin reverse proxy",
+  "version": "0.1.1-rc.2",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/office/univer"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./tools": {
+      "types": "./lib/types/tools.d.ts",
+      "default": "./lib/tools.js"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "scripts": {
+    "bundle": "tsdown",
+    "watch": "tsdown --watch",
+    "fetch-artifacts": "node scripts/fetch-artifacts.mjs"
+  },
+  "license": "Apache-2.0",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-attachment": "workspace:^",
+    "@deepseek-ai/dsh-client-connection": "workspace:^",
+    "@deepseek-ai/dsh-client-locale": "workspace:^",
+    "@deepseek-ai/dsh-client-runtime": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-conversation": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
+    "@deepseek-ai/dsh-host-webserver": "workspace:^",
+    "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-skill": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:^",
+    "@puppeteer/browsers": "^3.2.0",
+    "@univer-cli/api-reference": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univer-cli/resource-library": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univer-cli/svg-facade": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univer-cli/unit-layout-lint": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univer-cli/unit-screenshot": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univer-cli/univer-render-runtime": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univerjs-pro/cli-assets": "0.1.0",
+    "@univerjs-pro/engine-formula-rust-binding": "1.0.0-insiders.20260819-8209aa8",
+    "@univerjs-pro/exchange-node-binding": "0.1.0",
+    "libsql": "^0.5.29",
+    "puppeteer-core": "^25.7.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-attachment": "workspace:^",
+    "@deepseek-ai/dsh-client-connection": "workspace:^",
+    "@deepseek-ai/dsh-client-locale": "workspace:^",
+    "@deepseek-ai/dsh-client-runtime": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-conversation": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
+    "@deepseek-ai/dsh-host-webserver": "workspace:^",
+    "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-skill": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@types/react": "~18.3.1",
+    "@types/ws": "^8.18.1",
+    "@univerjs/core": "1.0.0-insiders.20260822-0c0c0dd",
+    "react": "^18.2.0",
+    "ws": "^8.21.0"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "lib/tools.js",
+    "lib/types.js",
+    "artifacts/**",
+    "skills/**",
+    "lib/types/**/*.d.ts"
+  ]
+}

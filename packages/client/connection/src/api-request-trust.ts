@@ -13,15 +13,15 @@
  * belongs to the webserver config, and this fence is not an auth layer.
  */
 
-import type { IncomingHttpHeaders } from 'node:http'
 import { isLoopbackHostname } from './loopback-hostname.ts'
+import type { ConnectionRequestHeaders } from './rpc.ts'
 
 /** The request facts the fence reads from either HTTP representation. */
 interface ApiTrustRequest {
-  headers: IncomingHttpHeaders | Headers
+  headers: ConnectionRequestHeaders
 }
 
-function header(headers: IncomingHttpHeaders | Headers, name: string): string | undefined {
+function header(headers: ConnectionRequestHeaders, name: string): string | undefined {
   if (headers instanceof Headers) return headers.get(name) ?? undefined
   const value = headers[name]
   return typeof value === 'string' ? value : undefined

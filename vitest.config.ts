@@ -272,6 +272,32 @@ export default defineConfig({
         'packages/interaction/commands/src/index.ts',
         'packages/interaction/commands/src/invariant.ts',
         'packages/session/session-projection/src/index.ts',
+        // `packages/office/univer` is vendored from `dsh-univer-office` (fork
+        // point and local modifications: docs/office-univer-upstream.md).
+        // Upstream ships no test suite, and these files are pinned copies whose
+        // behavior this repo does not own: Gateway HTTP/worker adapters and
+        // supervision, the document operations behind them, the tool
+        // definitions, and the browser components. The harness-authored seams
+        // are NOT exempt and stay at per-file 100%: src/index.ts,
+        // src/invariant.ts, src/tools.ts, src/client/viewer-url.ts,
+        // src/client/viewer-locale.ts, src/host/config.ts, src/host/index.ts,
+        // src/host/artifacts/paths.ts, src/host/provider/plugin.ts,
+        // src/host/service/univer-service.ts, src/host/tools/names.ts,
+        // src/host/tools/plugin.ts, src/host/webServer/gateway-proxy.ts, and
+        // src/host/webServer/plugin.ts.
+        'packages/office/univer/src/client/index.ts',
+        'packages/office/univer/src/client/*/**',
+        'packages/office/univer/src/host/adapters/**',
+        'packages/office/univer/src/host/processes/**',
+        'packages/office/univer/src/host/provider/!(plugin).ts',
+        'packages/office/univer/src/host/service/!(univer-service).ts',
+        'packages/office/univer/src/host/skills/**',
+        'packages/office/univer/src/host/tools/definitions/**',
+        'packages/office/univer/src/host/tools/!(names|plugin).ts',
+        'packages/office/univer/src/host/webServer/routes/**',
+        'packages/office/univer/src/host/webServer/!(gateway-proxy|plugin).ts',
+        'packages/office/univer/src/shared/**',
+        'packages/office/univer/src/workers/**',
         ...windowsUnsupportedCoveragePackages.map(path => `${path}/src/**/*.ts`),
         ...windowsOnlyCoverageExclusions,
         ...windowsRunnerCoverageExclusions,

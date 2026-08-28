@@ -70,9 +70,11 @@ The browser HTTP carrier service. Activation listens immediately. Route registra
 register(route: WebRoute): () => void
 
 /**
- * Register an exact-path HTTP upgrade route. Duplicate paths throw because
- * one socket can have only one protocol owner.
- * @param route - pathname and handler owning negotiation plus socket use.
+ * Register an HTTP upgrade route. Duplicate (kind, path) throws because one
+ * socket can have only one protocol owner. Dispatch mirrors {@link register}:
+ * the exact table answers first, then longest-prefix-wins.
+ * @param route - match kind (default 'exact'), pathname, and the handler
+ * owning negotiation plus socket use.
  * @returns the disposer removing the route.
  */
 registerUpgrade(route: WebUpgradeRoute): () => void

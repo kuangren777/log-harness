@@ -213,6 +213,7 @@
       "@deepseek-ai/dsh-client-ui-layout": ["./packages/client/ui-layout/src"],
       "@deepseek-ai/dsh-client-ui-sidebar": ["./packages/client/ui-sidebar/src"],
       "@deepseek-ai/dsh-client-ui-brand-official": ["./packages/client/ui-brand-official/src"],
+      "@deepseek-ai/dsh-client-ui-brand-sci": ["./packages/client/ui-brand-sci/src"],
       "@deepseek-ai/dsh-client-ui-conversation": ["./packages/client/ui-conversation/src"],
       "@deepseek-ai/dsh-client-ui-tool": ["./packages/client/ui-tool/src"],
       "@deepseek-ai/dsh-client-ui-deliverables": ["./packages/client/ui-deliverables/src"],
@@ -247,6 +248,15 @@
       "@deepseek-ai/dsh-sdk-jsonrpc-server": ["./packages/sdk/server/src"],
       "@deepseek-ai/dsh-experimental-agent-team": ["./packages/experimental/agent-team/src"],
       "@deepseek-ai/dsh-experimental-tool-agent-team": ["./packages/experimental/tool-agent-team/src"],
+      // office/ packages are named after the engine (dsh-office-univer) while the
+      // directory drops the group prefix (office/univer), so the wildcard cannot
+      // map them.
+      "@deepseek-ai/dsh-office-univer": ["./packages/office/univer/src"],
+      "@deepseek-ai/dsh-office-univer/client": ["./packages/office/univer/src/client"],
+      "@deepseek-ai/dsh-office-univer/tools": ["./packages/office/univer/src/tools.ts"],
+      "@deepseek-ai/dsh-office-univer/types": ["./packages/office/univer/src/types.ts"],
+      "@deepseek-ai/dsh-office-univer/invariant": ["./packages/office/univer/src/invariant.ts"],
+      "@deepseek-ai/dsh-client-ui-sci-files": ["./packages/client/ui-sci-files/src"],
       "@deepseek-ai/dsh-*": [
         "./packages/core/*/src",
         "./packages/prompt/*/src",

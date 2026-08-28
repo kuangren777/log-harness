@@ -154,6 +154,11 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // The Python runtime uses a distinct closed-resolution bin; the public CLI
   // keeps config-owned bare-package resolution through lib/bin.js.
   '@deepseek-ai/dsh-sdk-jsonrpc-demo': ['lib/packaged-bin.js'],
+  // The vendored Univer office runtime: the preset-mountable `./tools` entry
+  // and the `./types` channel are their own bundles; `artifacts/` is the
+  // prebuilt Gateway/Viewer fetched by `pnpm run fetch-artifacts`; `skills/`
+  // are the upstream-published Univer skills the host row can register.
+  '@deepseek-ai/dsh-office-univer': ['lib/tools.js', 'lib/types.js', 'artifacts/**', 'skills/**'],
   // The argv-prefix runner entry ships beside the lib as its own bundle;
   // sandbox-local resolves it through the package's ./runner export. tsdown
   // also shares its generated FFI code through a hashed runtime chunk.
@@ -163,7 +168,8 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-skill-badge': ['assets'],
   // The bundled skill tree is a runtime package resource: Config.skillRoot
   // defaults to <pkg>/skills, which the provider scans at load.
-  '@deepseek-ai/dsh-sci-skills': ['skills/**', 'lib/*.js'],
+  // Built-in skill bodies live in the loopback vault, never in the package.
+  '@deepseek-ai/dsh-sci-skills': ['lib/*.js'],
   // tsdown extracts a shared chunk whenever a package's two entries (index and
   // invariant) import the same module, and names it by content hash. The chunk
   // is real published code — `lib/index.js` imports it by name — but no fixed

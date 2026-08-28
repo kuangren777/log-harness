@@ -54,6 +54,17 @@ function printable(value: unknown): string {
  * @param root - absolute repository root containing the workspace package.json.
  * @returns the checked package count and every non-MIT declaration.
  */
+/**
+ * Packages whose declaration is fixed by an upstream licence rather than by
+ * this repository: the vendored code stays under its original terms, and a
+ * `MIT` declaration on it would misstate what a consumer receives.
+ */
+export const INHERITED_LICENSES: Readonly<Record<string, string>> = {
+  // Full-fidelity vendoring of dream-num/dsh-univer-office (Apache-2.0);
+  // provenance and the drift log are in docs/office-univer-upstream.md.
+  '@deepseek-ai/dsh-office-univer': 'Apache-2.0',
+}
+
 export function inspectDshPackageLicenses(root: string): DshPackageLicenseReport {
   let packageCount = 0
   const failures: string[] = []
@@ -64,6 +75,16 @@ export function inspectDshPackageLicenses(root: string): DshPackageLicenseReport
     if (typeof name !== 'string' || !DSH_PACKAGE_NAME.test(name)) continue
 
     packageCount++
+    const inherited = INHERITED_LICENSES[name]
+    if (inherited !== undefined) {
+      if (manifest.license !== inherited) {
+        const normalizedFile = file.split(sep).join('/')
+        failures.push(
+          `${normalizedFile}: ${name} must declare its inherited "license": "${inherited}"; found ${printable(manifest.license)}.`,
+        )
+      }
+      continue
+    }
     if (manifest.license !== 'MIT') {
       const normalizedFile = file.split(sep).join('/')
       failures.push(
@@ -83,7 +104,7 @@ if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) {
     process.exitCode = 1
   } else {
     process.stdout.write(
-      `verify-dsh-package-licenses: ${String(report.packageCount)} DSH package(s) checked; all declare MIT.\n`,
+      `verify-dsh-package-licenses: ${String(report.packageCount)} DSH package(s) checked; all declare their required licence.\n`,
     )
   }
 }

@@ -1,0 +1,218 @@
+import { isAbsolute, normalize } from 'node:path'
+import { UnitContentWorker } from '../adapters/unit-content/worker.ts'
+import type { UnitContentInspectionQuery, UnitContentWorkerTarget } from '../adapters/unit-content/protocol.ts'
+import { GatewayClient } from '../adapters/gateway/client.ts'
+import { GatewayFileApi, fileKeyOf } from '../adapters/gateway/file-api.ts'
+import { isRecord, mapUnits, type GatewayUnit } from '../adapters/gateway/mapping.ts'
+import { GatewayWorktreeApi } from '../adapters/gateway/worktree-api.ts'
+import type { ExportUnitContentRequest, InspectUnitContentRequest, JsonValue, UniverOperationResult, UniverUnitKind } from '../service/types.ts'
+import { UniverError } from '../service/errors.ts'
+import { univerFilePath, type UniverFilePath } from '../service/identifiers.ts'
+
+/**
+ * Validate a file value at the service boundary.
+ * @param value - the path as it arrived.
+ * @returns the normalized path under the file-path brand.
+ * @throws {UniverError} when the path is relative or does not end in `.univer`.
+ */
+export function resolveUniverFile(value: string): UniverFilePath {
+  const file = normalize(value)
+  if (!isAbsolute(file)) throw new UniverError('Univer file path must be absolute.', 'INVALID_FILE_PATH')
+  if (!file.toLowerCase().endsWith('.univer')) throw new UniverError('Univer file path must end in .univer.', 'INVALID_FILE_PATH')
+  return univerFilePath(file)
+}
+
+/**
+ * Validate a user-facing export target.
+ * @param value - the output path as it arrived.
+ * @returns the normalized absolute path.
+ * @throws {UniverError} when the path is relative.
+ */
+export function resolveExportFile(value: string): string {
+  const file = normalize(value)
+  if (!isAbsolute(file)) throw new UniverError('Export path must be absolute.', 'INVALID_EXPORT_PATH')
+  return file
+}
+
+/** Package-local Unit content operations over one Gateway and isolated workers. */
+export class UnitContentOperations {
+  private readonly worker: UnitContentWorker
+
+  constructor(
+    private readonly gatewayRequestTimeoutMs: number,
+    private readonly unitContentCommitTimeoutMs: number,
+    unitContentOperationTimeoutMs: number,
+  ) {
+    this.worker = new UnitContentWorker(unitContentOperationTimeoutMs)
+  }
+
+  /**
+   * Inspect one file, unit, or Sheet range.
+   * @param gateway - origin of the running collaboration Gateway.
+   * @param request - the file, Unit, worktree, and optional range to inspect.
+   * @param signal - aborts the worker running the inspection.
+   * @returns the inspection payload.
+   */
+  async inspect(gateway: string, request: InspectUnitContentRequest, signal?: AbortSignal): Promise<UniverOperationResult> {
+    const target = await this.resolveTarget(gateway, request.file, request.unitId, request.worktreeId)
+    const result = await this.worker.run({
+      ...target,
+      operation: 'inspect',
+      query: inspectionQuery(target.unitType, request.range),
+    }, signal)
+    return { ok: true, operation: 'inspect', file: request.file, result }
+  }
+
+  /**
+   * Execute Facade code and commit its mutations to a draft worktree.
+   * @param gateway - origin of the running collaboration Gateway.
+   * @param file - absolute path of the `.univer` file.
+   * @param code - the Facade program to run.
+   * @param worktreeId - the draft worktree the mutations commit to.
+   * @param unitId - the Unit the program runs against.
+   * @param signal - aborts the worker running the program.
+   * @returns the execution payload.
+   */
+  async execute(
+    gateway: string,
+    file: string,
+    code: string,
+    worktreeId: string,
+    unitId: string,
+    signal?: AbortSignal,
+  ): Promise<UniverOperationResult> {
+    const target = await this.resolveTarget(gateway, file, unitId, worktreeId)
+    const result = await this.worker.run({ ...target, operation: 'execute', code, worktreeId }, signal)
+    return { ok: true, operation: 'execute', file, result }
+  }
+
+  /**
+   * Export one Unit to a user-facing Office or delimited file.
+   * @param gateway - origin of the running collaboration Gateway.
+   * @param request - the source Unit and the authorized output path.
+   * @param signal - aborts the worker performing the export.
+   * @returns the export payload.
+   */
+  async export(gateway: string, request: ExportUnitContentRequest, signal?: AbortSignal): Promise<UniverOperationResult> {
+    const target = await this.resolveTarget(gateway, request.file, request.unitId, request.worktreeId)
+    const result = await this.worker.run({
+      ...target,
+      operation: 'export',
+      outputPath: resolveExportFile(request.output),
+    }, signal)
+    return { ok: true, operation: 'export', file: request.file, result }
+  }
+
+  /**
+   * Load one Unit snapshot for machine rendering.
+   * @param gateway - origin of the running collaboration Gateway.
+   * @param file - absolute path of the `.univer` file.
+   * @param unitId - the Unit to load.
+   * @param worktreeId - the worktree to read from, or undefined for trunk.
+   * @param signal - aborts the worker performing the read.
+   * @returns the Unit's kind and its snapshot data.
+   * @throws {UniverError} when the worker returns something that is not a render source.
+   */
+  async renderSource(
+    gateway: string,
+    file: string,
+    unitId: string,
+    worktreeId?: string,
+    signal?: AbortSignal,
+  ): Promise<{ readonly unitType: UniverUnitKind; readonly unitData: { [key: string]: JsonValue } }> {
+    const target = await this.resolveTarget(gateway, file, unitId, worktreeId)
+    const value = await this.worker.run({ ...target, operation: 'render-source' }, signal)
+    if (!isRecord(value) || !isUnitKind(value.unitType) || !isRecord(value.unitData)) {
+      throw new UniverError('Unit content worker returned an invalid render source.', 'UNIT_CONTENT_WORKER_INVALID_RESPONSE')
+    }
+    return { unitType: value.unitType, unitData: value.unitData }
+  }
+
+  /**
+   * Import one Office file into a JSON Unit snapshot.
+   * @param sourcePath - absolute path of the Office file to read.
+   * @param signal - aborts the worker performing the import.
+   * @returns the Unit kind inferred from the extension and its snapshot.
+   */
+  import(sourcePath: string, signal?: AbortSignal): Promise<{ readonly kind: UniverUnitKind; readonly snapshot: JsonValue }> {
+    const kind = importKind(sourcePath)
+    return this.worker.run({ operation: 'import', sourcePath, unitType: unitType(kind) }, signal).then(snapshot => ({ kind, snapshot }))
+  }
+
+  private async resolveTarget(
+    gatewayOrigin: string,
+    filePath: string,
+    unitId: string | undefined,
+    worktreeId: string | undefined,
+  ): Promise<UnitContentWorkerTarget> {
+    const client = new GatewayClient(gatewayOrigin, this.gatewayRequestTimeoutMs)
+    const listing = worktreeId === undefined
+      ? await new GatewayFileApi(client).listUnits(filePath)
+      : await new GatewayWorktreeApi(client).listUnits(filePath, worktreeId)
+    const unit = selectUnit(mapUnits(listing), unitId)
+    return {
+      gatewayOrigin,
+      commitTimeoutMs: this.unitContentCommitTimeoutMs,
+      fileKey: fileKeyOf(filePath),
+      filePath,
+      unitId: unit.unitId,
+      unitType: unit.type,
+      ...(worktreeId === undefined ? {} : { worktreeId }),
+    }
+  }
+}
+
+function importKind(sourcePath: string): UniverUnitKind {
+  const extension = sourcePath.slice(sourcePath.lastIndexOf('.')).toLowerCase()
+  if (extension === '.xlsx' || extension === '.csv' || extension === '.tsv') return 'sheet'
+  if (extension === '.docx') return 'doc'
+  if (extension === '.pptx') return 'slide'
+  throw new UniverError('Import source must end in .xlsx, .csv, .tsv, .docx, or .pptx.', 'IMPORT_FORMAT_UNSUPPORTED')
+}
+
+function unitType(kind: UniverUnitKind): 1 | 2 | 3 | 5 | 6 {
+  if (kind === 'doc') return 1
+  if (kind === 'sheet') return 2
+  if (kind === 'slide') return 3
+  if (kind === 'base') return 5
+  return 6
+}
+
+function isUnitKind(value: JsonValue | undefined): value is UniverUnitKind {
+  return value === 'sheet' || value === 'doc' || value === 'slide' || value === 'base' || value === 'board'
+}
+
+function selectUnit(units: readonly GatewayUnit[], requested: string | undefined): GatewayUnit {
+  if (requested !== undefined) {
+    const unit = units.find(candidate => candidate.unitId === requested)
+    if (unit !== undefined) return unit
+    throw new UniverError(`Unit ${requested} was not found in the selected scope.`, 'UNIT_NOT_FOUND')
+  }
+  const [only] = units
+  if (only !== undefined && units.length === 1) return only
+  throw new UniverError('Specify unitId when the selected scope has zero or multiple Units.', 'UNIT_REQUIRED')
+}
+
+function inspectionQuery(unitType: number, range: string | undefined): UnitContentInspectionQuery {
+  if (range !== undefined) {
+    if (unitType !== 2) throw new UniverError('Range inspection requires a Sheet Unit.', 'INSPECTION_UNIT_TYPE_MISMATCH')
+    const split = range.lastIndexOf('!')
+    const selector = split < 0
+      ? { index: 0 as const }
+      : { name: unquoteSheetName(range.slice(0, split)) }
+    const address = split < 0 ? range : range.slice(split + 1)
+    if (address.trim().length === 0) throw new UniverError('Inspection range must not be empty.', 'INSPECTION_RANGE_INVALID')
+    return { kind: 'worksheet-range', ranges: [{ range: address, worksheet: selector }] }
+  }
+  if (unitType === 2) return { kind: 'workbook' }
+  if (unitType === 3) return { kind: 'presentation' }
+  if (unitType === 1) return { kind: 'document' }
+  throw new UniverError(`Unit type ${String(unitType)} does not support structured inspection.`, 'INSPECTION_UNIT_TYPE_UNSUPPORTED')
+}
+
+function unquoteSheetName(value: string): string {
+  const trimmed = value.trim()
+  return trimmed.startsWith("'") && trimmed.endsWith("'")
+    ? trimmed.slice(1, -1).replace(/''/gu, "'")
+    : trimmed
+}

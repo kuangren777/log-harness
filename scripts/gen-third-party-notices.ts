@@ -52,12 +52,36 @@ const CLAUDE_PLATFORM_PACKAGE_PREFIX = `${CLAUDE_AGENT_SDK_PACKAGE}-`
 const CLAUDE_PLATFORM_DECLARED_LICENSE = 'SEE LICENSE IN LICENSE.md'
 
 /**
+ * Univer's prerelease Office packages `packages/office/univer` runs. Recorded
+ * distribution decision (2026-08-28): the sci deployment runs them under
+ * Univer's development licence for INTERNAL testing only — the artifacts are
+ * fetched at image build, never republished — and the production licence is
+ * decided before any public release. Listing a name here records that
+ * decision; it does not reclassify the terms, which stay "no license
+ * declared" in the notices.
+ */
+export const UNIVER_PRERELEASE_PACKAGES: ReadonlySet<string> = new Set([
+  '@univer-cli/api-reference',
+  '@univer-cli/resource-library',
+  '@univer-cli/svg-facade',
+  '@univer-cli/unit-layout-lint',
+  '@univer-cli/unit-screenshot',
+  '@univer-cli/univer-render-runtime',
+  '@univerjs-pro/cli-assets',
+  '@univerjs-pro/engine-formula-rust-binding',
+  '@univerjs-pro/exchange-node-binding',
+])
+
+/**
  * Whether a non-permissive runtime declaration has an identity-scoped owner
- * authorization. This does not reclassify its terms as permissive.
+ * authorization or a recorded distribution decision. This does not reclassify
+ * its terms as permissive.
  * @param name - exact npm package identity.
- * @returns true only for the official Claude Agent SDK package.
+ * @returns true for the official Claude Agent SDK package and for the Univer
+ * prerelease packages in {@link UNIVER_PRERELEASE_PACKAGES}.
  */
 export function isOwnerAuthorizedRuntime(name: string): boolean {
+  if (UNIVER_PRERELEASE_PACKAGES.has(name)) return true
   return name === CLAUDE_AGENT_SDK_PACKAGE
 }
 
@@ -75,6 +99,24 @@ const OVERRIDES: Record<string, { license?: string; repo?: string }> = {
   '@modelcontextprotocol/server-filesystem': { license: 'MIT / Apache-2.0', repo: 'https://github.com/modelcontextprotocol/servers' },
   // No repository field in the published manifest.
   'node-addon-require-builtin': { repo: 'https://www.npmjs.com/package/node-addon-require-builtin' },
+  // Univer's prerelease Office packages, required by `packages/office/univer`.
+  // The `@univer-cli/*` builds ship from Univer's private insiders registry and
+  // the `@univerjs-pro/*` native bindings from npm; NONE of them publishes a
+  // `license` field or a LICENSE file, so no grant is on record and the default
+  // (all rights reserved) is what these notices can truthfully state. Replace
+  // each entry with the real terms once Univer states them; the pinned versions
+  // are in packages/office/univer/package.json.
+  // TODO(legal): confirm the distribution terms with Univer before any release
+  // that publishes or redistributes these artifacts.
+  '@univer-cli/api-reference': { license: 'All rights reserved (no license declared)', repo: 'https://github.com/dream-num/univer-cli' },
+  '@univer-cli/resource-library': { license: 'All rights reserved (no license declared)', repo: 'https://github.com/dream-num/univer-cli' },
+  '@univer-cli/svg-facade': { license: 'All rights reserved (no license declared)', repo: 'https://github.com/dream-num/univer-cli' },
+  '@univer-cli/unit-layout-lint': { license: 'All rights reserved (no license declared)', repo: 'https://github.com/dream-num/univer-cli' },
+  '@univer-cli/unit-screenshot': { license: 'All rights reserved (no license declared)', repo: 'https://github.com/dream-num/univer-cli' },
+  '@univer-cli/univer-render-runtime': { license: 'All rights reserved (no license declared)', repo: 'https://github.com/dream-num/univer-cli' },
+  '@univerjs-pro/cli-assets': { license: 'All rights reserved (no license declared)' },
+  '@univerjs-pro/engine-formula-rust-binding': { license: 'All rights reserved (no license declared)', repo: 'https://github.com/dream-num/univer' },
+  '@univerjs-pro/exchange-node-binding': { license: 'All rights reserved (no license declared)', repo: 'https://github.com/dream-num/univer' },
 }
 
 /**

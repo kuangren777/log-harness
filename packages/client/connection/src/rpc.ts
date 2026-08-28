@@ -2,6 +2,15 @@
 
 import type { RpcResult } from '@deepseek-ai/dsh-host-apiproxy/api'
 
+/**
+ * Request headers in either HTTP representation.
+ *
+ * Stated structurally rather than as node's `IncomingHttpHeaders`: this module
+ * is the face both Connection halves compile against, and the browser half has
+ * no node types.
+ */
+export type ConnectionRequestHeaders = Headers | Readonly<Record<string, string | readonly string[] | undefined>>
+
 /** Trust fence applied before a Host RPC channel reaches its handler. */
 export type ConnectionRpcAuthority = 'trusted-host' | 'loopback'
 
@@ -56,6 +65,19 @@ export interface HostConnectionRpc {
 export interface HostConnectionHandle {
   /** Generic RPC channel registry. */
   readonly rpc: HostConnectionRpc
+  /**
+   * Whether one request passes the browser-trust fence a `trusted-host`
+   * channel applies, for a host plugin that owns a raw webserver route instead
+   * of an RPC channel and must reach the same decision.
+   *
+   * The fence reads the request headers alone (Host, Origin, Fetch-Metadata)
+   * and answers against this deployment's `trustedHosts`. It is not
+   * authentication: it closes the DNS-rebinding and cross-site paths a browser
+   * opens against a local HTTP surface, nothing more.
+   * @param headers - the inbound request headers.
+   * @returns true when the route may serve the request.
+   */
+  isTrustedRequest(headers: ConnectionRequestHeaders): boolean
 }
 
 /** Client caller for logical RPC channels carried by the current transport. */

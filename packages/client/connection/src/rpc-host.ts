@@ -15,6 +15,7 @@ import { bridge, type FetchHandler } from './http-bridge.ts'
 import { isTrustedApiRequest } from './api-request-trust.ts'
 import { API_PATH } from './api-path.ts'
 import type {
+  ConnectionRequestHeaders,
   ConnectionRpcEndpointMatcher,
   ConnectionRpcHandler,
   ConnectionRpcHandlerOptions,
@@ -63,6 +64,16 @@ export class HostConnectionService extends Service implements HostConnectionHand
   ) {
     super(ctx, 'connection')
     this.loopbackTrustedHosts = privilegedTrustedHosts ? trustedHosts : []
+  }
+
+  /**
+   * Whether one request passes the same browser-trust fence a `trusted-host`
+   * channel applies. See {@link HostConnectionHandle.isTrustedRequest}.
+   * @param headers - the inbound request headers.
+   * @returns true when the route may serve the request.
+   */
+  isTrustedRequest(headers: ConnectionRequestHeaders): boolean {
+    return isTrustedApiRequest({ headers }, this.trustedHosts)
   }
 
   /** Generic channel registry scoped to the Context reading this service. */

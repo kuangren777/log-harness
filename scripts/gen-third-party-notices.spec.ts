@@ -7,6 +7,7 @@ import {
   claudeDistributionFromManifest,
   collectPythonDependencies,
   isOwnerAuthorizedRuntime,
+  UNIVER_PRERELEASE_PACKAGES,
   isPermissive,
   type Manifest,
   manifestPatterns,
@@ -278,6 +279,13 @@ describe('official Claude distribution authorization', () => {
       .toBe(false)
     expect(isOwnerAuthorizedRuntime('@anthropic-ai/unrelated')).toBe(false)
     expect(isPermissive('SEE LICENSE IN README.md')).toBe(false)
+  })
+
+  it('records the Univer prerelease decision by exact identity without relabeling', () => {
+    for (const name of UNIVER_PRERELEASE_PACKAGES) expect(isOwnerAuthorizedRuntime(name)).toBe(true)
+    expect(isOwnerAuthorizedRuntime('@univerjs/core')).toBe(false)
+    expect(isOwnerAuthorizedRuntime('@univer-cli/unrelated')).toBe(false)
+    expect(isPermissive('All rights reserved (no license declared)')).toBe(false)
   })
 
   it('derives version-independent platform payloads from the official SDK manifest', () => {

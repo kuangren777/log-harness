@@ -187,4 +187,50 @@ readImageRequest( ref: ImageAttachmentRef, policy: ImageRequestPolicy, signal?: 
 ```
 
 Source: [`packages/attachment/attachment/src/index.ts`](../../packages/attachment/attachment/src/index.ts)
+
+<a id="ctxreferencedtext--referencedtextregistry"></a>
+
+### `ctx.referencedText` — `ReferencedTextRegistry`
+
+Registry of named referenced-text stores plus the model-request resolution that turns `referenced-text` blocks into `text` blocks.
+
+The registry owns digest verification for every store: a store returns bytes, and this service decides whether those bytes are the ones the logged reference named.
+
+```ts cordis-catalog
+/**
+ * Register one borrowed same-process store under a unique name. Disposing
+ * the calling fiber, or calling the returned disposer, removes it.
+ * @param name - store name that logged references address; a duplicate throws.
+ * @param store - the borrowed store implementation.
+ * @returns the disposer that unregisters this store.
+ */
+registerStore(name: string, store: ReferencedTextStore): () => void
+
+/**
+ * Read one reference and verify the returned text against its recorded digest.
+ * @param ref - the logged reference to resolve.
+ * @param signal - optional cancellation passed to the owning store.
+ * @returns the exact stored text.
+ * @throws {ReferencedTextError} `STORE_MISSING` when no store owns `ref.store`,
+ *   `DIGEST_MISMATCH` when the returned text hashes to another digest, or the
+ *   store's own failure, such as `NOT_FOUND`.
+ */
+async read(ref: ReferencedTextRef, signal?: AbortSignal): Promise<string>
+
+/**
+ * Replace every `referenced-text` block, including blocks nested in
+ * tool-result content, with the verified `text` block it names. Input
+ * messages are never mutated: only messages that carry a reference are
+ * rebuilt, and each distinct reference is read once per call.
+ * @param messages - the assembled request messages, possibly deep-frozen.
+ * @param signal - optional cancellation passed to each owning store.
+ * @returns resolved messages, or the exact input array when it holds no reference.
+ * @throws the first failure {@link ReferencedTextRegistry.read} raises; no partial result is returned.
+ */
+async resolveMessages(messages: readonly Message[], signal?: AbortSignal): Promise<readonly Message[]>
+```
+
+Types: [Message](llm-streaming.zh.md)
+
+Source: [`packages/attachment/referenced-text/src/index.ts`](../../packages/attachment/referenced-text/src/index.ts)
 <!-- END GENERATED cordis-surface -->
