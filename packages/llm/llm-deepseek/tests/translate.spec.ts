@@ -123,6 +123,23 @@ describe('translate: tool calls', () => {
     ])
   })
 
+  it('keeps the call identity when continuation deltas carry empty id and name (live relay capture)', async () => {
+    const chunks = await collect(translate(feed(
+      firstChunk,
+      { choices: [{ delta: { tool_calls: [{ index: 1, id: 'call_0ce12aa343ca429782d5a1db', type: 'function', function: { name: 'subagent', arguments: '' } }] } }] },
+      { choices: [{ delta: { tool_calls: [{ index: 1, id: '', function: { name: '', arguments: '{"prompt": "' } }] } }] },
+      { choices: [{ delta: { tool_calls: [{ index: 1, id: '', function: { name: '', arguments: 'pong"}' } }] } }] },
+      { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+      DONE,
+    )))
+    const ends = chunks.filter(chunk => chunk.type === 'block-end')
+    expect(ends).toEqual([
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'call_0ce12aa343ca429782d5a1db', name: 'subagent', arguments: '{"prompt": "pong"}' } },
+    ])
+    const deltas = chunks.filter(chunk => chunk.type === 'tool-call-delta')
+    expect(deltas.every(d => d.type === 'tool-call-delta' && d.id === 'call_0ce12aa343ca429782d5a1db' && d.name === 'subagent')).toBe(true)
+  })
+
   it('disambiguates parallel tool calls by wire index', async () => {
     const chunks = await collect(translate(feed(
       firstChunk,

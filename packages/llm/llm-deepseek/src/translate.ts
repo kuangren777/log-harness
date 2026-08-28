@@ -156,8 +156,11 @@ export async function* translate(payloads: AsyncIterable<string>): AsyncGenerato
           toolBlocks.set(call.index, block)
           yield { type: 'block-start', index: block.index, blockType: 'tool-call' }
         }
-        if (call.id !== undefined) block.callId = call.id
-        if (call.function?.name !== undefined) block.name = call.function.name
+        // Some upstreams stream continuation deltas with `id: ""` and
+        // `function.name: ""` after the opening delta; an empty string is
+        // "unchanged", not a new value, or the call would lose its identity.
+        if (call.id !== undefined && call.id !== '') block.callId = call.id
+        if (call.function?.name !== undefined && call.function.name !== '') block.name = call.function.name
         const fragment = call.function?.arguments ?? ''
         block.text += fragment
         yield {
