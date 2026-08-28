@@ -28,7 +28,11 @@ async function bench() {
   await runtime.sessions.add({ id: ROOT, summary: { title: 'R', displayTitle: 'R' } }, { current: false })
   await runtime.sessions.add(
     { id: CHILD, summary: { title: 'C', displayTitle: 'C', parentId: ROOT } }, { current: false })
-  runtime.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn() })
+  // registerDetailsModeSelector: apply hands the layout the details-column
+  // mode writer at mount; these specs assert no panel behavior.
+  runtime.provide('layout', {
+    openDetails: vi.fn(), closeDetails: vi.fn(), registerDetailsModeSelector: () => () => {},
+  })
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.provide('locale', locale)
   runtime.slots.installLocale(locale)

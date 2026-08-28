@@ -7,12 +7,24 @@
  * apply worlds reach for panel transitions (sidebar toggle from ui-sidebar,
  * details open/close from ui-conversation) — writes stay inside the store's
  * declared action set, delivered as the registration's bound actions.
+ * Showing one details mode is the same kind of gesture but its state belongs
+ * to the column's occupant, so that plugin registers a selector here and every
+ * other plugin reaches the column through showDetailsMode without importing
+ * it.
  */
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
 import type { createLayoutStore } from './stores.ts'
 
 /** The layout store's bound action set (framework-baked, draft params peeled). */
 export type PanelActions = BoundActions<ReturnType<typeof createLayoutStore>>
+
+/**
+ * Writes one details-column mode id into the state of the plugin that owns
+ * the column. Supplied by that plugin through
+ * {@link ILayout.registerDetailsModeSelector}; this package never knows which
+ * ids exist.
+ */
+export type DetailsModeSelector = (id: string) => void
 
 /**
  * The outward layout face (`ctx.layout`): the panel transitions other
@@ -27,11 +39,31 @@ export interface ILayout {
   openDetails(): void
   /** Close the details panel. */
   closeDetails(): void
+  /**
+   * Open the details column and select mode `id`; an id naming no live
+   * `conversation.details.mode` entry leaves the panel on `tool`. The column
+   * opens either way — with no registered selector this is exactly
+   * {@link ILayout.openDetails}.
+   * @param id - the `conversation.details.mode` entry id to show.
+   */
+  showDetailsMode(id: string): void
+  /**
+   * Adopt the mode selector of the plugin occupying the `details` slot, so
+   * any plugin can reach its column through {@link ILayout.showDetailsMode}.
+   * The latest registration replaces the previous one (one details column,
+   * one owner); a disposer that is no longer the current registration removes
+   * nothing, so an HMR swap that registers before the old fiber unloads keeps
+   * the fresh selector.
+   * @param select - writes one mode id into the column owner's own state.
+   * @returns disposer removing this selector.
+   */
+  registerDetailsModeSelector(select: DetailsModeSelector): () => void
 }
 
 /** Cross-plugin panel-action face (ctx.layout). */
 export class LayoutController implements ILayout {
   #panels: PanelActions | undefined
+  #selectDetailsMode: DetailsModeSelector | undefined
 
   /**
    * Adopt the root entry's bound store actions. Called from the root
@@ -57,6 +89,30 @@ export class LayoutController implements ILayout {
   /** Close the details panel. */
   closeDetails(): void {
     this.#require().closeDetails()
+  }
+
+  /**
+   * Adopt the details column's mode selector (see the {@link ILayout} contract
+   * for replacement and disposer semantics).
+   * @param select - writes one mode id into the column owner's own state.
+   * @returns disposer removing this selector.
+   */
+  registerDetailsModeSelector(select: DetailsModeSelector): () => void {
+    this.#selectDetailsMode = select
+    return () => {
+      if (this.#selectDetailsMode === select) this.#selectDetailsMode = undefined
+    }
+  }
+
+  /**
+   * Select the mode, then open the column (see the {@link ILayout} contract).
+   * @param id - the `conversation.details.mode` entry id to show.
+   */
+  showDetailsMode(id: string): void {
+    // Selection first: the column owner reads its own state on the render the
+    // open triggers, so the panel never paints the previous mode in between.
+    this.#selectDetailsMode?.(id)
+    this.openDetails()
   }
 
   #require(): PanelActions {

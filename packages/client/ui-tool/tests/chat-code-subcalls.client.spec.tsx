@@ -116,7 +116,7 @@ async function bench(snapshot: ConversationSnapshot) {
     phase: 'ready', subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
   })
   const scoped = { send: vi.fn(async () => {}), cancel: vi.fn(async () => {}) }
-  const layout = { openDetails: vi.fn(), closeDetails: vi.fn() }
+  const layout = { openDetails: vi.fn(), closeDetails: vi.fn(), registerDetailsModeSelector: () => () => {} }
   // Provide-channel contributions land in this bundle the way the runtime
   // materializes them; the renderer host serves it through provideInfo.
   const provided: { hooks: Record<string, unknown>; props: Record<string, unknown> } = { hooks: {}, props: {} }

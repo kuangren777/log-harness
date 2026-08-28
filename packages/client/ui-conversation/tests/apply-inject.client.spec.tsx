@@ -18,6 +18,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SlotTestRuntime, usePinnedBrowserLanguages, stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionBehaviorOverrides } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+// The real layout service, not a fake: showDetailsMode is one gesture spanning
+// both packages (ui-conversation registers the selector, ui-layout dispatches
+// it), so the spec exercises the production controller over spied panel actions.
+import { LayoutController } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { ISession, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
@@ -97,8 +101,13 @@ async function bench(options: BenchOptions = {}) {
     summary: { title: 'R', displayTitle: 'R', cwd: '/proj' },
     session: sessionFake,
   })
-  const layoutFake = { openDetails: vi.fn(), closeDetails: vi.fn() }
-  runtime.provide('layout', layoutFake)
+  const panels = {
+    setSidebar: vi.fn(), setDetails: vi.fn(), toggleSidebar: vi.fn(),
+    setNarrow: vi.fn(), openDetails: vi.fn(), closeDetails: vi.fn(),
+  }
+  const layout = new LayoutController()
+  layout.attachPanels(panels)
+  runtime.provide('layout', layout)
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.provide('locale', locale)
   runtime.slots.installLocale(locale)
@@ -148,6 +157,14 @@ async function bench(options: BenchOptions = {}) {
       id, instance.actions)
     return { instance, injected }
   }
+  /** Resolve the details entry the way the outlet would; its inject records the session's bound actions. */
+  const detailsApi = (id: SessionId) => {
+    const entry = entryOf('details')
+    const instance = runtime.storeOf('details', id) as ChatInstance
+    const injected = (entry.inject as unknown as (sessionId: SessionId, actions: ChatActions) => DetailsInjected)(
+      id, instance.actions)
+    return { instance, injected }
+  }
   /** Materialize the input provide contribution the way the runtime does. */
   const inputApi = (id: SessionId) => {
     const info = runtime.sessions.provideInfo(id)!
@@ -163,8 +180,8 @@ async function bench(options: BenchOptions = {}) {
   }
   return {
     runtime, feature, slots: runtime.slots, entryOf,
-    conversationApi, conversationHeaderApi, residentApi, composerApi, chatViewApi, inputApi,
-    sessionFake, layoutFake,
+    conversationApi, conversationHeaderApi, residentApi, composerApi, chatViewApi, detailsApi, inputApi,
+    sessionFake, panels, layout,
   }
 }
 
@@ -263,19 +280,56 @@ describe('conversation slot inject API', () => {
   it('openDetails (chat view face) writes the selection through the store actions and opens the panel', async () => {
     const b = await bench()
     const { instance, injected } = b.chatViewApi(ROOT)
+    // The details column reached its session once, so the layout-registered
+    // selector has this session's actions.
+    b.detailsApi(ROOT)
     // A mode another gesture left behind must not swallow the call the user
     // just clicked: openDetails returns the column to the inspector.
     injected.showDetailsMode('files')
     expect(instance.store.getSnapshot().detailsMode).toBe('files')
-    expect(b.layoutFake.openDetails).toHaveBeenCalledTimes(1)
+    expect(b.panels.openDetails).toHaveBeenCalledTimes(1)
     injected.openDetails({ turnSeq: 2, callId: 'c1' })
     expect(instance.store.getSnapshot().selection).toEqual({ turnSeq: 2, callId: 'c1' })
     expect(instance.store.getSnapshot().detailsMode).toBe('tool')
-    expect(b.layoutFake.openDetails).toHaveBeenCalledTimes(2)
+    expect(b.panels.openDetails).toHaveBeenCalledTimes(2)
     // The chat view shares the conversation entry's store instance: selection
     // writes land where the skeleton and details read.
     const conv = b.conversationApi(ROOT)
     expect(conv.instance).toBe(instance)
+    await b.runtime.dispose()
+  })
+
+  it('the layout-level gesture reaches the current session store, and unloading the plugin removes the selector', async () => {
+    // The seam a sibling plugin uses: it holds ctx.layout, never this
+    // package, and its own mode entry is unmounted while another tab shows.
+    const b = await bench()
+    const { instance } = b.detailsApi(ROOT)
+
+    b.layout.showDetailsMode('files')
+    expect(instance.store.getSnapshot().detailsMode).toBe('files')
+    expect(b.panels.openDetails).toHaveBeenCalledTimes(1)
+
+    // A second session whose details column has not rendered yet: no write to
+    // make, and the column still opens on the caller's behalf.
+    const OTHER = 'other-2' as SessionId
+    await b.runtime.sessions.add({ id: OTHER })
+    b.layout.showDetailsMode('tool')
+    expect(instance.store.getSnapshot().detailsMode).toBe('files')
+    expect(b.panels.openDetails).toHaveBeenCalledTimes(2)
+
+    // No current session at all (the no-session empty state).
+    await b.runtime.sessions.setCurrent(undefined)
+    b.layout.showDetailsMode('tool')
+    expect(instance.store.getSnapshot().detailsMode).toBe('files')
+    expect(b.panels.openDetails).toHaveBeenCalledTimes(3)
+
+    // The feature fiber owns the registration: after unload the gesture is
+    // open-only again (no write into a store nobody renders).
+    await b.runtime.sessions.setCurrent(ROOT)
+    await b.feature.dispose()
+    b.layout.showDetailsMode('tool')
+    expect(instance.store.getSnapshot().detailsMode).toBe('files')
+    expect(b.panels.openDetails).toHaveBeenCalledTimes(4)
     await b.runtime.dispose()
   })
 
@@ -428,11 +482,10 @@ describe('conversation slot inject API', () => {
 describe('details inject API', () => {
   it('details injects the layout callback and the mode ledger; selection rides the shared store instead', async () => {
     const b = await bench()
-    const entry = b.entryOf('details')
-    const injected = (entry.inject as unknown as () => DetailsInjected)()
+    const { injected } = b.detailsApi(ROOT)
     expect(Object.keys(injected)).toEqual(['closeDetails', 'modes'])
     injected.closeDetails()
-    expect(b.layoutFake.closeDetails).toHaveBeenCalledTimes(1)
+    expect(b.panels.closeDetails).toHaveBeenCalledTimes(1)
     // The built-in inspector is the ring's first entry, labelled through the
     // package dictionary; a contributed mode lands after it by `order`.
     expect(injected.modes.list()).toEqual([{ id: 'tool', label: '工具' }])

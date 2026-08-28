@@ -786,7 +786,9 @@ export interface ChatViewInjected {
   openDetails: (target: SelectionTarget) => void
   /**
    * Show one `conversation.details.mode` entry and open the details column
-   * for it. An id naming no live entry leaves the panel on `tool`.
+   * for it. An id naming no live entry leaves the panel on `tool`. Routed
+   * through `ctx.layout.showDetailsMode`, the same gesture a plugin
+   * contributing a mode reaches, so both paths select on the current session.
    */
   showDetailsMode: (id: string) => void
   /**

@@ -182,6 +182,21 @@ export function apply(ctx: Context): void {
   const views = tabLedger('conversation.view')
   const detailsModes = tabLedger('conversation.details.mode')
 
+  // The details column's mode lives in this package's per-session chat store,
+  // while the gesture that switches it belongs to ctx.layout (a plugin owning
+  // a mode cannot import this package). Entry inject faces are cached per
+  // session — they run once per session, not on every switch — so each
+  // details render records its own session's bound actions here and the
+  // registered selector resolves the current session at call time.
+  const detailsActions = new Map<SessionId, BoundActions<typeof chatStore>>()
+  ctx.effect(() => layout.registerDetailsModeSelector((id) => {
+    const current = sessions.list.getSnapshot().current
+    // No current session means no rendered details column to switch; the
+    // layout still opens it, which is what the caller asked for.
+    if (current === undefined) return
+    detailsActions.get(current)?.setDetailsMode(id)
+  }), 'ui-conversation: details mode selector')
+
   // The per-session input machine registry (SessionInputResolver face; published as
   // ctx.conversation.input by the service below sharing this one instance).
   const inputHub = new InputHub(ctx, t)
@@ -414,10 +429,10 @@ export function apply(ctx: Context): void {
           actions.setDetailsMode(DEFAULT_DETAILS_MODE)
           layout.openDetails()
         },
-        showDetailsMode: (id) => {
-          actions.setDetailsMode(id)
-          layout.openDetails()
-        },
+        // The layout owns this gesture (one implementation, reachable from
+        // plugins that contribute a mode); the write lands back in this
+        // store through the selector registered above.
+        showDetailsMode: (id) => { layout.showDetailsMode(id) },
         fileMentions: owner => ctx.get('chatFileMentions')?.forClosing(owner),
         openFile: async (path) => {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
@@ -484,10 +499,13 @@ export function apply(ctx: Context): void {
       'conversation.details.mode': { kind: 'list', scope: 'session' },
     },
     store: chatStore,
-    inject: (): DetailsInjected => ({
-      closeDetails: () => { layout.closeDetails() },
-      modes: detailsModes,
-    }),
+    inject: (sessionId: SessionId, actions: BoundActions<typeof chatStore>): DetailsInjected => {
+      detailsActions.set(sessionId, actions)
+      return {
+        closeDetails: () => { layout.closeDetails() },
+        modes: detailsModes,
+      }
+    },
   }, DetailsPanel)
 
   // The built-in call inspector: first entry of the mode ring, and the one

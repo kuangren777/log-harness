@@ -6,6 +6,8 @@
 
 AppFrame 始终挂载会话栏和详情栏；已连接 Session 通过 `SessionProvider` 渲染。布局 store 是瞬时状态，侧边栏以默认宽度启动，详情栏则保持关闭，且该 store 从不读写 `localStorage`。hero 和其他未选中状态也会将详情栏的渲染宽度派生为零，但不会改变存储的宽度偏好。AppFrame 会跨越这些状态保留最后一个非 blank 会话 id：首个会话保持关闭；显式打开详情栏的操作会使用约定默认宽度；返回同一会话时恢复其未改变的宽度；选择不同会话时，详情栏会在绘制前关闭。会话 owner share 为空，侧边栏 owner share 只包含 `collapsed` 和 `width`；注册方通过标准钩子获取业务数据，并从各自的 inject 接口获取操作。
 
+`ctx.layout` 还承载详情栏的模式手势，使贡献某个模式的插件无需导入拥有该栏的插件即可唤起自己的内容：`showDetailsMode(id)` 会选中 `id` 指定的 `conversation.details.mode` 条目，然后打开详情栏。写入本身属于该栏的占位插件，它通过 `registerDetailsModeSelector` 注册选择器，并随自身 fiber 一并释放；后一次注册会替换前一次，而被替换的 disposer 不会移除任何东西，因此 HMR 换装后保留的是新的选择器。选中先于打开，详情栏因此不会先绘制上一个模式。若没有注册选择器，则不写入任何状态，该手势等同于 `openDetails`；`id` 指向的条目不存在时，面板保持在 `tool` 模式。
+
 `/client` 导出表层包含插件主体（`apply`／`inject`）、`LayoutController` 和四个 owner-share 接口。AppFrame、面板 store 与让步求解器仍属于包内部。
 
 ## 模型体验
