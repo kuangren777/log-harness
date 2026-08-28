@@ -6576,6 +6576,9 @@ importers:
       '@deepseek-ai/dsh-tool-ask-user':
         specifier: workspace:^
         version: link:../../interaction/tool-ask-user
+      '@deepseek-ai/dsh-web-fetch-http':
+        specifier: workspace:^
+        version: link:../../web/web-fetch-http
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
@@ -6801,6 +6804,9 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
         version: link:../../core/session
+      '@deepseek-ai/dsh-subprocess':
+        specifier: workspace:^
+        version: link:../../subprocess/subprocess
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:^
         version: link:../../core/system-prompt

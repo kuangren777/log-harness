@@ -120,7 +120,8 @@ function readableCatalog(event: Extract<SessionEvent, { type: 'user/message' }>)
   return Array.isArray(entries)
     && entries.every(entry => typeof entry === 'object' && entry !== null
       && typeof (entry as { name?: unknown }).name === 'string'
-      && typeof (entry as { description?: unknown }).description === 'string')
+      && typeof (entry as { description?: unknown }).description === 'string'
+      && typeof (entry as { provider?: unknown }).provider === 'string')
 }
 
 function catalogContent(entries: string[]): Message['content'] {
@@ -296,9 +297,9 @@ describe('dsh-tool-skill', () => {
           kind: 'skill-catalog',
           form: 'catalog',
           entries: [
-            { name: 'a-skill', description: 'Use {{placeholder}} <safely> & carefully.' },
-            { name: 'model-only-skill', description: 'Model-only skill.' },
-            { name: 'z-skill', description: 'Long description Long description Long descript...' },
+            { name: 'a-skill', description: 'Use {{placeholder}} <safely> & carefully.', provider: 'runtime' },
+            { name: 'model-only-skill', description: 'Model-only skill.', provider: 'runtime' },
+            { name: 'z-skill', description: 'Long description Long description Long descript...', provider: 'runtime' },
           ],
         },
         content: [{
@@ -443,7 +444,7 @@ describe('dsh-tool-skill', () => {
       source: {
         kind: 'skill-catalog',
         form: 'catalog',
-        entries: [{ name: 'stale-skill', description: 'Stale skill' }],
+        entries: [{ name: 'stale-skill', description: 'Stale skill', provider: 'runtime' }],
       },
     })
 
@@ -467,7 +468,7 @@ describe('dsh-tool-skill', () => {
       source: {
         kind: 'skill-catalog',
         form: 'catalog',
-        entries: [{ name: 'first-skill', description: 'First skill' }],
+        entries: [{ name: 'first-skill', description: 'First skill', provider: 'runtime' }],
       },
     })
 
@@ -542,7 +543,7 @@ describe('dsh-tool-skill', () => {
       source: {
         kind: 'skill-catalog',
         form: 'catalog',
-        entries: [{ name: 'old-skill', description: 'Old skill' }],
+        entries: [{ name: 'old-skill', description: 'Old skill', provider: 'runtime' }],
       },
     }), { surfaceOp: 'append' })
     session.append('user/message', createUserMessage({
@@ -561,7 +562,7 @@ describe('dsh-tool-skill', () => {
       kind: 'skill-catalog',
       form: 'catalog',
       update: true,
-      entries: [{ name: 'resumed-skill', description: 'Resumed skill' }],
+      entries: [{ name: 'resumed-skill', description: 'Resumed skill', provider: 'runtime' }],
     })
     expect(JSON.stringify(latest?.data.content)).toContain('resumed-skill')
 

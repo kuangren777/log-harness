@@ -52,6 +52,25 @@
 - id: llm-pi-ai
   disabled: true
 
+# Research needs page reads, so the fetch half of the web seam is on here (the
+# base leaves it unset). The provider refuses local and private-network hosts:
+# this process shares loopback with the gateway, the skill vault, the sandbox
+# daemon, and the model relay, and the model picks the URL. A patch replaces the
+# whole config, so the search provider is restated.
+- id: web
+  config:
+    searchProvider: deepseek-official
+    fetchProvider: http
+
+# Built-in skill bodies never reach a client; neither do their routing
+# descriptions. The `<available_skills>` message the model sees is logged whole,
+# and every copy sent to a browser carries the `sci` provider's entries with
+# the description withheld. The web-app row sets no other config.
+- id: api-gateway
+  config:
+    redactSkillCatalogProviders:
+      - sci
+
 - insert:
     - id: dormice
       name: '@deepseek-ai/dsh-dormice'
@@ -111,6 +130,11 @@
 # ── the science layer's host-plane rows ────────────────────────────────────
 
 - insert:
+    # Anonymous public HTTP(S) fetch for `web_fetch` (the `web` row above names
+    # it); local and private-network hosts are refused by the provider.
+    - id: web-fetch-http
+      name: '@deepseek-ai/dsh-web-fetch-http'
+
     # Deployment-wide chapters and standing reminders. Host-plane rather than
     # per-preset: the chapters are identical at both tiers, and one registration
     # per process is one assembly rather than two competing ones.

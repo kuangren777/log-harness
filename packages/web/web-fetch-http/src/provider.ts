@@ -27,6 +27,13 @@ export interface HttpFetchLimits {
   maxRedirects: number
   /** `User-Agent` header sent on every request. */
   userAgent: string
+  /**
+   * Whether a URL naming the local machine or a private network may be
+   * fetched. Off in every deployment: the model chooses the target and the
+   * process shares a network namespace with loopback-only services. On only
+   * for tests and local development against a loopback server.
+   */
+  allowPrivateHosts: boolean
 }
 
 /** Stable id this provider registers under. */
@@ -54,7 +61,7 @@ export class HttpFetchProvider implements WebFetchProvider {
 
   /** Follow same-origin redirects up to the hop cap, then read the final response. */
   private async followAndRead(initialUrl: string, signal: AbortSignal): Promise<WebFetchResult> {
-    let currentUrl = validateFetchUrl(initialUrl, this.limits.maxUrlLength)
+    let currentUrl = validateFetchUrl(initialUrl, this.limits.maxUrlLength, this.limits.allowPrivateHosts)
     let redirectsFollowed = 0
 
     for (;;) {
@@ -79,7 +86,7 @@ export class HttpFetchProvider implements WebFetchProvider {
         // that validateFetchUrl would reject.
         let validatedTarget: URL
         try {
-          validatedTarget = validateFetchUrl(target.toString(), this.limits.maxUrlLength)
+          validatedTarget = validateFetchUrl(target.toString(), this.limits.maxUrlLength, this.limits.allowPrivateHosts)
           if (!isSameOrigin(validatedTarget, currentUrl)) {
             throw new WebError(
               `cross-origin redirect to ${validatedTarget.origin} is not followed automatically; retry against that URL directly`,

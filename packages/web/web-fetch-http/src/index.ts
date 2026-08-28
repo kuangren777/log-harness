@@ -44,6 +44,14 @@ export interface Config {
   maxRedirects?: number
   /** `User-Agent` header sent on every request. */
   userAgent?: string
+  /**
+   * Allow fetching hosts that name the local machine or a private network
+   * (loopback, RFC 1918, link-local, `localhost`, `*.internal`, and their IPv6
+   * forms). Off by default: the model picks the target and the harness shares
+   * a network namespace with loopback-only services. Turn on only for local
+   * development against a loopback server.
+   */
+  allowPrivateHosts?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -53,6 +61,7 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().default(30_000),
   maxRedirects: z.number().default(5),
   userAgent: z.string().default(DEFAULT_USER_AGENT),
+  allowPrivateHosts: z.boolean().default(false),
 })
 
 /** Complete config after schemastery applies every field default. */
@@ -96,6 +105,7 @@ export function apply(ctx: Context, config: Config): void {
     timeoutMs: resolved.timeoutMs,
     maxRedirects: resolved.maxRedirects,
     userAgent: resolved.userAgent,
+    allowPrivateHosts: resolved.allowPrivateHosts,
   }
   ctx.web.registerFetchProvider(new HttpFetchProvider(limits))
 }

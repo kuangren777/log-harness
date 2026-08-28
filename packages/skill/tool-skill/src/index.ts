@@ -36,8 +36,14 @@ export interface SkillCatalogSource {
   readonly form: 'catalog'
   /** Marks a replacement catalog rather than this session's first publication. */
   readonly update?: true
-  /** Exactly the entries this message published, in catalog order. */
-  readonly entries: readonly { readonly name: string; readonly description: string }[]
+  /**
+   * Exactly the entries this message published, in catalog order. `provider`
+   * names the registry provider that owns the entry, so a client-facing
+   * projection can withhold the descriptions of one provider's skills (a
+   * deployment's protected built-ins) while leaving the model-facing text,
+   * and the log, intact.
+   */
+  readonly entries: readonly { readonly name: string; readonly description: string; readonly provider: string }[]
 }
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -54,6 +60,7 @@ function catalogSourceEntries(
   return skills.map(skill => ({
     name: skill.name,
     description: catalogDescription(skill.description, descriptionMaxLength),
+    provider: skill.provider,
   }))
 }
 
@@ -360,12 +367,15 @@ function digestCatalogEntries(entries: SkillCatalogSource['entries']): string {
 function readCatalogEntries(source: unknown): SkillCatalogSource['entries'] | undefined {
   const entries = (source as { entries?: unknown }).entries
   if (!Array.isArray(entries)) return undefined
-  const readable: { name: string; description: string }[] = []
+  const readable: { name: string; description: string; provider: string }[] = []
   for (const entry of entries as readonly unknown[]) {
     if (typeof entry !== 'object' || entry === null) return undefined
-    const { name, description } = entry as { name?: unknown; description?: unknown }
-    if (typeof name !== 'string' || name === '' || typeof description !== 'string') return undefined
-    readable.push({ name, description })
+    const { name, description, provider } = entry as { name?: unknown; description?: unknown; provider?: unknown }
+    // A catalog recorded before entries carried `provider` is unreadable here,
+    // so the next complete snapshot republishes once rather than trusting a
+    // baseline this build cannot fully read.
+    if (typeof name !== 'string' || name === '' || typeof description !== 'string' || typeof provider !== 'string') return undefined
+    readable.push({ name, description, provider })
   }
   return readable
 }

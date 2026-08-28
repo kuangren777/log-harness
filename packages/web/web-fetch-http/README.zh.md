@@ -33,6 +33,7 @@
 | `timeoutMs` | `30_000` | Node 定时器范围内的抓取超时：直接 `ctx.web.fetch()` 调用方的资源兜底，而非面向模型的工具调用预算（后者属于 `dsh-tool-call-timeout-policy`）。 |
 | `maxRedirects` | `5` | 同源重定向最大跳数（`0` 表示完全不跟随）。 |
 | `userAgent` | `deepseek-harness/…` | `User-Agent` 标头。 |
+| `allowPrivateHosts` | `false` | 允许抓取主机名指向本机或私有网络的 URL（`localhost`、`*.localhost`、`*.internal`、回环、RFC 1918、链路本地、共享地址空间，及其 IPv6 与 IPv4 映射形式）。任何部署都保持关闭——目标由模型选择，而 harness 与自身的回环服务共享网络命名空间；仅在对本地回环服务器做本地开发时打开。检查作用于 DNS 之前的字面主机名，因此解析到私有地址的公网域名不会被拦下。 |
 
 数值限制会在插件构造时验证：除 `maxRedirects` 外，每个上限都必须是正的有限数；`maxRedirects` 必须是非负整数。无效值会抛出异常，不会静默构造限制荒谬的提供方。
 

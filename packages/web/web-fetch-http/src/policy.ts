@@ -12,16 +12,19 @@ import { WebError } from '@deepseek-ai/dsh-web'
 export type FetchableKind = 'html' | 'text'
 
 /**
- * Validate a request URL against the basic transport hygiene the provider
- * enforces before any network access: http(s) only, no embedded credentials,
- * bounded length. Returns the parsed `URL`. Throws {@link WebError} otherwise.
- * (SSRF / private-network blocking is deferred — see the package Agent Note.)
+ * Validate a request URL against the transport hygiene the provider enforces
+ * before any network access: http(s) only, no embedded credentials, bounded
+ * length, and no host that names the local machine or a private network
+ * ({@link isPrivateHost}). Returns the parsed `URL`. Throws {@link WebError}
+ * otherwise.
  *
  * @param input - the raw URL string from the fetch request.
  * @param maxUrlLength - inclusive upper bound on `input`'s length.
+ * @param allowPrivateHosts - skip the private-host check; only tests and local
+ *   development against a loopback server set this.
  * @returns the parsed `URL`.
  */
-export function validateFetchUrl(input: string, maxUrlLength: number): URL {
+export function validateFetchUrl(input: string, maxUrlLength: number, allowPrivateHosts = false): URL {
   if (input.length > maxUrlLength) {
     throw new WebError(`URL exceeds the maximum length of ${maxUrlLength}`, 'WEB_INVALID_URL')
   }
@@ -37,7 +40,75 @@ export function validateFetchUrl(input: string, maxUrlLength: number): URL {
   if (url.username.length > 0 || url.password.length > 0) {
     throw new WebError('credentials in URLs are not allowed', 'WEB_BLOCKED_URL')
   }
+  if (!allowPrivateHosts && isPrivateHost(url.hostname)) {
+    throw new WebError(`host "${url.hostname}" is local or on a private network and cannot be fetched`, 'WEB_BLOCKED_URL')
+  }
   return url
+}
+
+/** Dotted-quad IPv4 literal. */
+const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
+
+/**
+ * Whether a URL hostname names the fetching machine or a private network.
+ *
+ * The harness process shares a network namespace with loopback-only services
+ * (its own gateway, the skill vault, the sandbox daemon, the model relay), and
+ * the model chooses the fetch target, so a request to one of those addresses
+ * is server-side request forgery. Blocked: `localhost` and `*.localhost`,
+ * `*.internal`, IPv4 loopback (127/8), unspecified (0/8), RFC 1918 (10/8,
+ * 172.16/12, 192.168/16), link-local (169.254/16), shared address space
+ * (100.64/10), and their IPv6 counterparts (`::`, `::1`, `fc00::/7`,
+ * `fe80::/10`, IPv4-mapped forms). Public names that resolve to a private
+ * address at connect time are not caught here — the check is on the literal
+ * host, before DNS (Known Limitations).
+ * @param hostname - the URL's hostname, as `URL` normalises it (IPv6 without brackets).
+ * @returns true when the host must not be fetched.
+ */
+export function isPrivateHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, '')
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.internal')) return true
+  const v4 = IPV4.exec(host)
+  if (v4 !== null) return isPrivateIpv4(v4.slice(1, 5).map(Number))
+  if (host.includes(':')) return isPrivateIpv6(host.replace(/^\[|\]$/g, ''))
+  return false
+}
+
+/**
+ * @param octets - the four IPv4 octets.
+ * @returns true for loopback, unspecified, RFC 1918, link-local, or shared address space.
+ */
+function isPrivateIpv4(octets: readonly number[]): boolean {
+  const [a, b] = octets as [number, number, number, number]
+  if (a === 127 || a === 0 || a === 10) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 192 && b === 168) return true
+  if (a === 169 && b === 254) return true
+  if (a === 100 && b >= 64 && b <= 127) return true
+  return false
+}
+
+/**
+ * @param host - an IPv6 literal without brackets, possibly zone-scoped or IPv4-mapped.
+ * @returns true for unspecified, loopback, unique-local, link-local, or a mapped private IPv4.
+ */
+function isPrivateIpv6(host: string): boolean {
+  const address = host.replace(/%.*$/, '')
+  if (address === '::' || address === '::1') return true
+  // `URL` renders an IPv4-mapped address in hex groups (`::ffff:7f00:1`), never
+  // dotted; both forms are accepted so a hand-built hostname cannot slip past.
+  const mappedDotted = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(address)
+  if (mappedDotted !== null) return isPrivateHost(mappedDotted[1] as string)
+  const mappedHex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(address)
+  if (mappedHex !== null) {
+    const high = parseInt(mappedHex[1] as string, 16)
+    const low = parseInt(mappedHex[2] as string, 16)
+    return isPrivateIpv4([high >> 8, high & 0xff, low >> 8, low & 0xff])
+  }
+  const head = address.split(':')[0] ?? ''
+  if (/^f[cd][0-9a-f]{0,2}$/.test(head)) return true
+  if (/^fe[89ab][0-9a-f]?$/.test(head)) return true
+  return false
 }
 
 /**

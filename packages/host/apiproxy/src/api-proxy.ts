@@ -36,6 +36,9 @@ import {
 } from '@deepseek-ai/dsh-agent-presets'
 import type { PresetBearingSession } from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-tools'
+// Type-only: resolves `ctx.get('fs')` to the filesystem seam owning the execution
+// world a session's cwd lives in; the composition may have no filesystem at all.
+import type {} from '@deepseek-ai/dsh-fs'
 import type {
   ApiProxy, ConfigurableProviderView, CredentialView, GoalRef, HistoryEntry, HostFrame,
   ModelCatalogFailure, ModelProviderGroup,
@@ -91,6 +94,7 @@ import type { ApprovalOutcome, ApprovalRequestId } from '@deepseek-ai/dsh-user-a
 // `ctx.get('approval')` without a value dependency on the seam (optional composition).
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { approvalResponsePayloadSchema } from './api/approvals.schema.ts'
+import { redactEventForClient } from './client-redaction.ts'
 import { imageLimitsProjectionSchema, sessionListMetadataProjectionSchema } from './api/sessions.schema.ts'
 import { questionResponsePayloadSchema } from './api/questions.schema.ts'
 import type { ClientResponse, RpcError, RpcReceipt, RpcRequest, RpcResponse } from './api/rpc.ts'
@@ -601,6 +605,14 @@ export interface ApiProxyDefaults {
   /** Maximum artifact size eligible for one cold blankness read. */
   coldBlankProbeMaxBytes?: number
   /**
+   * Skill providers whose catalog descriptions the client must not see. The
+   * session log keeps the full `<available_skills>` message the model saw;
+   * every copy sent to a client — live frames and history pages — carries
+   * those entries with their description withheld ({@link redactEventForClient}).
+   * Empty or absent sends events unchanged.
+   */
+  redactSkillCatalogProviders?: readonly string[]
+  /**
    * Whether handing a path to the native opener can work at all — the
    * `hasDocument` capability the preset roster reports, and the switch
    * between opening a preset directory and answering its path as text.
@@ -749,12 +761,13 @@ function historyPage(
   beforeSeq: number | undefined,
   maxMessages: number | undefined,
   scope?: ScopeKey,
+  redact: (event: SessionEvent) => SessionEvent = event => event,
 ): { events: HistoryEntry[]; hasMore: boolean } {
   const page = paginate(events, beforeSeq, maxMessages ?? DEFAULT_MAX_MESSAGES)
   return {
     events: page.events.map((event) => {
       const view = viewFor(ctx, event, callId => backscanArgs(page.events, callId), scope)
-      return { event, ...view === undefined ? {} : { view } }
+      return { event: redact(event), ...view === undefined ? {} : { view } }
     }),
     hasMore: page.hasMore,
   }
@@ -1049,6 +1062,9 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     ?? DEFAULT_SESSION_LOG_COMPRESSION_LEVEL
   const coldBlankProbeMaxBytes = defaults.coldBlankProbeMaxBytes
     ?? DEFAULT_COLD_BLANK_PROBE_MAX_BYTES
+  /** Client-facing copy of a logged event; the log itself is never rewritten. */
+  const protectedSkillProviders: ReadonlySet<string> = new Set(defaults.redactSkillCatalogProviders ?? [])
+  const redactForClient = (event: SessionEvent): SessionEvent => redactEventForClient(event, protectedSkillProviders)
   /** The seed model each create/resume declares; re-read so it never goes stale. */
   const agentOptions = (): AgentOptions => {
     const { provider, model } = defaults.defaultModelSelection()
@@ -1555,6 +1571,36 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     }
   }
 
+  /**
+   * Ensure the project directory a new session runs in exists in the execution
+   * world its tools will see.
+   *
+   * A composed filesystem service owns that world, and a sandboxed backend's
+   * paths are not paths on the Host process filesystem: `/home/user/sci` inside
+   * an E2B sandbox either rejects a Host `mkdir` outright or creates a Host
+   * directory no tool can reach. The seam has no directory-creation method
+   * because whoever supplies a cwd creates it there (the workspace picker's
+   * `createDirectory`, a sandbox provider's own bootstrap), so a service-backed
+   * composition verifies the directory and refuses an absent one. Without the
+   * service the Host filesystem IS that world and the directory is created
+   * recursively, as the Host-only deployments have always done.
+   * @param cwd - the project directory the session is created with.
+   */
+  async function ensureProjectDirectory(cwd: string): Promise<void> {
+    const fs = ctx.get('fs')
+    try {
+      if (fs === undefined) {
+        await mkdir(cwd, { recursive: true })
+        return
+      }
+      const info = await fs.stat(await fs.resolve(cwd))
+      if (info === undefined) throw new Error('the filesystem backend has no such directory')
+      if (info.type !== 'directory') throw new Error(`the filesystem backend reports a ${info.type}, not a directory`)
+    } catch (error: unknown) {
+      throw new Error(`failed to ensure project directory "${cwd}": ${String(error)}`, { cause: error })
+    }
+  }
+
   /** Resolve one requested identity to a live agent, creating or resuming it once. */
   async function ensureSession(
     sessionId: SessionId,
@@ -1602,11 +1648,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })).agent
         }
 
-        try {
-          await mkdir(cwd, { recursive: true })
-        } catch (error: unknown) {
-          throw new Error(`failed to ensure project directory "${cwd}": ${String(error)}`, { cause: error })
-        }
+        await ensureProjectDirectory(cwd)
         const composition = await composeAgent(presetId)
         return (await ctx.agents.create({
           sessionId,
@@ -2163,7 +2205,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           // at N with a baseline folded to N+1.
           const scope = await presenterScopeFor(sessionId, sourceSession(source))
           const cut = historyCutOf(source, beforeSeq === undefined)
-          const page = historyPage(ctx, cut.events, beforeSeq, maxMessages, scope)
+          const page = historyPage(ctx, cut.events, beforeSeq, maxMessages, scope, redactForClient)
           return ok(request, {
             events: page.events,
             hasMore: page.hasMore,
@@ -2630,7 +2672,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             details: { childSessionId },
           })
         }
-        const page = historyPage(ctx, events, beforeSeq, maxMessages)
+        const page = historyPage(ctx, events, beforeSeq, maxMessages, undefined, redactForClient)
         return ok(request, { ...page, ...projections === undefined ? {} : { projections } })
       },
 
@@ -3388,7 +3430,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
               callId => openCalls.get(session.id)?.get(callId) ?? backscanArgs(session.events, callId),
               ctx.agents.get(session.id),
             )
-            queue.push(frame({ type: 'session/event', sessionId: session.id, event, ...view === undefined ? {} : { view } }))
+            queue.push(frame({ type: 'session/event', sessionId: session.id, event: redactForClient(event), ...view === undefined ? {} : { view } }))
           }),
           ctx.on('session/created', (session: Session) => {
             subscribeSession(queue, session)

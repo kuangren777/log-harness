@@ -33,6 +33,7 @@ A shipping web-tool deployment sets the provider backstop above the tool budget,
 | `timeoutMs` | `30_000` | Fetch timeout within Node's timer range — a resource backstop for direct `ctx.web.fetch()` callers, not the model-facing tool-call budget (that is `dsh-tool-call-timeout-policy`). |
 | `maxRedirects` | `5` | Maximum same-origin redirect hops (`0` follows none). |
 | `userAgent` | `deepseek-harness/…` | `User-Agent` header. |
+| `allowPrivateHosts` | `false` | Permit URLs whose host names the local machine or a private network (`localhost`, `*.localhost`, `*.internal`, loopback, RFC 1918, link-local, shared address space, and their IPv6 and IPv4-mapped forms). Off in every deployment — the model chooses the target and the harness shares loopback with its own services; on only for local development against a loopback server. The check is on the literal host before DNS, so a public name resolving to a private address is not caught. |
 
 The numeric limits are validated at plugin construction: every cap except `maxRedirects` must be a positive finite number, and `maxRedirects` must be a non-negative integer. An invalid value throws rather than silently constructing a provider with nonsensical limits.
 

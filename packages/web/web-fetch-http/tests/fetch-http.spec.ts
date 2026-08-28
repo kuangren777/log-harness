@@ -6,7 +6,7 @@ import WebRuntime from '@deepseek-ai/dsh-web'
 import { HttpFetchProvider, LOCAL_FETCH_PROVIDER_ID } from '@deepseek-ai/dsh-web-fetch-http'
 import type { HttpFetchLimits } from '@deepseek-ai/dsh-web-fetch-http'
 import * as fetchPlugin from '@deepseek-ai/dsh-web-fetch-http'
-import { classifyContentType, decoderForCharset, isSameOrigin, parseCharset, validateFetchUrl } from '../src/policy.ts'
+import { classifyContentType, decoderForCharset, isPrivateHost, isSameOrigin, parseCharset, validateFetchUrl } from '../src/policy.ts'
 
 const limits: HttpFetchLimits = {
   maxUrlLength: 2048,
@@ -15,6 +15,8 @@ const limits: HttpFetchLimits = {
   timeoutMs: 5_000,
   maxRedirects: 5,
   userAgent: 'test-agent/1.0',
+  // The suite's server listens on loopback, which the provider refuses in deployment.
+  allowPrivateHosts: true,
 }
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => void
@@ -47,6 +49,27 @@ describe('policy helpers', () => {
     expect(() => validateFetchUrl('not a url', 2048)).toThrow(expect.objectContaining({ code: 'WEB_INVALID_URL' }))
     expect(() => validateFetchUrl('https://user:pass@example.com', 2048)).toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
     expect(() => validateFetchUrl(`https://example.com/${'a'.repeat(3000)}`, 2048)).toThrow(expect.objectContaining({ code: 'WEB_INVALID_URL' }))
+  })
+
+  it('refuses local and private-network hosts unless explicitly allowed', () => {
+    const blocked = [
+      'http://localhost/', 'http://app.localhost/', 'http://vault.internal/',
+      'http://127.0.0.1:3081/healthz', 'http://127.1.2.3/', 'http://0.0.0.0/',
+      'http://10.0.0.5/', 'http://172.16.0.1/', 'http://172.31.255.254/', 'http://192.168.1.1/',
+      'http://169.254.169.254/latest/meta-data', 'http://100.64.0.1/',
+      'http://[::1]/', 'http://[::]/', 'http://[fc00::1]/', 'http://[fd12::1]/', 'http://[fe80::1]/',
+      'http://[::ffff:127.0.0.1]/', 'http://[::ffff:10.0.0.1]/',
+    ]
+    for (const url of blocked) {
+      expect(() => validateFetchUrl(url, 2048), url).toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
+      expect(validateFetchUrl(url, 2048, true).href, url).toBe(new URL(url).href)
+    }
+    for (const url of ['https://example.com/', 'http://172.15.0.1/', 'http://172.32.0.1/', 'http://100.63.0.1/', 'http://100.128.0.1/', 'http://[2001:db8::1]/', 'http://8.8.8.8/']) {
+      expect(validateFetchUrl(url, 2048).href, url).toBe(new URL(url).href)
+    }
+    expect(isPrivateHost('LOCALHOST.')).toBe(true)
+    expect(isPrivateHost('fe80::1%eth0')).toBe(true)
+    expect(isPrivateHost('example.com')).toBe(false)
   })
 
   it('classifies content types', () => {
@@ -371,7 +394,7 @@ describe('web-fetch-http plugin registration', () => {
   it('registers the provider into ctx.web (HMR-safe)', async () => {
     const ctx = new Context()
     await ctx.plugin(WebRuntime, { fetchProvider: LOCAL_FETCH_PROVIDER_ID })
-    const fiber = await ctx.plugin(fetchPlugin, {})
+    const fiber = await ctx.plugin(fetchPlugin, { allowPrivateHosts: true })
     await expect(ctx.web.fetch({ url: `${base}/` }))
       .resolves.toMatchObject({ statusCode: 200 })
     await fiber.dispose()
@@ -421,7 +444,7 @@ describe('web-fetch-http plugin registration', () => {
   it('accepts maxRedirects: 0 (follow no redirects) as valid config', async () => {
     const ctx = new Context()
     await ctx.plugin(WebRuntime, { fetchProvider: LOCAL_FETCH_PROVIDER_ID })
-    const fiber = await ctx.plugin(fetchPlugin, { maxRedirects: 0 })
+    const fiber = await ctx.plugin(fetchPlugin, { maxRedirects: 0, allowPrivateHosts: true })
     await expect(ctx.web.fetch({ url: `${base}/` }))
       .resolves.toMatchObject({ statusCode: 200 })
     await fiber.dispose()

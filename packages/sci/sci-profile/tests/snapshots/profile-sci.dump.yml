@@ -335,10 +335,13 @@
       - 5
       - 8
     argumentsPreviewChars: 500
+# == @deepseek-ai/dsh-base, patched by @deepseek-ai/dsh-sci
 - id: web
   name: '@deepseek-ai/dsh-web'
   config:
     searchProvider: deepseek-official
+    fetchProvider: http
+# == @deepseek-ai/dsh-base
 - id: web-search-deepseek
   name: '@deepseek-ai/dsh-web-search-deepseek'
   config:
@@ -412,8 +415,13 @@
 # == @deepseek-ai/dsh-web-app
 - id: plugin-inventory
   name: '@deepseek-ai/dsh-host-plugin-inventory'
+# == @deepseek-ai/dsh-web-app, patched by @deepseek-ai/dsh-sci
 - id: api-gateway
   name: '@deepseek-ai/dsh-host-apiproxy'
+  config:
+    redactSkillCatalogProviders:
+      - sci
+# == @deepseek-ai/dsh-web-app
 - id: cordis-host-runner
   name: '@deepseek-ai/dsh-cordis-host-runner'
 - id: web-startup
@@ -539,6 +547,8 @@
   name: '@deepseek-ai/dsh-host-directory-picker-e2b'
 - id: ui-directory-picker-browse
   name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
+- id: web-fetch-http
+  name: '@deepseek-ai/dsh-web-fetch-http'
 - id: sci-prompt
   name: '@deepseek-ai/dsh-sci-prompt'
 - id: sci-skills
