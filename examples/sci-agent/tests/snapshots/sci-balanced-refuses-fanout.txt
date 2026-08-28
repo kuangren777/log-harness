@@ -1,0 +1,21 @@
+isError: true
+---
+Error: workflow is refused: this session runs in Solo mode, which has no subagent orchestration. Do the work directly in this thread; if it genuinely needs a swarm, deliver what one pass covers and call suggest_tier_upgrade with one sentence on what the swarm would add.
+---
+sci events: [
+  {
+    "type": "sci/tier-resolved",
+    "data": {
+      "tier": "balanced",
+      "presetName": "sci-balanced"
+    }
+  },
+  {
+    "type": "sci/tool-denied",
+    "data": {
+      "toolName": "workflow",
+      "rule": "tier",
+      "reason": "workflow is refused: this session runs in Solo mode, which has no subagent orchestration. Do the work directly in this thread; if it genuinely needs a swarm, deliver what one pass covers and call suggest_tier_upgrade with one sentence on what the swarm would add."
+    }
+  }
+]

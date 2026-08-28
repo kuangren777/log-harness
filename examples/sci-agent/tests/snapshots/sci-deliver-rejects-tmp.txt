@@ -1,0 +1,13 @@
+isError: false
+---
+rejected tmp/figure.png: <root>/demo/tmp/figure.png is outside the delivery area; only workspace/ and a bundle's own .paper / .sciplot manifest can be delivered — copy it into workspace/ under a descriptive name and deliver the copy
+---
+sci events: [
+  {
+    "type": "sci/tier-resolved",
+    "data": {
+      "tier": "balanced",
+      "presetName": "sci-balanced"
+    }
+  }
+]

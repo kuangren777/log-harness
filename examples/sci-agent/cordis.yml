@@ -1,0 +1,173 @@
+# The science-research agent at the BALANCED tier, running entirely on this
+# machine. It is the `dsh --profile sci` composition minus the parts that are
+# facts about a deployment rather than about the science layer: the Dormice
+# sandbox is replaced by `fs-local` over `sandbox-local`, and the Typert RPC
+# surfaces (`sci.recall.*`, `sci.hosts.*`, `sci.tier.fork`) are absent because
+# nothing here serves a browser. Everything a model can actually reach — the
+# path gate, the authorization gate, delivery, skills, the tier guard — is the
+# same plugin the profile mounts.
+#
+# `DSH_SCI_PROJECT_ROOT` selects the project tree; unset, the agent works in the
+# process cwd. The snapshot suites point it at a temporary tree so a refusal is
+# recorded against a fixture rather than against whatever the repository holds.
+
+# User-settings document and credential store, as in every runnable example.
+- id: settings
+  name: '@deepseek-ai/dsh-settings-file'
+
+- id: credentials
+  name: '@deepseek-ai/dsh-credentials-local'
+
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek'
+  config:
+    thinking: enabled
+    reasoningEffort: max
+    models:
+      - id: deepseek-v4-pro
+        contextWindow: 128000
+
+# Managed child-process groups: the bash executor's plumbing, and the ripgrep
+# binary `glob`/`grep` spawn.
+- id: subprocess
+  name: '@deepseek-ai/dsh-subprocess-local'
+
+# The local confinement layer the profile keeps even with Dormice underneath.
+# Without Dormice it is the ONLY file-effect boundary, so the science gates and
+# this policy are enforcing different things over the same calls: `sci-workspace`
+# refuses by project role, `sandbox-policy` by write authority.
+- id: sandbox
+  name: '@deepseek-ai/dsh-sandbox-local'
+
+- id: sandbox-policy
+  name: '@deepseek-ai/dsh-sandbox-policy'
+  config:
+    mode: workspace-write
+    workspaceRoot: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+
+- id: bash-sandbox
+  name: '@deepseek-ai/dsh-bash-sandbox'
+  config:
+    timeoutMs: 60000
+
+# `sci-guard` answers `ask`; without an approval provider dsh denies instead,
+# which is a different transcript.
+- id: approval
+  name: '@deepseek-ai/dsh-user-approval'
+
+- id: fs-local
+  name: '@deepseek-ai/dsh-fs-local'
+  config:
+    cwd: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+
+# Loaded before the model-facing filesystem tools so writes and edits require an
+# observed file. It owns the single `fs/*-intent` slot, which is why every
+# science gate below sits on `tools/pre-execute` instead.
+- id: fs-observation-policy
+  name: '@deepseek-ai/dsh-fs-observation-policy'
+
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# The projection registry and the storage form the skill lifecycle table lives in.
+- id: session-projection
+  name: '@deepseek-ai/dsh-session-projection'
+
+- id: storage
+  name: '@deepseek-ai/dsh-storage'
+
+- id: storage-json
+  name: '@deepseek-ai/dsh-storage-json'
+  config:
+    root: ./.storages
+
+- id: storage-domain
+  name: '@deepseek-ai/dsh-storage-domain'
+  config:
+    backend: json
+
+- id: persistence
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: ./.sessions
+    compression: none
+
+# The example spine: session store, tool registry, prompt assembly, the Agent
+# registry, `bash`, and the agent loop, with one pre-created `main` agent.
+- id: agent-spine
+  name: '@deepseek-ai/dsh-agent-spine-demo'
+  config:
+    agents:
+      - id: main
+        provider: deepseek-official
+        model: deepseek-v4-pro
+        cwd: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+    workspaceContext:
+      maxBytes: 65536
+    persona: |
+      You are sci-agent, a research assistant powered by the {{model}} model.
+
+      Work in one pass. Deliver what you can honestly finish.
+
+# ── the science layer ───────────────────────────────────────────────────────
+
+# Deployment-wide chapters and standing reminders.
+- id: sci-prompt
+  name: '@deepseek-ai/dsh-sci-prompt'
+
+# The skill catalog. `syncOnStart` is off here: the bundled tree is already on
+# this machine, and copying it through the filesystem seam at every boot would
+# make a keyless snapshot wait on fifteen directory walks.
+- id: sci-skills
+  name: '@deepseek-ai/dsh-sci-skills'
+  config:
+    # Deployment reads bodies from the loopback vault; this local example reads a
+    # small fixture tree instead (DSH_SCI_SKILLS_ROOT, set by the snapshot harness).
+    source:
+      kind: directory
+      root: !!js process.env.DSH_SCI_SKILLS_ROOT ?? process.cwd()
+    sandboxRoot: !!js (process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()) + '/skills'
+    syncOnStart: false
+
+# Path classification, manifest field ownership, and the recursive-delete
+# screen, all on `tools/pre-execute`.
+- id: sci-workspace
+  name: '@deepseek-ai/dsh-sci-workspace'
+  config:
+    projectRoot: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+
+- id: sci-guard
+  name: '@deepseek-ai/dsh-sci-guard'
+  config:
+    projectRoot: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+
+- id: sci-deliver
+  name: '@deepseek-ai/dsh-sci-deliver'
+  config:
+    projectRoot: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+    spoolDir: !!js (process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()) + '/.sci/spool'
+    snapshotDir: !!js (process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()) + '/.sci/snapshots'
+
+# The balanced tier: the section plus the deny-only guard over `fanoutTools`.
+# The composition mounts none of those tools, which is what the plugin verifies
+# against the catalog at load.
+- id: sci-tier
+  name: '@deepseek-ai/dsh-sci-tier'
+  config:
+    tier: balanced
+    fanoutTools:
+      - workflow
+      - subagent
+      - subagent_fork
+      - subagent_codex
+      - subagent_claude_code
+      - ralph
+      - declare_research_plan
+
+- id: sci-tier-suggest
+  name: '@deepseek-ai/dsh-sci-tier/suggest'

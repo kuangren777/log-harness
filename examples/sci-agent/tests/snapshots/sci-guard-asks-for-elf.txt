@@ -1,0 +1,39 @@
+isError: true
+---
+Error: tool "bash" requires approval, but no approval channel is available
+---
+sci events: [
+  {
+    "type": "sci/tier-resolved",
+    "data": {
+      "tier": "balanced",
+      "presetName": "sci-balanced"
+    }
+  },
+  {
+    "type": "approval/asked",
+    "data": {
+      "id": "<id>",
+      "toolName": "bash",
+      "callId": "bash-call",
+      "reason": "Running <root>/demo/tmp/solver executes a file that appeared inside this session rather than one the image ships, so nothing observed so far establishes what it does. It runs as the sandbox user, with that user's access to the whole project tree, the network, and every credential readable from it. Anything it writes, sends, or destroys before it is stopped cannot be taken back from here. A README's description of a binary is not evidence of what the binary does: inspect it with `file`, `readelf`, `strings`, and `sha256sum`, and report any discrepancy before this is approved."
+    }
+  },
+  {
+    "type": "approval/decided",
+    "data": {
+      "id": "<id>",
+      "outcome": "unavailable"
+    }
+  },
+  {
+    "type": "sci/authorized",
+    "data": {
+      "callId": "bash-call",
+      "category": "execUnsigned",
+      "command": "./tmp/solver --run",
+      "sha256": "cc9d6fac1f314ccbd3003c6a0e788a426958609b1312422d8fed40a08ee0bb51",
+      "decision": "denied"
+    }
+  }
+]

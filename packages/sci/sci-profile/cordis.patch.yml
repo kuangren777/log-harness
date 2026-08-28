@@ -1,0 +1,215 @@
+# The dsh-sci bundle patch: the science-research surface over dsh-base plus
+# dsh-web-app. The profile's bundle list is
+# ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-sci'],
+# so this layer is applied last and addresses rows from BOTH earlier layers by
+# id, with the last write winning per row.
+#
+# dsh-web-app is a layer rather than an alternative: `storageDomain`,
+# `session-query-sqlite`, and the browser roster live there, and the audit
+# projection, the memory index, and the tier-upgrade button all need them. It
+# also already moved the whole agent plane behind agent presets, which is what
+# makes the two rosters below the only per-agent composition this profile has.
+#
+# A patch replaces the targeted row's whole `config` rather than merging into
+# it, so each row below restates every key it owns.
+#
+# What lives here versus in a preset follows the criterion the web-app layer
+# states: a Service other rows resolve, a registry keyed by session or agent,
+# and any row that INJECTS a service belong to the host plane; the model-facing
+# tools, the tier section, and the delivery tool are what one agent contributes,
+# and those sit in `config/agent-presets/`.
+
+# ── the sandbox this profile actually runs in ───────────────────────────────
+
+# The Dormice daemon is the `ctx.e2b` provider, and the filesystem and
+# subprocess seams move into that sandbox with it. `sandbox-local` (the `sandbox`
+# row) deliberately STAYS: a second, local confinement layer outside the gVisor
+# boundary costs nothing and keeps the permission stack that every surface reads
+# unchanged.
+#
+# `userKey` has no default because it identifies WHOSE sandbox is acquired; a
+# wrong value would hand one researcher another's working tree. A deployment
+# that runs without Dormice removes these three rows and un-disables the two
+# local providers below, which is what `examples/sci-agent/` does.
+- id: fs-sandbox
+  disabled: true
+
+- id: subprocess
+  disabled: true
+
+# The workspace picker must browse the sandbox, not this container: with fs and
+# subprocess in Dormice, a host path the `-auto` backends offer is a session cwd
+# every command fails on. A patch cannot rewrite a row's `name`, and `-auto` also
+# mounts the client surface, so this is disable + insert of BOTH faces — the same
+# pair as apps/web/tests/pin-browse-picker.overlay.yml.
+- id: directory-picker
+  disabled: true
+
+# Only the deployment's own DeepSeek relay serves models here: the multi-vendor
+# provider table (anthropic, bedrock, …) would let a tenant point sessions at a
+# third-party endpoint the credit meter cannot price. `llm-deepseek` stays, keyed
+# from the process environment.
+- id: llm-pi-ai
+  disabled: true
+
+- insert:
+    - id: dormice
+      name: '@deepseek-ai/dsh-dormice'
+      config:
+        endpoint: !!js process.env.DORMICE_ENDPOINT ?? 'http://127.0.0.1:3676'
+        userKey: !!js process.env.DSH_SCI_USER_KEY
+        cwd: /home/user/sci
+
+    - id: subprocess-e2b
+      name: '@deepseek-ai/dsh-subprocess-e2b'
+
+    - id: fs-e2b
+      name: '@deepseek-ai/dsh-fs-e2b'
+
+    - id: directory-picker-e2b
+      name: '@deepseek-ai/dsh-host-directory-picker-e2b'
+
+    - id: ui-directory-picker-browse
+      name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
+
+# ── persistence the science layer reads back ───────────────────────────────
+
+# The audit projection and the memory index are COLD readers: `sci audit rebuild`
+# and `sci.recall.index` replay whole logs rather than folding the live stream,
+# so the ephemeral in-memory index the Web layer configures would answer for
+# sessions from this process only. A durable file under the Harness home, opened
+# at the first search, keeps Node 22 startup as quiet as the Web default while
+# making yesterday's sessions readable.
+- id: session-query-sqlite
+  config:
+    path: !!js dshHomePath('sci/session-index.sqlite')
+    openAt: first-search
+
+# ── the deployment persona ─────────────────────────────────────────────────
+
+# Both presets restate their own persona, so this value is what a session
+# composed WITHOUT a preset (a cold transcript read, a maintenance boot) sees.
+- id: system-prompt
+  config:
+    persona: >-
+      You are a research agent powered by the {{model}} model. Your project root is {{cwd}}.
+
+# ── skills: one provider, and only one ─────────────────────────────────────
+
+# `skill-filesystem` stays off. `sci-skills` is the sole provider for this
+# profile because it owns the lifecycle projection: a skill it has retired still
+# exists on disk, and a second provider scanning the same tree would list the
+# retired skill back into the catalog.
+- id: skill-filesystem
+  disabled: true
+
+# ── the science layer's host-plane rows ────────────────────────────────────
+
+- insert:
+    # Deployment-wide chapters and standing reminders. Host-plane rather than
+    # per-preset: the chapters are identical at both tiers, and one registration
+    # per process is one assembly rather than two competing ones.
+    - id: sci-prompt
+      name: '@deepseek-ai/dsh-sci-prompt'
+
+    # Skill registry provider plus the sandbox sync. `sandboxRoot` is required:
+    # the home layout is a property of the image, and a wrong guess publishes
+    # the tree where the model cannot open it.
+    - id: sci-skills
+      name: '@deepseek-ai/dsh-sci-skills'
+      config:
+        # Skill bodies are a platform secret served by the loopback skill vault,
+        # never bundled in this image. The VM presents its per-VM bearer from
+        # SCI_VAULT_TOKEN (injected by sci-gate at container create).
+        source:
+          kind: http
+          url: http://127.0.0.1:3081
+        sandboxRoot: /home/user/sci/skills
+        staleAfterDays: 90
+        syncOnStart: true
+
+    # The path-classification gate on `tools/pre-execute`. It reads
+    # `exec.args` and never touches the single `fs/*-intent` slot, which
+    # `fs-observation-policy` (a base row that stays mounted) already owns.
+    - id: sci-workspace
+      name: '@deepseek-ai/dsh-sci-workspace'
+      config:
+        projectRoot: /home/user/sci/projects
+
+    # The irreversible-action gate. It answers `ask`, which needs the base
+    # `approval` row to be mounted — it is, and dsh denies rather than asks
+    # where it is not.
+    - id: sci-guard
+      name: '@deepseek-ai/dsh-sci-guard'
+      config:
+        projectRoot: /home/user/sci/projects
+
+    # USD credit metering on `llm/stream`: the balance check that refuses a spent
+    # tenant before the adapter is reached, and the official-price charge posted
+    # to the gate afterwards. `vmToken` has no default because it names WHOSE
+    # ledger every charge lands in; the VM orchestrator bakes
+    # `SCI_GATE_VM_TOKEN` into the container's Env, and a deployment with no gate
+    # removes this row rather than blanking the token.
+    - id: sci-credit
+      name: '@deepseek-ai/dsh-sci-credit'
+      config:
+        gateUrl: !!js process.env.SCI_GATE_URL ?? 'http://127.0.0.1:3079'
+        vmToken: !!js process.env.SCI_GATE_VM_TOKEN
+        spoolPath: !!js dshHomePath('sci/credit-spool.jsonl')
+
+    # Memory nodes, the recall RPC, and the timing metric. A Typert Remote
+    # service: it resolves on the host and the gateway serves its namespace to
+    # the browser, so a per-session realm would answer `service-unavailable`.
+    - id: sci-memory
+      name: '@deepseek-ai/dsh-sci-memory'
+      config:
+        memoryDir: /home/user/sci/memory
+
+    # The six-table audit projection and `sci audit rebuild`.
+    - id: sci-audit
+      name: '@deepseek-ai/dsh-sci-audit'
+
+    # The managed `~/.ssh/config` block and its RPC. `identityDir` is created
+    # `0700 user:user` by the image, which is what keeps a written key `0600`:
+    # the filesystem seam has no chmod.
+    - id: sci-remote-hosts
+      name: '@deepseek-ai/dsh-sci-remote-hosts'
+      config:
+        sshConfigPath: /home/user/.ssh/config
+        identityDir: /home/user/.ssh/sci-keys
+
+    # `sci.tier.fork`, the endpoint the tier-upgrade button calls. Host-plane
+    # for the same reason as the subagent registry: the package entry is a
+    # function plugin BOTH presets mount, and a service published from there
+    # would collide the moment the second preset mounted it.
+    - id: sci-tier-fork
+      name: '@deepseek-ai/dsh-sci-tier/fork'
+
+# ── the preset roster ──────────────────────────────────────────────────────
+
+# `default` is Solo (单体): a swarm is compute the user chooses rather than
+# receives.
+#
+# `roots` names THIS bundle's own preset tree and nothing else, so the roster
+# offers the two science presets and none of the launcher's four general-purpose
+# ones — a `dsh` preset composes tools this profile disabled and a sandbox it
+# does not run in. The path is resolved by the launcher that loaded this layer
+# (`dshBundlePath`, provided by `apps/cli/src/profile-boot.ts` from the
+# already-resolved bundle directory), because only a resolver that can find the
+# bundle package knows where its files are; `@deepseek-ai/dsh-sci-profile`
+# exports the same path as `BUNDLED_PRESET_ROOT` for in-process consumers.
+# Declaring roots is also what keeps the launcher's shipped root out: it appends
+# its own only for a composition that declares none
+# (`resolvePresetRootPatch`).
+#
+# `includeUserRoot` stays at its default, so `$DSH_HOME/.agent-presets` is still
+# scanned and a deployment can add presets. It is scanned AFTER this root, and
+# discovery is first-root-wins per id, so a hand-seeded copy of `sci-balanced`
+# or `sci-cluster` there is shadowed by the shipped one and its edits do
+# nothing — delete such copies rather than maintaining them.
+- id: agent-presets
+  config:
+    default: sci-balanced
+    roots:
+      - path: !!js dshBundlePath('@deepseek-ai/dsh-sci-profile', 'config/agent-presets')
+        trust: system

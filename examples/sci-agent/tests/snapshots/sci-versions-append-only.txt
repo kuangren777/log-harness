@@ -1,0 +1,22 @@
+isError: true
+---
+Error: refusing to write "<root>/demo/sciplots/effect-by-group/effect-by-group.sciplot": it changes history — the render script and the user maintain them, and this call cannot see their side of the file. Describe the change in chat instead.
+---
+sci events: [
+  {
+    "type": "sci/tier-resolved",
+    "data": {
+      "tier": "balanced",
+      "presetName": "sci-balanced"
+    }
+  },
+  {
+    "type": "sci/fs-denied",
+    "data": {
+      "op": "write",
+      "path": "<root>/demo/sciplots/effect-by-group/effect-by-group.sciplot",
+      "rule": "manifest-owned-field",
+      "reason": "refusing to write \"<root>/demo/sciplots/effect-by-group/effect-by-group.sciplot\": it changes history — the render script and the user maintain them, and this call cannot see their side of the file. Describe the change in chat instead."
+    }
+  }
+]

@@ -1,0 +1,7 @@
+{
+  "name": "sci-agent-example",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Runnable demo: the science-research agent layer on local filesystem and sandbox providers, without Dormice"
+}

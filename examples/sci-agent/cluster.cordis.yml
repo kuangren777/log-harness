@@ -1,0 +1,178 @@
+# The science-research agent at the CLUSTER tier: `cordis.yml` with the tier
+# row flipped, `declare_research_plan` mounted, and the in-process delegation
+# stack behind it. Everything else is identical, so a diff against `cordis.yml`
+# is exactly what the second preset adds.
+#
+# The G1 latch is the point of this file: `workflow` and `subagent` are present
+# in the catalog and still refused until a plan is declared, and one declaration
+# is spent by one fan-out.
+
+- id: settings
+  name: '@deepseek-ai/dsh-settings-file'
+
+- id: credentials
+  name: '@deepseek-ai/dsh-credentials-local'
+
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek'
+  config:
+    thinking: enabled
+    reasoningEffort: max
+    models:
+      - id: deepseek-v4-pro
+        contextWindow: 128000
+
+- id: subprocess
+  name: '@deepseek-ai/dsh-subprocess-local'
+
+- id: sandbox
+  name: '@deepseek-ai/dsh-sandbox-local'
+
+- id: sandbox-policy
+  name: '@deepseek-ai/dsh-sandbox-policy'
+  config:
+    mode: workspace-write
+    workspaceRoot: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+
+- id: bash-sandbox
+  name: '@deepseek-ai/dsh-bash-sandbox'
+  config:
+    timeoutMs: 60000
+
+- id: approval
+  name: '@deepseek-ai/dsh-user-approval'
+
+- id: fs-local
+  name: '@deepseek-ai/dsh-fs-local'
+  config:
+    cwd: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+
+- id: fs-observation-policy
+  name: '@deepseek-ai/dsh-fs-observation-policy'
+
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+- id: session-projection
+  name: '@deepseek-ai/dsh-session-projection'
+
+- id: storage
+  name: '@deepseek-ai/dsh-storage'
+
+- id: storage-json
+  name: '@deepseek-ai/dsh-storage-json'
+  config:
+    root: ./.storages
+
+- id: storage-domain
+  name: '@deepseek-ai/dsh-storage-domain'
+  config:
+    backend: json
+
+- id: persistence
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: ./.sessions
+    compression: none
+
+- id: agent-spine
+  name: '@deepseek-ai/dsh-agent-spine-demo'
+  config:
+    agents:
+      - id: main
+        provider: deepseek-official
+        model: deepseek-v4-pro
+        cwd: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+    workspaceContext:
+      maxBytes: 65536
+    persona: |
+      You are sci-agent, a research assistant powered by the {{model}} model.
+
+      Declare a plan before you fan out. One declaration authorizes one fan-out.
+
+# ── delegation ──────────────────────────────────────────────────────────────
+
+# Fresh-child `spawn` through an in-process backend, plus the worker-thread
+# workflow engine. Both fan-out tools are what the G1 latch gates.
+- id: subagent
+  name: '@deepseek-ai/dsh-subagent'
+
+- id: subagent-spawn-in-process
+  name: '@deepseek-ai/dsh-subagent-spawn-in-process'
+  config:
+    providerName: spawn
+
+- id: tool-subagent-control
+  name: '@deepseek-ai/dsh-tool-subagent-control'
+
+- id: tool-subagent-report
+  name: '@deepseek-ai/dsh-tool-subagent-report'
+
+- id: tool-subagent
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent
+    backgroundMode: continuable
+    maxDepth: 1
+
+- id: workflow-worker-thread
+  name: '@deepseek-ai/dsh-workflow-worker-thread'
+  config:
+    provider: spawn
+
+- id: tool-workflow
+  name: '@deepseek-ai/dsh-tool-workflow'
+
+# ── the science layer ───────────────────────────────────────────────────────
+
+- id: sci-prompt
+  name: '@deepseek-ai/dsh-sci-prompt'
+
+- id: sci-skills
+  name: '@deepseek-ai/dsh-sci-skills'
+  config:
+    # Deployment reads bodies from the loopback vault; this local example reads a
+    # small fixture tree instead (DSH_SCI_SKILLS_ROOT, set by the snapshot harness).
+    source:
+      kind: directory
+      root: !!js process.env.DSH_SCI_SKILLS_ROOT ?? process.cwd()
+    sandboxRoot: !!js (process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()) + '/skills'
+    syncOnStart: false
+
+- id: sci-workspace
+  name: '@deepseek-ai/dsh-sci-workspace'
+  config:
+    projectRoot: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+
+- id: sci-guard
+  name: '@deepseek-ai/dsh-sci-guard'
+  config:
+    projectRoot: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+
+- id: sci-deliver
+  name: '@deepseek-ai/dsh-sci-deliver'
+  config:
+    projectRoot: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+    spoolDir: !!js (process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()) + '/.sci/spool'
+    snapshotDir: !!js (process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()) + '/.sci/snapshots'
+
+- id: sci-plan
+  name: '@deepseek-ai/dsh-sci-plan'
+
+- id: sci-tier
+  name: '@deepseek-ai/dsh-sci-tier'
+  config:
+    tier: cluster
+    fanoutTools:
+      - workflow
+      - subagent
+      - subagent_fork
+      - subagent_codex
+      - subagent_claude_code
+      - ralph

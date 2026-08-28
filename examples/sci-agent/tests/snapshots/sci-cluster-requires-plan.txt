@@ -1,0 +1,21 @@
+isError: true
+---
+Error: workflow is refused: declare_research_plan has not been called in this session. Declare the swarm first — name each parallel line of work and what it produces — then call workflow again.
+---
+sci events: [
+  {
+    "type": "sci/tier-resolved",
+    "data": {
+      "tier": "cluster",
+      "presetName": "sci-cluster"
+    }
+  },
+  {
+    "type": "sci/tool-denied",
+    "data": {
+      "toolName": "workflow",
+      "rule": "plan",
+      "reason": "workflow is refused: declare_research_plan has not been called in this session. Declare the swarm first — name each parallel line of work and what it produces — then call workflow again."
+    }
+  }
+]
