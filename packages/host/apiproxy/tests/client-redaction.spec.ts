@@ -64,6 +64,17 @@ describe('redactEventForClient', () => {
     expect(readable(event).source.entries[0]!.description).toContain('Author a research paper bundle')
   })
 
+  it('copies non-text content blocks through unchanged', () => {
+    const base = catalogEvent()
+    const image = { type: 'image', source: { kind: 'base64', mediaType: 'image/png', data: 'AA==' } }
+    const data = base.data as unknown as { content: unknown[] }
+    const event = { ...base, data: { ...data, content: [...data.content, image] } } as unknown as SessionEvent
+    const redacted = redactEventForClient(event, new Set(['sci']))
+    const blocks = (redacted.data as unknown as { content: unknown[] }).content
+    expect(blocks).toHaveLength(2)
+    expect(blocks[1]).toBe(image)
+  })
+
   it('returns the same instance when nothing is protected or nothing matches', () => {
     const event = catalogEvent()
     expect(redactEventForClient(event, new Set())).toBe(event)

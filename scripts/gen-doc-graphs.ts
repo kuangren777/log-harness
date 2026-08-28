@@ -130,6 +130,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Creates a cluster-tier session seeded from the balanced session it replaces, rather than forking its conversation.',
   },
   {
+    key: 'referencedText',
+    pkg: 'referenced-text',
+    title: 'Content-addressed referenced text',
+    mode: 'core',
+    consumers: ['sci-skills', 'llm-deepseek', 'tool-cordis'],
+    note: 'Session logs carry a store id and digest instead of the body; the model request path resolves the body from the registered store, so protected text never lands in a log or a client frame.',
+  },
+  {
     key: 'attachments',
     pkg: 'attachment',
     title: 'Durable binary attachment storage',

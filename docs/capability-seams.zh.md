@@ -18,6 +18,11 @@ flowchart LR
   svc_sciRemoteHosts["ctx.sciRemoteHosts<br/>Science-research managed SSH hosts"]
   pkg_sci_tier["sci-tier"]
   svc_sciTierFork["ctx.sciTierFork<br/>Science-research tier upgrade"]
+  pkg_referenced_text["referenced-text"]
+  svc_referencedText["ctx.referencedText<br/>Content-addressed referenced text"]
+  pkg_sci_skills["sci-skills"]
+  pkg_llm_deepseek["llm-deepseek"]
+  pkg_tool_cordis["tool-cordis"]
   pkg_attachment["attachment"]
   svc_attachments["ctx.attachments<br/>Durable binary attachment storage"]
   pkg_attachment_local["attachment-local"]
@@ -25,7 +30,6 @@ flowchart LR
   pkg_llm_pi_ai["llm-pi-ai"]
   pkg_llm["llm"]
   svc_llm["ctx.llm<br/>LLM adapter registry"]
-  pkg_llm_deepseek["llm-deepseek"]
   pkg_llm_replay["llm-replay"]
   pkg_agent_loop["agent-loop"]
   pkg_compaction_basic["compaction-basic"]
@@ -95,7 +99,6 @@ flowchart LR
   pkg_tool_web["tool-web"]
   svc_tools["ctx.tools<br/>Tool registry and guarded execution pipeline"]
   pkg_tool_ask_user["tool-ask-user"]
-  pkg_tool_cordis["tool-cordis"]
   pkg_tool_skill["tool-skill"]
   pkg_tool_subagent["tool-subagent"]
   pkg_tool_todo["tool-todo"]
@@ -263,6 +266,7 @@ flowchart LR
   pkg_permission_presets --> svc_permissionPresets
   pkg_plan_mode --> svc_planMode
   pkg_pwsh_local --> svc_shell
+  pkg_referenced_text --> svc_referencedText
   pkg_sandbox --> svc_sandbox
   pkg_sandbox_local --> svc_sandbox
   pkg_sandbox_policy --> svc_sandboxPolicy
@@ -359,6 +363,9 @@ flowchart LR
   svc_llm --> pkg_agent_loop
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
+  svc_referencedText --> pkg_llm_deepseek
+  svc_referencedText --> pkg_sci_skills
+  svc_referencedText --> pkg_tool_cordis
   svc_sandbox --> pkg_bash_sandbox
   svc_sandbox --> pkg_terminal_bash
   svc_sandboxPolicy --> pkg_bash_sandbox
@@ -450,6 +457,7 @@ flowchart LR
 | `ctx.sciMemory` | `core` | [`sci-memory`](../packages/sci/sci-memory) | - | [`sci-profile`](../packages/sci/sci-profile) | - | 观察已接受的记忆目录写入，回填来源会话，并基于投影后的日志提供 recall。 |
 | `ctx.sciRemoteHosts` | `core` | [`sci-remote-hosts`](../packages/sci/sci-remote-hosts) | - | [`sci-profile`](../packages/sci/sci-profile) | - | 拥有沙箱 ssh config 中一段有界的托管块；块外字节保持不变，私钥留在凭据 seam 内。 |
 | `ctx.sciTierFork` | `core` | [`sci-tier`](../packages/sci/sci-tier) | - | [`sci-profile`](../packages/sci/sci-profile) | - | 创建一个以其所替换的均衡档位会话为种子的集群档位会话，而非 fork 该会话的对话。 |
+| `ctx.referencedText` | `core` | [`referenced-text`](../packages/attachment/referenced-text) | - | [`sci-skills`](../packages/sci/sci-skills), [`llm-deepseek`](../packages/llm/llm-deepseek), [`tool-cordis`](../packages/extensions/tool-cordis) | - | 会话日志携带的是存储 id 和摘要而非正文；模型请求路径从已注册的存储中解析正文，因此受保护文本永远不会落入日志或客户端帧中。 |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | `host-runtime`, [`llm-pi-ai`](../packages/llm/llm-pi-ai) | - | 宿主会在会话事件之前提交已接受的图片；提供方适配器将已授权的持久引用解析为提供方原生内容。 |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | 适配器注册提供方实现；agent loop（智能体循环）与压缩功能调用提供方无关的流服务。 |
 | `ctx.tokenMeter` | `core` | [`token-meter`](../packages/llm/token-meter) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | 拥有按会话隔离的回放折叠区；压力消费方共享不可变且带修订版本的测量结果。 |

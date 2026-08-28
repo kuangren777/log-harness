@@ -172,6 +172,11 @@ interface SkillDefinition extends SkillSummary {
   readonly path?: string
   /** Parsed optional metadata object from frontmatter. */
   readonly metadata?: Readonly<Record<string, unknown>>
+  /**
+   * Content-addressed reference to `content`; when present, model-facing
+   * consumers log the reference and let the model request path resolve the body.
+   */
+  readonly reference?: ReferencedTextRef
 }
 ```
 

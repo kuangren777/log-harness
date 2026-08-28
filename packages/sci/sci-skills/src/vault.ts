@@ -125,6 +125,12 @@ export class DirectoryVaultSource implements SkillVaultSource {
     return (await this.load()).entries
   }
 
+  /**
+   * Read one skill body from the loaded tree.
+   * @param sha256Digest - hex SHA-256 of the body, as listed in the catalog.
+   * @returns the body text.
+   * @throws {Error} when no loaded body carries that digest.
+   */
   async object(sha256Digest: string): Promise<string> {
     const body = (await this.load()).bodies.get(sha256Digest)
     if (body === undefined) throw new Error(`sci-skills: no skill body with digest ${sha256Digest}`)
@@ -177,6 +183,12 @@ export class HttpVaultSource implements SkillVaultSource {
     return (JSON.parse(raw) as { skills: readonly SkillCatalogEntry[] }).skills
   }
 
+  /**
+   * Fetch one skill body from the vault by content address.
+   * @param sha256Digest - hex SHA-256 of the body, as listed in the catalog.
+   * @param signal - aborts the request.
+   * @returns the body text.
+   */
   async object(sha256Digest: string, signal?: AbortSignal): Promise<string> {
     return await this.get(`/v1/objects/${sha256Digest}`, signal)
   }

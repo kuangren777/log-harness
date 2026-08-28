@@ -46,10 +46,20 @@ External packages that a workspace package resolves at runtime. The tier covers 
 | [`@opentelemetry/otlp-exporter-base`](https://github.com/open-telemetry/opentelemetry-js) | Apache-2.0 |
 | [`@opentelemetry/resources`](https://github.com/open-telemetry/opentelemetry-js) | Apache-2.0 |
 | [`@opentelemetry/sdk-logs`](https://github.com/open-telemetry/opentelemetry-js) | Apache-2.0 |
+| [`@puppeteer/browsers`](https://github.com/puppeteer/puppeteer/tree/main/packages/browsers) | Apache-2.0 |
 | [`@shikijs/langs`](https://github.com/shikijs/shiki) | MIT |
 | [`@standard-schema/spec`](https://github.com/standard-schema/standard-schema) | MIT |
 | [`@tanstack/react-virtual`](https://github.com/TanStack/virtual) | MIT |
 | [`@types/mdast`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
+| [`@univer-cli/api-reference`](https://github.com/dream-num/univer-cli) | All rights reserved (no license declared) |
+| [`@univer-cli/resource-library`](https://github.com/dream-num/univer-cli) | All rights reserved (no license declared) |
+| [`@univer-cli/svg-facade`](https://github.com/dream-num/univer-cli) | All rights reserved (no license declared) |
+| [`@univer-cli/unit-layout-lint`](https://github.com/dream-num/univer-cli) | All rights reserved (no license declared) |
+| [`@univer-cli/unit-screenshot`](https://github.com/dream-num/univer-cli) | All rights reserved (no license declared) |
+| [`@univer-cli/univer-render-runtime`](https://github.com/dream-num/univer-cli) | All rights reserved (no license declared) |
+| [`@univerjs-pro/cli-assets`](https://github.com/dream-num/univer-cli) | All rights reserved (no license declared) |
+| [`@univerjs-pro/engine-formula-rust-binding`](https://github.com/dream-num/univer) | All rights reserved (no license declared) |
+| [`@univerjs-pro/exchange-node-binding`](https://github.com/dream-num/univer) | All rights reserved (no license declared) |
 | [`@vscode/ripgrep`](https://github.com/microsoft/vscode-ripgrep) | MIT |
 | [`anser`](https://github.com/IonicaBizau/anser) | MIT |
 | [`chokidar`](https://github.com/paulmillr/chokidar) | MIT |
@@ -63,6 +73,7 @@ External packages that a workspace package resolves at runtime. The tier covers 
 | [`js-yaml`](https://github.com/nodeca/js-yaml) | MIT |
 | [`katex`](https://github.com/KaTeX/KaTeX) | MIT |
 | [`koffi`](https://github.com/Koromix/koffi) | MIT |
+| [`libsql`](https://github.com/tursodatabase/libsql-js) | MIT |
 | [`mdast-util-from-markdown`](https://github.com/syntax-tree/mdast-util-from-markdown) | MIT |
 | [`mdast-util-gfm`](https://github.com/syntax-tree/mdast-util-gfm) | MIT |
 | [`mdast-util-math`](https://github.com/syntax-tree/mdast-util-math) | MIT |
@@ -79,6 +90,7 @@ External packages that a workspace package resolves at runtime. The tier covers 
 | [`node-pty`](https://github.com/microsoft/node-pty) | MIT |
 | [`open`](https://github.com/sindresorhus/open) | MIT |
 | [`picomatch`](https://github.com/micromatch/picomatch) | MIT |
+| [`puppeteer-core`](https://github.com/puppeteer/puppeteer/tree/main/packages/puppeteer-core) | Apache-2.0 |
 | [`react`](https://github.com/facebook/react) | MIT |
 | [`react-dom`](https://github.com/facebook/react) | MIT |
 | [`sharp`](https://github.com/lovell/sharp) | Apache-2.0 |
@@ -137,6 +149,7 @@ External packages **directly declared** only by repository tooling, test infrast
 | [`@types/spdx-expression-parse`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/turndown`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/ws`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
+| [`@univerjs/core`](https://github.com/dream-num/univer) | Apache-2.0 |
 | [`@vitejs/plugin-react`](https://github.com/vitejs/vite-plugin-react) | MIT |
 | [`@vitest/coverage-v8`](https://github.com/vitest-dev/vitest) | MIT |
 | [`@yarnpkg/cli-dist`](https://github.com/yarnpkg/berry) | BSD-2-Clause |
