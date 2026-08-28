@@ -1,0 +1,38 @@
+/* Office document frame: a one-line collaboration status over the Viewer. */
+
+.root {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.connected,
+.readonly {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.connected {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.readonly {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.frame {
+  flex: 1 1 auto;
+  min-height: 240px;
+  border: none;
+  background: var(--dsw-alias-bg-base);
+}
+
+.note {
+  padding: 12px 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 22px;
+}

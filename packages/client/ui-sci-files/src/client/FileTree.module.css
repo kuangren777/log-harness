@@ -1,0 +1,92 @@
+/* Project tree: one indented row per entry, scrolling inside the details
+   column's upper pane. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 4px 0;
+  font-size: 13px;
+  line-height: 22px;
+}
+
+.seat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding-block: 2px;
+  padding-inline-end: 8px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.rowCurrent {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* An entry that is neither a directory to open nor a file to preview. */
+.rowInert {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.rowInert:hover {
+  background: none;
+}
+
+.chevron {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 120ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.icon {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Read-only archive marker on a versions/ directory. */
+.tag {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.note {
+  padding: 2px 8px 2px 26px;
+  color: var(--dsw-alias-label-tertiary);
+}

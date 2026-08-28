@@ -1,0 +1,49 @@
+/* Preview pane: the selected file's body, scrolling inside the details
+   column's lower pane. */
+
+.body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px;
+}
+
+.prose {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 22px;
+}
+
+.meta {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.image {
+  max-width: 100%;
+  /* The pane owns the height; a tall figure scrolls rather than squashing. */
+  height: auto;
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.pdf {
+  flex: 1 1 auto;
+  min-height: 320px;
+  border: none;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.note {
+  padding: 12px 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 22px;
+}

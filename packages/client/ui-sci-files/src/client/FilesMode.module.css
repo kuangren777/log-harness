@@ -1,0 +1,25 @@
+/* Files mode: the tree over the preview. The details column is narrow, so
+   the split is vertical and each half scrolls on its own. */
+
+.root {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tree {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 40%;
+  overflow: auto;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.preview {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
