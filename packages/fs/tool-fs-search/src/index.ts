@@ -1,8 +1,10 @@
 /**
- * The model-facing filesystem discovery tool suite (`glob`, `grep`) over the
- * packaged ripgrep binary (`@vscode/ripgrep`). This single plugin registers
- * both tools; the binary ships inside the npm dependency, so no system `rg`
- * install and no shell layer is involved.
+ * The model-facing filesystem discovery tool suite (`glob`, `grep`) over a
+ * ripgrep executable. This single plugin registers both tools; by default the
+ * binary ships inside the npm dependency (`@vscode/ripgrep`), so a co-located
+ * deployment needs no system `rg` install, and no shell layer is involved. A
+ * deployment whose `ctx.subprocess` provider executes elsewhere (a sandbox
+ * seam) names its own ripgrep with the `rgPath` config.
  *
  * ## Spawn-backed, not a `ctx.fs` provider method
  *
@@ -56,12 +58,13 @@ export {
   SEARCH_TIMEOUT_MS,
   SearchError,
   previewLine,
+  resolveRgCommand,
   resolveRgPath,
   runRipgrep,
   toWorkdirRelative,
   trySaveFormattedResult,
 } from './search-core.ts'
-export type { GrepMatch, RipgrepRun, SearchErrorCode } from './search-core.ts'
+export type { GrepMatch, RipgrepRun, RipgrepRunLimits, SearchErrorCode } from './search-core.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'tool-fs-search'
@@ -92,6 +95,15 @@ export interface Config {
    * `@deepseek-ai/dsh-tool-call-timeout-policy` through `exec.signal`.
    */
   timeoutMs?: number
+  /**
+   * The ripgrep command both tools spawn, used verbatim as the argv leader.
+   * Omitted, the tools spawn the binary packaged with `@vscode/ripgrep` by its
+   * absolute path — correct only when `ctx.subprocess` executes in this
+   * process's own filesystem. A deployment whose subprocess provider runs
+   * commands in a sandbox sets `rg` (or an absolute path inside that sandbox)
+   * so the argv leader exists on the far side.
+   */
+  rgPath?: string
 }
 
 export const Config: z<Config> = z.object({
@@ -104,10 +116,11 @@ export const Config: z<Config> = z.object({
   graceMs: z.number().default(SEARCH_GRACE_MS),
   stderrMaxBytes: z.number().default(SEARCH_STDERR_MAX_BYTES),
   timeoutMs: z.number().default(SEARCH_TIMEOUT_MS),
+  rgPath: z.string(),
 })
 
-/** The shape after schemastery applied the defaults. */
-type ResolvedConfig = Required<Config>
+/** The shape after schemastery applied the defaults; `rgPath` has no default and stays optional. */
+type ResolvedConfig = Required<Omit<Config, 'rgPath'>> & Pick<Config, 'rgPath'>
 
 /** Every search cap counts items/bytes/milliseconds — a positive integer, or retention and timeout arithmetic misbehaves silently. */
 function assertPositiveInteger(name: string, value: number): void {
@@ -117,9 +130,11 @@ function assertPositiveInteger(name: string, value: number): void {
 }
 
 /**
- * Register the `glob`/`grep` filesystem discovery tool suite. The packaged
- * ripgrep binary is always available (an npm dependency), so registration is
- * unconditional.
+ * Register the `glob`/`grep` filesystem discovery tool suite. Registration is
+ * unconditional and probes nothing: the packaged binary is always available (an
+ * npm dependency), and a configured `rgPath` names a command on the subprocess
+ * provider's side, which this process cannot stat — an unusable command
+ * surfaces at the first search call as `SEARCH_FAILED`.
  *
  * @param ctx - plugin context; registrations are effects scoped to this plugin.
  * @param config - resolved plugin configuration from schemastery.
@@ -139,6 +154,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }
   assertPositiveInteger('stderrMaxBytes', resolved.stderrMaxBytes)
   assertPositiveInteger('timeoutMs', resolved.timeoutMs)
+  if (resolved.rgPath !== undefined && resolved.rgPath.trim().length === 0) {
+    throw new Error('tool-fs-search: rgPath must be a non-empty ripgrep command')
+  }
   applyGlobTool(ctx, {
     sampleOverCapGlobResults: resolved.sampleOverCapGlobResults,
     maxResults: resolved.globMaxResults,
@@ -147,6 +165,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     graceMs: resolved.graceMs,
     stderrMaxBytes: resolved.stderrMaxBytes,
     timeoutMs: resolved.timeoutMs,
+    rgPath: resolved.rgPath,
   })
   applyGrepTool(ctx, {
     maxMatches: resolved.grepMaxMatches,
@@ -156,5 +175,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     graceMs: resolved.graceMs,
     stderrMaxBytes: resolved.stderrMaxBytes,
     timeoutMs: resolved.timeoutMs,
+    rgPath: resolved.rgPath,
   })
 }

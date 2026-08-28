@@ -1,20 +1,24 @@
 /**
  * Shared execution plumbing for the `glob` / `grep` search tools: the
- * package-owned `SEARCH_*` error vocabulary, one spawn helper that runs the
- * PACKAGED ripgrep binary (`@vscode/ripgrep`) with a plain argv vector and
- * returns complete raw stdout, the best-effort formatted-result spill handoff,
- * and workdir-relative path display.
+ * package-owned `SEARCH_*` error vocabulary, one spawn helper that runs a
+ * ripgrep executable with a plain argv vector and returns complete raw stdout,
+ * the best-effort formatted-result spill handoff, and workdir-relative path
+ * display.
  *
  * Both tools execute as ordinary foreground spawns through `ctx.subprocess` —
  * never `ctx.shell`, never `ctx.shell.start()`, never a model-visible background
- * task. The ripgrep binary ships inside the npm package, so no system `rg`
- * install is required, and no shell layer exists between the argv vector and
- * ripgrep, so no shell quoting is involved. Raw `rg` stdout is an internal
- * transport detail: the tools request a per-run stdout capture budget from the
- * subprocess seam, parse only complete in-memory stdout within
- * `rawOutputMaxBytes`, and never read spill files. The model-facing recovery
- * artifact is the formatted result saved through `ctx.spillStore.saveText()`
- * ({@link trySaveFormattedResult}).
+ * task. By default the argv leader is the ripgrep binary packaged inside the
+ * npm dependency (`@vscode/ripgrep`), so a co-located deployment needs no system
+ * `rg` install. A deployment whose `ctx.subprocess` provider executes somewhere
+ * other than the harness process (a sandbox seam) must set the `rgPath` config
+ * instead: the packaged absolute path does not exist on the far side, and the
+ * launch fails with `SEARCH_FAILED` ({@link resolveRgCommand}). No shell layer
+ * exists between the argv vector and ripgrep, so no shell quoting is involved.
+ * Raw `rg` stdout is an internal transport detail: the tools request a per-run
+ * stdout capture budget from the subprocess seam, parse only complete in-memory
+ * stdout within `rawOutputMaxBytes`, and never read spill files. The
+ * model-facing recovery artifact is the formatted result saved through
+ * `ctx.spillStore.saveText()` ({@link trySaveFormattedResult}).
  *
  * @module @deepseek-ai/dsh-tool-fs-search/search-core
  */
@@ -51,6 +55,13 @@ export const SEARCH_STDERR_MAX_BYTES = 64 * 1024
 
 /** Default terminate grace period for a search process (ms). */
 export const SEARCH_GRACE_MS = 3_000
+
+/**
+ * The POSIX command-not-found exit status. A subprocess provider that executes
+ * the argv vector through an exec wrapper on a remote machine reports it when
+ * the argv leader does not exist there; ripgrep itself never exits 127.
+ */
+const COMMAND_NOT_FOUND_EXIT = 127
 
 /**
  * Default cap in bytes on one search's serialized `presentationMeta` (the
@@ -117,14 +128,49 @@ function stderrExcerpt(stderrText: string, truncated: boolean): string {
 }
 
 /**
- * Classify a nonzero-exit `rg` run into the search error vocabulary. There is
- * no shell layer, so an exit 127 or shell "command not found" text cannot
- * occur — a launch failure rejects at spawn (see {@link runRipgrep}).
+ * The `rgPath` remedy sentence appended to every launch failure: the config
+ * field is the only way to point the tools at a ripgrep the subprocess seam can
+ * actually execute.
+ *
+ * @param command - the ripgrep command the failed launch used as argv leader.
+ * @returns the remedy sentence naming that command.
  */
-function classifyRunFailure(toolName: string, exitCode: number, stderrText: string, stderrTruncated: boolean): SearchError {
+function rgPathRemedy(command: string): string {
+  return `the ripgrep command \`${command}\` is not executable where this deployment runs subprocesses;`
+    + ' set the tool-fs-search `rgPath` config to a ripgrep available there (`rg` resolves it on that PATH)'
+}
+
+/**
+ * Classify a nonzero-exit `rg` run into the search error vocabulary. There is
+ * no shell layer of the tools' own, but a subprocess provider that hands the
+ * argv vector to a remote sandbox can still report the POSIX
+ * command-not-found status (exit 127) for an argv leader that does not exist
+ * there, so that status carries the {@link rgPathRemedy} guidance.
+ *
+ * @param toolName - `glob` or `grep`, used in the message.
+ * @param exitCode - the process exit status (never 0 or 1 here).
+ * @param stderrText - the retained stderr tail.
+ * @param stderrTruncated - whether the seam dropped stderr bytes.
+ * @param command - the ripgrep command used as argv leader.
+ * @returns the classified failure.
+ */
+function classifyRunFailure(
+  toolName: string,
+  exitCode: number,
+  stderrText: string,
+  stderrTruncated: boolean,
+  command: string,
+): SearchError {
   const stderr = stderrExcerpt(stderrText, stderrTruncated)
   if (/regex parse error|error parsing glob/i.test(stderr)) {
     return new SearchError(`${toolName} pattern rejected by ripgrep: ${stderr}`, 'SEARCH_INVALID_PATTERN')
+  }
+  if (exitCode === COMMAND_NOT_FOUND_EXIT) {
+    return new SearchError(
+      `${toolName} search failed (exit ${exitCode}): ${rgPathRemedy(command)}`
+      + (stderr.length > 0 ? `. ripgrep stderr: ${stderr}` : ''),
+      'SEARCH_FAILED',
+    )
   }
   return new SearchError(`${toolName} search failed (exit ${exitCode})${stderr.length > 0 ? `: ${stderr}` : ''}`, 'SEARCH_FAILED')
 }
@@ -178,6 +224,38 @@ export function resolveRgPath(): Promise<string> {
 }
 
 /**
+ * The argv leader for one run: the configured `rgPath` verbatim when a
+ * deployment set one, else the packaged binary ({@link resolveRgPath}).
+ *
+ * A configured value is passed through untouched — no existence probe, no
+ * absolutization — because the deployment that sets it is exactly the one whose
+ * subprocess provider executes somewhere this process cannot stat (a sandbox
+ * seam), where a bare `rg` is resolved by the provider on the far side's PATH.
+ *
+ * @param rgPath - the configured ripgrep command, or undefined for the packaged binary.
+ * @returns the argv leader; rejects only for the packaged-binary resolution.
+ */
+export function resolveRgCommand(rgPath?: string): Promise<string> {
+  return rgPath === undefined ? resolveRgPath() : Promise.resolve(rgPath)
+}
+
+/**
+ * Per-run spawn budgets and the ripgrep command, as both tools' caps carry
+ * them: one object instead of a positional tail that four numbers and a string
+ * would make unreadable at the call sites.
+ */
+export interface RipgrepRunLimits {
+  /** Cap on the complete raw stdout the tool will parse. */
+  rawOutputMaxBytes: number
+  /** The seam's terminate-escalation grace period (ms). */
+  graceMs: number
+  /** Cap on the retained stderr diagnostic tail. */
+  stderrMaxBytes: number
+  /** Ripgrep command used verbatim as argv leader; undefined uses the packaged binary. */
+  rgPath?: string | undefined
+}
+
+/**
  * Run the packaged ripgrep binary with a plain argv vector and return its
  * complete raw stdout. The working directory is the calling agent's session
  * cwd (`exec.agent.session.header.cwd`) when available, else
@@ -192,14 +270,20 @@ export function resolveRgPath(): Promise<string> {
  * seam's diagnostic-tail shape (no spill files): the tools never read a raw
  * spill path, and truncated stdout fails as `SEARCH_RAW_OUTPUT_OVERFLOW`.
  *
+ * The argv leader comes from {@link resolveRgCommand}, so a deployment whose
+ * subprocess provider executes in a sandbox points `rgPath` at a ripgrep that
+ * exists there. Every launch failure — a spawn-creation throw, a rejected
+ * `handle.done`, and the seam's command-not-found exit status — names that
+ * command and the `rgPath` remedy.
+ *
  * Exit semantics are tool-owned: exit 0 is success with results, exit 1 is
  * success with zero results (`noMatches`), anything else throws a
  * {@link SearchError} (abort/timeout → `SEARCH_ABORTED`, invalid pattern →
  * `SEARCH_INVALID_PATTERN`, the rest → `SEARCH_FAILED` /
- * `SEARCH_RAW_OUTPUT_OVERFLOW`). Both launch-time failure domains are
- * classified: a synchronous throw at spawn CREATION (a NUL in argv, an abort
- * racing the pre-check, a rejected `@vscode/ripgrep` resolution) and a
- * rejection of `handle.done` (the seam's infrastructure failures) both become
+ * `SEARCH_RAW_OUTPUT_OVERFLOW`). Three launch-time failure domains are
+ * classified: a rejected packaged-binary resolution, a synchronous throw at
+ * spawn CREATION (a NUL in argv, an abort racing the pre-check), and a
+ * rejection of `handle.done` (the seam's infrastructure failures) all become
  * `SEARCH_FAILED` with the original as `cause` — an abort already observed by
  * creation time becomes `SEARCH_ABORTED` instead.
  *
@@ -207,9 +291,7 @@ export function resolveRgPath(): Promise<string> {
  * @param exec - the tool-execution context; supplies the session cwd and the abort signal.
  * @param toolName - `glob` or `grep`, used in error messages.
  * @param argv - the ripgrep arguments (every model value an unquoted argv element; no shell layer exists).
- * @param rawOutputMaxBytes - cap on the complete raw stdout the tool will parse.
- * @param graceMs - the seam's terminate-escalation grace period.
- * @param stderrMaxBytes - cap on the retained stderr diagnostic tail.
+ * @param limits - the per-run spawn budgets and the ripgrep command.
  * @returns the complete stdout, the zero-result flag, and the resolved workdir.
  */
 export async function runRipgrep(
@@ -217,19 +299,30 @@ export async function runRipgrep(
   exec: ToolExecution,
   toolName: string,
   argv: readonly string[],
-  rawOutputMaxBytes: number,
-  graceMs: number,
-  stderrMaxBytes: number,
+  limits: RipgrepRunLimits,
 ): Promise<RipgrepRun> {
   if (exec.signal.aborted) {
     throw new SearchError(`${toolName} was aborted before completion (tool timeout or caller cancellation)`, 'SEARCH_ABORTED')
   }
+  const { rawOutputMaxBytes, graceMs, stderrMaxBytes } = limits
   const cwd = exec.agent?.session.header.cwd
   const workdir = cwd ?? process.cwd()
+  let command: string
+  try {
+    command = await resolveRgCommand(limits.rgPath)
+  } catch (error: unknown) {
+    throw new SearchError(
+      `${toolName} could not start its search command (ripgrep launch failed): the packaged ripgrep binary could not be resolved;`
+      + ' set the tool-fs-search `rgPath` config to a ripgrep command available where this deployment runs subprocesses',
+      'SEARCH_FAILED',
+      { cause: error },
+    )
+  }
+  const launchFailed = `${toolName} could not start its search command (ripgrep launch failed): ${rgPathRemedy(command)}`
   let handle: SubprocessHandle
   try {
     handle = ctx.subprocess.spawn({
-      argv: [await resolveRgPath(), '--no-config', ...argv],
+      argv: [command, '--no-config', ...argv],
       cwd: workdir,
       stdio: {
         stdin: 'ignore',
@@ -242,20 +335,20 @@ export async function runRipgrep(
   } catch (error: unknown) {
     // Node's spawn() throws synchronously for a NUL in argv, and the local
     // impl can throw synchronously when the signal aborts between the check
-    // above and this call (or when the platform-package resolution rejects).
+    // above and this call.
     // The static narrowing that proves this re-check "always false" cannot
     // see AbortSignal state changes.
     // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (exec.signal.aborted) {
       throw new SearchError(`${toolName} was aborted before completion (tool timeout or caller cancellation)`, 'SEARCH_ABORTED')
     }
-    throw new SearchError(`${toolName} could not start its search command (ripgrep launch failed)`, 'SEARCH_FAILED', { cause: error })
+    throw new SearchError(launchFailed, 'SEARCH_FAILED', { cause: error })
   }
   let outcome: SubprocessOutcome
   try {
     outcome = await handle.done
   } catch (error: unknown) {
-    throw new SearchError(`${toolName} could not start its search command (ripgrep launch failed)`, 'SEARCH_FAILED', { cause: error })
+    throw new SearchError(launchFailed, 'SEARCH_FAILED', { cause: error })
   }
   const stdout = handle.collected.stdout?.readFrom(0)
   const stderr = handle.collected.stderr?.readFrom(0)
@@ -272,7 +365,7 @@ export async function runRipgrep(
     throw new SearchError(`${toolName} search command was killed by signal ${outcome.signal ?? '(unknown)'}`, 'SEARCH_FAILED')
   }
   if (outcome.exitCode !== 0 && outcome.exitCode !== 1) {
-    throw classifyRunFailure(toolName, outcome.exitCode, stderr.text, stderr.lossy)
+    throw classifyRunFailure(toolName, outcome.exitCode, stderr.text, stderr.lossy, command)
   }
   const text = completeStdout(toolName, stdout, rawOutputMaxBytes)
   return { stdout: text, noMatches: outcome.exitCode === 1, workdir }

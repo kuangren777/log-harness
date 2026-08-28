@@ -19,6 +19,7 @@ import type { SpillRef } from '@deepseek-ai/dsh-spill'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { GrepMatch } from './search-core.ts'
 import { SearchError, previewLine, retainGrepMatches, runRipgrep, toWorkdirRelative, trySaveFormattedResult } from './search-core.ts'
+import type { RipgrepRunLimits } from './search-core.ts'
 import { grepSearchMeta, searchViewFromMeta } from './presentation.ts'
 import { acceptedDirectCallValue } from './direct-call.ts'
 
@@ -35,20 +36,18 @@ export const GREP_MAX_MATCHES = 250
  */
 export const GREP_MAX_LINE_BYTES = 2000
 
-/** Resolved grep-tool caps — plugin config after defaulting (see `Config` in index.ts). */
-export interface GrepToolCaps {
+/**
+ * Resolved grep-tool caps — plugin config after defaulting (see `Config` in
+ * index.ts). The inherited {@link RipgrepRunLimits} members are the spawn
+ * arguments handed to {@link runRipgrep} unchanged.
+ */
+export interface GrepToolCaps extends RipgrepRunLimits {
   /** Max flat matches retained inline; later matches go to the formatted spill file. */
   maxMatches: number
   /** Max bytes retained per matched-line preview. */
   maxLineBytes: number
   /** Max bytes of serialized `presentationMeta`; trailing file groups drop past it. */
   maxMetaBytes: number
-  /** Cap on the complete raw `rg` stdout the tool will parse. */
-  rawOutputMaxBytes: number
-  /** Terminate-escalation grace period (ms) for the search process. */
-  graceMs: number
-  /** Cap on the retained stderr diagnostic tail. */
-  stderrMaxBytes: number
   /** Cooperative tool-call budget (ms) attached as `ToolDefinition.timeoutMs`. */
   timeoutMs: number
 }
@@ -319,7 +318,7 @@ export function applyGrepTool(ctx: Context, caps: GrepToolCaps): void {
     },
     async execute(args, exec) {
       const input = parseGrepArgs(args)
-      const run = await runRipgrep(ctx, exec, 'grep', buildGrepCommand(input), caps.rawOutputMaxBytes, caps.graceMs, caps.stderrMaxBytes)
+      const run = await runRipgrep(ctx, exec, 'grep', buildGrepCommand(input), caps)
       if (run.noMatches) return { matches: [] }
 
       const all: GrepMatch[] = []

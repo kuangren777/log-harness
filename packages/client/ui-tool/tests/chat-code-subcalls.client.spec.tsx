@@ -158,10 +158,14 @@ async function bench(snapshot: ConversationSnapshot) {
   }
   ctx.provide('workspaces', workspaces)
   ctx.provide('layout', layout)
+  // The openable-Host posture: ui-conversation's openFile inject reaches
+  // workspaces.openPath only on a loopback page whose Host publishes
+  // canOpenPath, and the file sub-row case below asserts that RPC.
   ctx.provide('connection', {
     api: { settings: {} },
-    isLoopback: false,
-    hostDescription: { getSnapshot: () => undefined, subscribe: () => () => {} },
+    isLoopback: true,
+    configurationPlane: 'memory',
+    hostDescription: { getSnapshot: () => ({ canOpenPath: true }), subscribe: () => () => {} },
   } as never)
   // ui-theme's Appearance row binds a durable scope through these two.
   ctx.provide('remote', { $on: () => () => {} } as never)

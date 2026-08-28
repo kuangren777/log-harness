@@ -18,6 +18,12 @@ await ctx.plugin(LocalSpillStore)                           // @deepseek-ai/dsh-
 
 Node 部署在受支持的 macOS、Linux 与 Windows x64/arm64 目标上获得 `@vscode/ripgrep` 平台包。Python SDK 的 Linux 与 macOS wheel 将目标原生二进制复制到单文件运行时旁，命名为 `<runtime>-rg`；`deepseek_harness_runtime.bundled_runtime_path()` 会在启动前拒绝不完整的 wheel。两种载体均不要求宿主安装 `rg`。返回路径会相对于解析后的工作目录显示（调用方 agent（智能体）有会话 cwd 时使用该 cwd，否则使用 `process.cwd()`）；只有该工作目录与文件系统根目录是同一工作区时，才能用 `read` 继续读取。这项共置要求不附带运行时跨服务校验；远程或虚拟文件系统搜索需等待共享工作区约定或特定提供方的搜索后端。
 
+<a id="rgpath-sandbox"></a>
+
+### 沙箱 subprocess 提供方：设置 `rgPath`
+
+打包二进制是 harness 进程自身文件系统中的绝对路径，因此只有在 `ctx.subprocess` 也在那里执行命令时，它才是正确的 argv 首元素。若某部署的 subprocess 提供方在别处执行——例如 E2B/Dormice seam，其每次工具调用都在沙箱容器内运行——则必须把 `rgPath` 设为在那一侧存在的 ripgrep（设为 `rg` 可让提供方在沙箱 PATH 上解析），并在沙箱镜像中安装 ripgrep。否则那一侧会针对 harness 路径返回 POSIX 命令未找到状态，每次搜索都以 `SEARCH_FAILED` 失败，并在消息中给出所用命令与该修复方式。`rgPath` 原样透传：宿主侧不做任何探测，因为需要它的部署恰恰是本进程无法 stat 其 ripgrep 的那一种。
+
 ## 配置
 
 `sampleOverCapGlobResults` 是必填项且没有回退值；部署必须显式选择超过上限时的排序约定。其余配置键是可选的搜索上限，默认值如下。
@@ -32,6 +38,7 @@ Node 部署在受支持的 macOS、Linux 与 Windows x64/arm64 目标上获得 `
 | `timeoutMs` | `30000` | 附加到两个工具定义上的协作式工具调用预算，由 `@deepseek-ai/dsh-tool-call-timeout-policy` 通过 `exec.signal` 强制执行；subprocess seam 的终止升级提供硬终止。 |
 | `graceMs` | `3000` | subprocess seam 在 `timeoutMs` 之外授予的终止升级宽限期须为正值；超过后搜索以 `SEARCH_ABORTED` 失败；该宽限期不得大于 [`MAX_TIMER_DELAY_MS`](../../util/timeout/README.zh.md)。 |
 | `stderrMaxBytes` | `65536` | `rg` stderr 的诊断尾部预算，经 subprocess seam 的 collect 形态捕获；lossy 读取只保留尾部（标记 `[stderr truncated]`）。 |
+| `rgPath` | 无（打包二进制） | 两个工具 spawn 的 ripgrep 命令，原样用作 argv 首元素。当 `ctx.subprocess` 在本进程文件系统之外执行时必须设置；参见[沙箱 subprocess 提供方](#rgpath-sandbox)。空白值在加载期被拒绝。 |
 
 ## 工具
 
@@ -48,7 +55,7 @@ Node 部署在受支持的 macOS、Linux 与 Windows x64/arm64 目标上获得 `
 
 ## 错误
 
-搜索失败会携带由本包定义的 `SearchError`（`HarnessError` 子类），并以 `{ name, code }` 的形式呈现在 `isError` 结果上：`SEARCH_INVALID_PATTERN`（ripgrep 拒绝正则/glob）、`SEARCH_FAILED`（`rg` 启动失败、目标不可访问、信号终止、`--json` 输出格式错误）、`SEARCH_RAW_OUTPUT_OVERFLOW`（原始输出超过 `rawOutputMaxBytes`，或在请求 stdout 捕获预算后仍 lossy）和 `SEARCH_ABORTED`（协作式工具超时或调用方取消）。ripgrep 的退出语义由工具负责处理：退出 0 表示成功且有结果，退出 1 表示成功的空搜索（`No files found` / `No matches found`），只有其他退出值表示失败。模型参数错误（空白 pattern、列表值 `include`）仍是普通工具参数错误。
+搜索失败会携带由本包定义的 `SearchError`（`HarnessError` 子类），并以 `{ name, code }` 的形式呈现在 `isError` 结果上：`SEARCH_INVALID_PATTERN`（ripgrep 拒绝正则/glob）、`SEARCH_FAILED`（`rg` 启动失败、目标不可访问、信号终止、`--json` 输出格式错误）、`SEARCH_RAW_OUTPUT_OVERFLOW`（原始输出超过 `rawOutputMaxBytes`，或在请求 stdout 捕获预算后仍 lossy）和 `SEARCH_ABORTED`（协作式工具超时或调用方取消）。ripgrep 的退出语义由工具负责处理：退出 0 表示成功且有结果，退出 1 表示成功的空搜索（`No files found` / `No matches found`），只有其他退出值表示失败。每一种启动失败——spawn 被拒、打包二进制无法解析、远程提供方对缺失 argv 首元素返回的命令未找到退出状态——都会在消息中给出所用命令与 `rgPath` 修复方式。模型参数错误（空白 pattern、列表值 `include`）仍是普通工具参数错误。
 
 ## 模型体验
 

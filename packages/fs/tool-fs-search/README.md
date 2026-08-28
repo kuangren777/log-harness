@@ -18,6 +18,12 @@ Why spawn-backed: local workspace discovery is naturally a process-backed `rg` w
 
 Node deployments receive the `@vscode/ripgrep` platform package on supported macOS, Linux, and Windows x64/arm64 targets. Python SDK Linux and macOS wheels copy the target-native binary beside the single-file runtime as `<runtime>-rg`; `deepseek_harness_runtime.bundled_runtime_path()` rejects an incomplete wheel before launch. No carrier requires a host `rg` install. Returned paths are displayed relative to the resolved workdir (the calling agent's session cwd when present, else `process.cwd()`) and are follow-up-readable with `read` only when that workdir and the filesystem root are the same workspace. That co-location requirement carries no runtime cross-service validation; remote or virtual filesystem search waits for a shared workspace contract or a provider-specific search backend.
 
+<a id="rgpath-sandbox"></a>
+
+### Sandbox subprocess providers: set `rgPath`
+
+The packaged binary is an absolute path in the harness process's own filesystem, so it is the right argv leader only while `ctx.subprocess` runs commands there. A deployment whose subprocess provider executes elsewhere — the E2B/Dormice seam, where every tool call runs inside a sandbox container — must set `rgPath` to a ripgrep that exists on that side (`rg` lets the provider resolve it on the sandbox PATH) and install ripgrep in the sandbox image. Without it the far side reports the POSIX command-not-found status for the harness path and every search fails with `SEARCH_FAILED`, naming the command tried and this remedy. `rgPath` is passed through verbatim: nothing probes it host-side, because the deployment that needs it is exactly the one whose ripgrep this process cannot stat.
+
 ## Config
 
 `sampleOverCapGlobResults` is required and has no fallback; deployments choose the over-cap ordering contract explicitly. The remaining keys are optional search caps with the defaults below.
@@ -32,6 +38,7 @@ Node deployments receive the `@vscode/ripgrep` platform package on supported mac
 | `timeoutMs` | `30000` | Cooperative tool-call budget attached to both tool definitions, enforced by `@deepseek-ai/dsh-tool-call-timeout-policy` through `exec.signal`; the subprocess seam's terminate escalation is the hard kill. |
 | `graceMs` | `3000` | Positive terminate-escalation grace the subprocess seam grants past `timeoutMs` before the search fails as `SEARCH_ABORTED`; it cannot exceed [`MAX_TIMER_DELAY_MS`](../../util/timeout/README.md). |
 | `stderrMaxBytes` | `65536` | Diagnostic-tail budget for `rg` stderr, captured through the subprocess seam's collect disposition; a lossy read keeps only the tail (marked `[stderr truncated]`). |
+| `rgPath` | none (packaged binary) | The ripgrep command both tools spawn, used verbatim as the argv leader. Required when `ctx.subprocess` executes outside this process's filesystem; see [Sandbox subprocess providers](#rgpath-sandbox). A blank value is rejected at load. |
 
 ## Tools
 
@@ -48,7 +55,7 @@ Raw `rg` stdout and stderr are internal transport details. Each search requests 
 
 ## Errors
 
-Search failures carry the package-owned `SearchError` (a `HarnessError` subclass), surfaced as `{ name, code }` on `isError` results: `SEARCH_INVALID_PATTERN` (ripgrep rejected the regex/glob), `SEARCH_FAILED` (a failed `rg` launch, inaccessible target, signal kill, malformed `--json` output), `SEARCH_RAW_OUTPUT_OVERFLOW` (raw output over `rawOutputMaxBytes`, or still lossy after the requested stdout capture budget), and `SEARCH_ABORTED` (cooperative tool timeout or caller cancellation). ripgrep exit semantics are tool-owned: exit 0 is success with results, exit 1 is a successful empty search (`No files found` / `No matches found`), and only other exits are failures. Model argument mistakes (blank pattern, a list-valued `include`) stay ordinary tool argument errors.
+Search failures carry the package-owned `SearchError` (a `HarnessError` subclass), surfaced as `{ name, code }` on `isError` results: `SEARCH_INVALID_PATTERN` (ripgrep rejected the regex/glob), `SEARCH_FAILED` (a failed `rg` launch, inaccessible target, signal kill, malformed `--json` output), `SEARCH_RAW_OUTPUT_OVERFLOW` (raw output over `rawOutputMaxBytes`, or still lossy after the requested stdout capture budget), and `SEARCH_ABORTED` (cooperative tool timeout or caller cancellation). ripgrep exit semantics are tool-owned: exit 0 is success with results, exit 1 is a successful empty search (`No files found` / `No matches found`), and only other exits are failures. Every launch failure — a spawn rejection, an unresolvable packaged binary, and the command-not-found exit status a remote provider reports for a missing argv leader — names the command tried and the `rgPath` remedy. Model argument mistakes (blank pattern, a list-valued `include`) stay ordinary tool argument errors.
 
 ## Model Experience
 

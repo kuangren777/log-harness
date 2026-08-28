@@ -41,6 +41,9 @@ import {
 
 const testToolSignal = new AbortController().signal
 
+/** The spawn budgets for direct runRipgrep unit calls (the registry supplies them from config). */
+const LIMITS = { rawOutputMaxBytes: 1_000_000, graceMs: 3_000, stderrMaxBytes: 64 * 1024 }
+
 /**
  * Normalize a POSIX-style test path to the platform separator: the sampler and
  * the workdir-relative display conversion group by `node:path.sep`, so
@@ -313,6 +316,22 @@ describe('config validation', () => {
     await expect(ctx.plugin(ToolFsSearch, { ...DEFAULT_CONFIG, ...config })).rejects.toThrow(new RegExp(`tool-fs-search: ${name} must be a positive integer`))
   })
 
+  it('rejects a blank rgPath at load', async () => {
+    // A whitespace-only command would spawn nothing usable; the deployment
+    // either names a ripgrep or omits the field for the packaged binary.
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(FakeSubprocess)
+    await expect(ctx.plugin(ToolFsSearch, { ...DEFAULT_CONFIG, rgPath: '  ' }))
+      .rejects.toThrow('tool-fs-search: rgPath must be a non-empty ripgrep command')
+  })
+
+  it('leaves rgPath undefined when the config omits it', () => {
+    expect(new ToolFsSearch.Config({ sampleOverCapGlobResults: true }).rgPath).toBeUndefined()
+    expect(new ToolFsSearch.Config({ sampleOverCapGlobResults: true, rgPath: 'rg' }).rgPath).toBe('rg')
+  })
+
   it('rejects a grace beyond the Node timer range at load', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
@@ -468,7 +487,7 @@ describe('workdir derivation and signal forwarding', () => {
     const controller = new AbortController()
     controller.abort()
     const exec = { signal: controller.signal, name: 'glob', callId: CallId('direct-pre-abort') } as unknown as ToolExecution
-    await expect(runRipgrep(ctx, exec, 'glob', ['--files'], 1_000_000, 3_000, 64 * 1024)).rejects
+    await expect(runRipgrep(ctx, exec, 'glob', ['--files'], LIMITS)).rejects
       .toMatchObject({ name: 'SearchError', code: 'SEARCH_ABORTED' })
   })
 
@@ -532,6 +551,33 @@ describe('workdir derivation and signal forwarding', () => {
     expect(resolveRgPath()).toBe(resolveRgPath())
   })
 
+  it('spawns the configured rgPath verbatim instead of the packaged binary', async () => {
+    // The sci-style deployment: ctx.subprocess executes inside a sandbox, so
+    // the argv leader must be a command that exists THERE, resolved by the
+    // provider on the far side's PATH — never this process's absolute path.
+    const { ctx, subprocess } = await setup({ config: { rgPath: 'rg' } })
+    subprocess.handler = () => runResult('', { exitCode: 1 })
+    await call(ctx, 'grep', { pattern: 'needle' })
+    await call(ctx, 'glob', { pattern: '*.ts' })
+    expect(subprocess.spawns[0]?.argv[0]).toBe('rg')
+    expect(subprocess.spawns[1]?.argv[0]).toBe('rg')
+    expect(subprocess.spawns[0]?.argv).toEqual(['rg', '--no-config', '--json', '--regexp=needle'])
+  })
+
+  it('spawns an absolute rgPath verbatim, with no host-side existence probe', async () => {
+    const { ctx, subprocess } = await setup({ config: { rgPath: '/sandbox/usr/bin/rg' } })
+    subprocess.handler = () => runResult('', { exitCode: 1 })
+    await call(ctx, 'grep', { pattern: 'needle' })
+    expect(subprocess.spawns[0]?.argv[0]).toBe('/sandbox/usr/bin/rg')
+  })
+
+  it('keeps the packaged binary as the argv leader when rgPath is absent', async () => {
+    const { ctx, subprocess } = await setup()
+    subprocess.handler = () => runResult('', { exitCode: 1 })
+    await call(ctx, 'grep', { pattern: 'needle' })
+    expect(subprocess.spawns[0]?.argv[0]).toBe(rgPath)
+  })
+
   it('rejects when the subprocess implementation drops a requested collect stream', async () => {
     const { ctx, subprocess } = await setup()
     subprocess.dropReaders = true
@@ -583,6 +629,45 @@ describe('exit semantics and failure classification', () => {
     const result = await call(ctx, 'glob', { pattern: '*' })
     expect(result.error).toMatchObject({ info: { code: 'SEARCH_FAILED' } })
     expect(text(result)).toContain('exit 3')
+  })
+
+  it('exit 127 names the command tried and the rgPath remedy', async () => {
+    // The sci regression: the subprocess seam ran the harness-side absolute
+    // path inside a sandbox that has no such file, and its exec wrapper
+    // reported the POSIX command-not-found status.
+    const { ctx, subprocess } = await setup()
+    subprocess.handler = () => runResult('', {
+      exitCode: 127,
+      stderr: { text: `/usr/bin/env: '${rgPath}': No such file or directory` },
+    })
+    const result = await call(ctx, 'grep', { pattern: 'x' })
+    expect(result.isError).toBe(true)
+    expect(result.error).toMatchObject({ info: { name: 'SearchError', code: 'SEARCH_FAILED' } })
+    const message = text(result)
+    expect(message).toContain('exit 127')
+    expect(message).toContain(`\`${rgPath}\` is not executable where this deployment runs subprocesses`)
+    expect(message).toContain('`rgPath` config')
+    expect(message).toContain('No such file or directory')
+  })
+
+  it('exit 127 with a configured rgPath names that command, not the packaged path', async () => {
+    const { ctx, subprocess } = await setup({ config: { rgPath: 'rg' } })
+    subprocess.handler = () => runResult('', { exitCode: 127 })
+    const result = await call(ctx, 'glob', { pattern: '*' })
+    const message = text(result)
+    expect(message).toContain('`rg` is not executable where this deployment runs subprocesses')
+    expect(message).not.toContain(rgPath)
+    expect(message).not.toContain('ripgrep stderr')
+  })
+
+  it('a spawn rejection names the command tried and the rgPath remedy', async () => {
+    const { ctx, subprocess } = await setup({ config: { rgPath: 'rg' } })
+    subprocess.handler = () => ({ reject: new Error('spawn rg ENOENT') })
+    const result = await call(ctx, 'grep', { pattern: 'x' })
+    expect(result.error).toMatchObject({ info: { name: 'SearchError', code: 'SEARCH_FAILED' } })
+    const message = text(result)
+    expect(message).toContain('could not start its search command')
+    expect(message).toContain('`rg` is not executable where this deployment runs subprocesses')
   })
 
   it('truncated stderr gains a truncation note and stderr.spillPath is never read', async () => {

@@ -64,10 +64,15 @@ const LAYOUT_CHILDREN = {
  */
 async function bench(nodes: ToolResultNode[]) {
   const runtime = await SlotTestRuntime.create()
+  // The openable-Host posture: ui-conversation's openFile inject reaches
+  // workspaces.openPath only on a loopback page whose Host publishes
+  // canOpenPath, and the path-click case below asserts that RPC. The gated
+  // clipboard branch is ui-conversation's own spec.
   runtime.provide('connection', {
     api: { settings: {} },
-    isLoopback: false,
-    hostDescription: { getSnapshot: () => undefined, subscribe: () => () => {} },
+    isLoopback: true,
+    configurationPlane: 'memory',
+    hostDescription: { getSnapshot: () => ({ canOpenPath: true }), subscribe: () => () => {} },
   })
   // ui-theme's Appearance row binds a durable scope through these two.
   runtime.provide('remote', { $on: () => () => {} })
@@ -210,6 +215,7 @@ describe('registrant declaration injection', () => {
     runtime.provide('connection', {
       api: { settings: {} },
       isLoopback: false,
+      configurationPlane: 'memory',
       hostDescription: { getSnapshot: () => undefined, subscribe: () => () => {} },
     })
     // ui-theme's Appearance row binds a durable scope through these two.

@@ -16,6 +16,7 @@ import type { GenericCallView, SearchResultView, ToolResult } from '@deepseek-ai
 import type { SpillRef } from '@deepseek-ai/dsh-spill'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { runRipgrep, toWorkdirRelative, trySaveFormattedResult } from './search-core.ts'
+import type { RipgrepRunLimits } from './search-core.ts'
 import { globSearchMeta, searchViewFromMeta } from './presentation.ts'
 import { acceptedDirectCallValue } from './direct-call.ts'
 
@@ -37,20 +38,18 @@ export const GLOB_MAX_RESULTS = 100
  */
 export const GLOB_VCS_EXCLUDES: readonly string[] = ['.git', '.svn', '.hg', '.bzr', '.jj', '.sl']
 
-/** Resolved glob-tool caps — plugin config after defaulting (see `Config` in index.ts). */
-export interface GlobToolCaps {
+/**
+ * Resolved glob-tool caps — plugin config after defaulting (see `Config` in
+ * index.ts). The inherited {@link RipgrepRunLimits} members are the spawn
+ * arguments handed to {@link runRipgrep} unchanged.
+ */
+export interface GlobToolCaps extends RipgrepRunLimits {
   /** Whether over-cap pages are sampled across top-level entries instead of taking the modification-time head. */
   sampleOverCapGlobResults: boolean
   /** Max paths retained inline; later paths go to the formatted spill file. */
   maxResults: number
   /** Max bytes of serialized `presentationMeta`; trailing paths drop past it. */
   maxMetaBytes: number
-  /** Cap on the complete raw `rg` stdout the tool will parse. */
-  rawOutputMaxBytes: number
-  /** Terminate-escalation grace period (ms) for the search process. */
-  graceMs: number
-  /** Cap on the retained stderr diagnostic tail. */
-  stderrMaxBytes: number
   /** Cooperative tool-call budget (ms) attached as `ToolDefinition.timeoutMs`. */
   timeoutMs: number
 }
@@ -341,7 +340,7 @@ export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
     },
     async execute(args, exec) {
       const input = parseGlobArgs(args)
-      const run = await runRipgrep(ctx, exec, 'glob', buildGlobCommand(input), caps.rawOutputMaxBytes, caps.graceMs, caps.stderrMaxBytes)
+      const run = await runRipgrep(ctx, exec, 'glob', buildGlobCommand(input), caps)
       const root = input.path === undefined ? '.' : toWorkdirRelative(input.path, run.workdir)
       if (run.noMatches) return { root, paths: [] }
 
