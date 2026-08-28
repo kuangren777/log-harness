@@ -1,0 +1,29 @@
+/* CaMeL Science motion + type base. Plugin-owned: mounted and removed with the
+ * ui-brand-sci client row. Only variables the upstream sheets already read are
+ * redefined here (motion curve/durations, font stack); no component selectors. */
+:root {
+  --dsw-font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+    'PingFang SC', 'Hiragino Sans GB', 'Helvetica Neue', 'Noto Sans SC', Helvetica, Arial, sans-serif;
+  --ds-ease-in-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ds-transition-duration: 0.3s;
+  --ds-transition-duration-fast: 0.16s;
+  --ds-transition-duration-slow: 0.45s;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #6e6cf7;
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ds-transition-duration: 0.01ms;
+    --ds-transition-duration-fast: 0.01ms;
+    --ds-transition-duration-slow: 0.01ms;
+  }
+}
