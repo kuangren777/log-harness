@@ -20,7 +20,7 @@
         disabled: true
       - insert:
           - id: e2b
-            name: '@deepseek-ai/dsh-e2b'
+            name: '@deepseek-ai/dsh-e2b-cloud'
             config:
               cwd: !!js process.cwd()
               timeoutMs: 300000

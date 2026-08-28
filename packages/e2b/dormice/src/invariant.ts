@@ -1,23 +1,23 @@
 /**
- * Package-owned invariant companion for `@deepseek-ai/dsh-e2b`.
- * @module @deepseek-ai/dsh-e2b/invariant
+ * Package-owned invariant companion for `@deepseek-ai/dsh-dormice`.
+ * @module @deepseek-ai/dsh-dormice/invariant
  */
 
 /* jscpd:ignore-start */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 
-const PACKAGE_NAME = '@deepseek-ai/dsh-e2b'
+const PACKAGE_NAME = '@deepseek-ai/dsh-dormice'
 
 /** Cordis companion plugin name. */
-export const name = 'e2b-invariant'
+export const name = 'dormice-invariant'
 /** Service required before the companion can reserve package ownership. */
 export const inject = ['invariants']
 
 /**
- * No runtime invariant: this stateless Service Definition owns the shared path
- * reservation and quoting helpers, while Service Providers own sandbox
- * acquisition and every observable lifecycle relationship.
+ * No runtime invariant: acquisition is one promise against a remote daemon
+ * that owns the sandbox lifecycle, and this package holds no event stream or
+ * mutable data of its own to cross-check it against.
  */
 const install: InvariantInstaller = () => {}
 

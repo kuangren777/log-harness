@@ -18,7 +18,7 @@ import type {
   SubprocessOutputMode,
   SubprocessSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
-import type E2BRuntime from '@deepseek-ai/dsh-e2b'
+import type { E2BRuntime } from '@deepseek-ai/dsh-e2b'
 import { bootstrapEnvironment, readRemoteEnvironment, serializeRemoteEnvironment } from './environment.ts'
 import { E2BBase64Decoder, E2B_OUTPUT_COMPLETE_FRAME, E2BOutputReader } from './output.ts'
 import { asError, commandOpts, signalRemoteGroups, waitTick } from './remote.ts'
@@ -504,8 +504,35 @@ export class E2BSubprocessHandle implements SubprocessHandle {
         return pid
       }
       const settled = await Promise.race([commandSettled, waitTick(this.pollMs).then(() => false)])
-      if (settled) throw new Error('subprocess-e2b: remote command exited before publishing its process-group id')
+      if (settled) throw await this.unpublishedGroupFailure(sandbox)
     }
+  }
+
+  /**
+   * The failure for a wrapper that exited before publishing its process-group
+   * id. A `cwd` absent from the sandbox is the cause this reaches most often and
+   * the only one the sandbox can still confirm afterwards: `commands.run`
+   * reports a nonexistent working directory as nothing but the wrapper's own
+   * immediate exit. The probe therefore runs here, on the failure path, where
+   * one metadata request costs nothing, instead of before every spawn. A probe
+   * that cannot answer leaves the working directory as the question the message
+   * asks.
+   * @param sandbox - the sandbox the command ran in.
+   * @returns the error to throw for this publication failure.
+   */
+  private async unpublishedGroupFailure(sandbox: Sandbox): Promise<Error> {
+    const cwd = this.spec.cwd
+    try {
+      await sandbox.files.getInfo(cwd)
+    } catch (probeFailure: unknown) {
+      if (probeFailure instanceof FileNotFoundError) {
+        return new Error(`subprocess-e2b: cwd does not exist in the sandbox: ${cwd}`)
+      }
+      return new Error(
+        `subprocess-e2b: remote command exited before publishing its process-group id (cwd ${cwd}; does it exist in the sandbox?)`,
+      )
+    }
+    return new Error(`subprocess-e2b: remote command exited before publishing its process-group id (cwd ${cwd})`)
   }
 
   private async waitForCommand(

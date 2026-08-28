@@ -19,7 +19,7 @@ import type {
   SubprocessTerminalSignal,
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
-import type E2BRuntime from '@deepseek-ai/dsh-e2b'
+import type { E2BRuntime } from '@deepseek-ai/dsh-e2b'
 import {
   bootstrapEnvironment,
   readRemoteEnvironment,

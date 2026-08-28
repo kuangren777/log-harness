@@ -1,14 +1,17 @@
 /**
- * Shared ownership of one E2B sandbox. Capability adapters await the same SDK
- * handle, so filesystem and process operations inhabit one remote Linux world.
+ * Service Definition for the E2B sandbox seam (`ctx.e2b`): one shared SDK
+ * handle, the reserved adapter-state directory under the shared working
+ * directory, and the two helpers every adapter needs to survive the SDK's
+ * hard-coded login shell. Acquisition policy — create, connect, lifetime,
+ * delete — belongs to Service Providers (`@deepseek-ai/dsh-e2b-cloud` for
+ * E2B Cloud, `@deepseek-ai/dsh-dormice` for a self-hosted Dormice pool).
  * @module @deepseek-ai/dsh-e2b
  */
 
 import { randomUUID } from 'node:crypto'
 import { posix } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
-import z from '@deepseek-ai/schemastery'
-import { FileType, Sandbox, SandboxNotFoundError } from 'e2b'
+import type { Sandbox } from 'e2b'
 
 export {
   CommandExitError,
@@ -18,6 +21,14 @@ export {
   SandboxNotFoundError,
 } from 'e2b'
 export type { CommandHandle, CommandResult, EntryInfo } from 'e2b'
+
+/**
+ * Reserved directory name for adapter-owned process and terminal state,
+ * placed directly under the shared working directory. Adapters address it
+ * through {@link E2BRuntime.runtimeRoot}; every provider must reserve the
+ * same relative name so one sandbox reads back the state another wrote.
+ */
+export const E2B_RUNTIME_DIRECTORY = '.dsh-e2b'
 
 /**
  * Quote one opaque argument for the SDK's unavoidable `/bin/bash -l -c` layer.
@@ -39,27 +50,6 @@ export function e2bControlEnvs(
   return { ...overrides, HOME: `/.dsh-e2b-control-${randomUUID()}` }
 }
 
-/** Configuration for the shared E2B sandbox owner. */
-export interface Config {
-  /** API key; omission reads `E2B_API_KEY`. It is never forwarded into the sandbox. */
-  apiKey?: string
-  /** Shared remote working directory, created before adapters receive the sandbox. */
-  cwd?: string
-  /** E2B sandbox lifetime in milliseconds; expiry always deletes the sandbox. */
-  timeoutMs?: number
-}
-
-interface ResolvedConfig {
-  apiKey: string
-  cwd: string
-  timeoutMs: number
-}
-
-interface SchemaResolvedConfig extends Config {
-  cwd: string
-  timeoutMs: number
-}
-
 declare module '@deepseek-ai/cordis' {
   interface Context {
     e2b: E2BRuntime
@@ -67,116 +57,49 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /**
- * Creates one lazily consumable E2B SDK handle and deletes the sandbox at
- * timeout or disposal. Creation begins at plugin construction; adapters await
- * {@link getSandbox} before their first operation.
+ * Abstract owner of one shared E2B sandbox. Subclass, implement
+ * {@link getSandbox}, and load the subclass as a plugin — it registers as
+ * `ctx.e2b` (one implementation per context; loading a second throws, which is
+ * cordis' standard duplicate-service behavior). Filesystem and subprocess
+ * adapters await the one handle, so they inhabit the same remote Linux world.
+ *
+ * Implementations must honor these semantics:
+ * - {@link getSandbox} resolves only after {@link cwd} and {@link runtimeRoot}
+ *   exist in the sandbox, so an adapter's first operation needs no setup.
+ * - {@link runtimeRoot} is adapter-private: a real directory, never a symlink,
+ *   reachable only by its owner.
+ * - Acquisition is shared and repeatable: concurrent callers await one attempt
+ *   and receive the same handle.
+ * - Acquisition failure is reported to every caller; providers never hand back
+ *   a half-prepared sandbox.
+ * - Disposal first refuses new handle acquisition; whether it also deletes the
+ *   sandbox is the provider's lifetime policy.
  */
-export class E2BRuntime extends Service {
-  static Config: z<Config> = z.object({
-    apiKey: z.string(),
-    cwd: z.string().default('/home/user/workspace'),
-    timeoutMs: z.number().default(300_000),
-  })
-
+export abstract class E2BRuntime extends Service {
   /** Validated remote working directory shared by provider adapters. */
   readonly cwd: string
   /** Remote directory reserved for adapter-owned process and terminal state. */
   readonly runtimeRoot: string
 
-  private readonly config: ResolvedConfig
-  private readonly ready: Promise<Sandbox>
-  private disposed = false
-
-  constructor(ctx: Context, config: Config) {
+  /**
+   * Reserve the seam's shared paths before the provider acquires a sandbox.
+   * @param ctx - Cordis context this service registers into.
+   * @param cwd - Absolute POSIX working directory shared by every adapter.
+   * @throws when `cwd` is not an absolute Linux path.
+   */
+  constructor(ctx: Context, cwd: string) {
     super(ctx, 'e2b')
-    // Schemastery fills these fields before construction; the type does not encode that step.
-    const resolved = config as SchemaResolvedConfig
-    const apiKey = config.apiKey ?? process.env.E2B_API_KEY
-    this.config = {
-      apiKey: apiKey ?? '',
-      cwd: resolved.cwd,
-      timeoutMs: resolved.timeoutMs,
+    if (!posix.isAbsolute(cwd)) {
+      throw new Error(`dsh-e2b: cwd must be an absolute Linux path: ${cwd}`)
     }
-    this.validate()
-    this.cwd = this.config.cwd
-    this.runtimeRoot = posix.join(this.cwd, '.dsh-e2b')
-    this.ready = this.open()
-    // A deployment may load the owner before any adapter uses it. Keep a
-    // failed eager connection observed; getSandbox() still returns the error.
-    void this.ready.catch(() => {})
-
-    ctx.effect(() => async () => {
-      this.disposed = true
-      let sandbox: Sandbox
-      try {
-        sandbox = await this.ready
-      } catch (_sandboxSetupFailure) {
-        // open() either acquired no sandbox or already made the POC's one rollback attempt.
-        return
-      }
-      try {
-        await sandbox.kill()
-      } catch (error: unknown) {
-        if (!(error instanceof SandboxNotFoundError)) throw error
-      }
-    }, 'e2b sandbox teardown')
+    this.cwd = cwd
+    this.runtimeRoot = posix.join(cwd, E2B_RUNTIME_DIRECTORY)
   }
 
   /**
    * Return the shared live SDK handle.
-   * @returns the created sandbox after the configured cwd exists.
-   * @throws when E2B rejects creation or the service is disposing.
+   * @returns the acquired sandbox after {@link cwd} and {@link runtimeRoot} exist.
+   * @throws when acquisition fails or the service is disposing.
    */
-  async getSandbox(): Promise<Sandbox> {
-    if (this.disposed) throw new Error('E2B sandbox service is disposing')
-    const sandbox = await this.ready
-    // Disposal can race the awaited sandbox readiness despite the synchronous precheck.
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- Awaiting readiness yields to disposal.
-    if (this.disposed) throw new Error('E2B sandbox service is disposing')
-    return sandbox
-  }
-
-  private validate(): void {
-    if (this.config.apiKey.length === 0) {
-      throw new Error('dsh-e2b: configure apiKey or set E2B_API_KEY')
-    }
-    if (!posix.isAbsolute(this.config.cwd)) {
-      throw new Error(`dsh-e2b: cwd must be an absolute Linux path: ${this.config.cwd}`)
-    }
-    if (!Number.isFinite(this.config.timeoutMs) || this.config.timeoutMs <= 0) {
-      throw new Error('dsh-e2b: timeoutMs must be a positive finite number')
-    }
-  }
-
-  private async open(): Promise<Sandbox> {
-    const sandbox = await Sandbox.create({
-      apiKey: this.config.apiKey,
-      timeoutMs: this.config.timeoutMs,
-      secure: true,
-      lifecycle: { onTimeout: 'kill' },
-    })
-    try {
-      await sandbox.files.makeDir(this.cwd)
-      await sandbox.files.makeDir(this.runtimeRoot)
-      const runtimeRoot = await sandbox.files.getInfo(this.runtimeRoot)
-      if (runtimeRoot.type !== FileType.DIR || runtimeRoot.symlinkTarget !== undefined) {
-        throw new Error(`dsh-e2b: runtime root must be a real directory: ${this.runtimeRoot}`)
-      }
-      await sandbox.commands.run(
-        `chmod 700 -- ${quoteE2BShellArg(this.runtimeRoot)}`,
-        { envs: e2bControlEnvs() },
-      )
-      return sandbox
-    } catch (error: unknown) {
-      try {
-        await sandbox.kill()
-      } catch (_sandboxSetupRollbackFailure) {
-        // TODO(e2b-setup-rollback): Add retry state only if a real double failure
-        // outlives E2B's configured sandbox timeout.
-      }
-      throw error
-    }
-  }
+  abstract getSandbox(): Promise<Sandbox>
 }
-
-export default E2BRuntime

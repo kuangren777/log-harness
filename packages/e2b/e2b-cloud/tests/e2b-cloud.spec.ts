@@ -1,22 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import type { Sandbox as SandboxType } from 'e2b'
-import E2BRuntime, {
-  e2bControlEnvs,
-  FileType,
-  SandboxNotFoundError,
-  quoteE2BShellArg,
-} from '@deepseek-ai/dsh-e2b'
-import * as E2BInvariant from '../src/invariant.ts'
+import { FileType, SandboxNotFoundError } from '@deepseek-ai/dsh-e2b'
+import type { Sandbox as SandboxType } from '@deepseek-ai/dsh-e2b'
+import E2BCloudRuntime from '@deepseek-ai/dsh-e2b-cloud'
+import * as E2BCloudInvariant from '../src/invariant.ts'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 
 const sdk = vi.hoisted(() => ({
   create: vi.fn(),
 }))
 
-vi.mock('e2b', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('e2b')>()
+// The E2B Cloud provider reaches the SDK through the Definition's re-export,
+// so the Definition module is the seam this suite replaces.
+vi.mock('@deepseek-ai/dsh-e2b', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@deepseek-ai/dsh-e2b')>()
   // The mock replaces only the SDK's static factory surface and is never constructed.
   // oxlint-disable-next-line typescript/no-extraneous-class -- The SDK contract is a class with a static factory.
   class FakeSandbox {
@@ -59,21 +57,12 @@ beforeEach(() => {
   vi.unstubAllEnvs()
 })
 
-describe('E2BRuntime', () => {
-  it('gives each SDK login shell a fresh non-overridable control home', () => {
-    const first = e2bControlEnvs({ HOME: '/hostile', NPM_TOKEN: '' })
-    const second = e2bControlEnvs()
-
-    expect(first.HOME).toMatch(/^\/\.dsh-e2b-control-/)
-    expect(first).toEqual({ HOME: first.HOME, NPM_TOKEN: '' })
-    expect(first.HOME).not.toBe(second.HOME)
-  })
-
+describe('E2BCloudRuntime', () => {
   it('creates one protected shared sandbox and kills it on default disposal', async () => {
     const fixture = fakeSandbox()
     sdk.create.mockResolvedValue(fixture.sandbox)
     const ctx = new Context()
-    const fiber = await ctx.plugin(E2BRuntime, { apiKey: 'test-key' })
+    const fiber = await ctx.plugin(E2BCloudRuntime, { apiKey: 'test-key' })
 
     const service = ctx.e2b
     await expect(service.getSandbox()).resolves.toBe(fixture.sandbox)
@@ -105,7 +94,7 @@ describe('E2BRuntime', () => {
     const opening = Promise.withResolvers<SandboxType>()
     sdk.create.mockReturnValue(opening.promise)
     const ctx = new Context()
-    const fiber = await ctx.plugin(E2BRuntime, { apiKey: 'test-key' })
+    const fiber = await ctx.plugin(E2BCloudRuntime, { apiKey: 'test-key' })
 
     const acquisition = ctx.e2b.getSandbox()
     const disposing = fiber.dispose()
@@ -121,7 +110,7 @@ describe('E2BRuntime', () => {
     const fixture = fakeSandbox('configured-sandbox')
     sdk.create.mockResolvedValue(fixture.sandbox)
     const ctx = new Context()
-    const fiber = await ctx.plugin(E2BRuntime, {
+    const fiber = await ctx.plugin(E2BCloudRuntime, {
       cwd: '/workspace/project',
       timeoutMs: 60_000,
     })
@@ -145,7 +134,7 @@ describe('E2BRuntime', () => {
     const ctx = new Context()
     const errors: unknown[] = []
     ctx.logger.error = ((error: unknown) => { errors.push(error) }) as typeof ctx.logger.error
-    const fiber = await ctx.plugin(E2BRuntime, { apiKey: 'test-key' })
+    const fiber = await ctx.plugin(E2BCloudRuntime, { apiKey: 'test-key' })
     await ctx.e2b.getSandbox()
 
     await fiber.dispose()
@@ -161,7 +150,7 @@ describe('E2BRuntime', () => {
     const ctx = new Context()
     const errors: unknown[] = []
     ctx.logger.error = ((error: unknown) => { errors.push(error) }) as typeof ctx.logger.error
-    const fiber = await ctx.plugin(E2BRuntime, { apiKey: 'test-key' })
+    const fiber = await ctx.plugin(E2BCloudRuntime, { apiKey: 'test-key' })
     await ctx.e2b.getSandbox()
     await expect(fiber.dispose()).resolves.toBeUndefined()
     expect(fixture.kill).toHaveBeenCalledOnce()
@@ -173,7 +162,7 @@ describe('E2BRuntime', () => {
     fixture.makeDir.mockRejectedValueOnce(new Error('setup failed'))
     sdk.create.mockResolvedValue(fixture.sandbox)
     const ctx = new Context()
-    const fiber = await ctx.plugin(E2BRuntime, { apiKey: 'test-key' })
+    const fiber = await ctx.plugin(E2BCloudRuntime, { apiKey: 'test-key' })
 
     await expect(ctx.e2b.getSandbox()).rejects.toThrow('setup failed')
     expect(fixture.kill).toHaveBeenCalledOnce()
@@ -186,7 +175,7 @@ describe('E2BRuntime', () => {
     fixture.kill.mockRejectedValueOnce(new Error('cleanup failed'))
     sdk.create.mockResolvedValue(fixture.sandbox)
     const ctx = new Context()
-    const fiber = await ctx.plugin(E2BRuntime, { apiKey: 'test-key' })
+    const fiber = await ctx.plugin(E2BCloudRuntime, { apiKey: 'test-key' })
     await expect(ctx.e2b.getSandbox()).rejects.toThrow('chmod failed')
     expect(fixture.kill).toHaveBeenCalledOnce()
 
@@ -202,7 +191,7 @@ describe('E2BRuntime', () => {
     fixture.getInfo.mockResolvedValueOnce(info)
     sdk.create.mockResolvedValue(fixture.sandbox)
     const ctx = new Context()
-    await ctx.plugin(E2BRuntime, { apiKey: 'test-key' })
+    await ctx.plugin(E2BCloudRuntime, { apiKey: 'test-key' })
 
     await expect(ctx.e2b.getSandbox()).rejects.toThrow('runtime root must be a real directory')
     expect(fixture.run).not.toHaveBeenCalled()
@@ -216,7 +205,7 @@ describe('E2BRuntime', () => {
   ] as const)('fails self-contained configuration before opening E2B: %j', async (config, message) => {
     vi.stubEnv('E2B_API_KEY', '')
     const ctx = new Context()
-    await expect(ctx.plugin(E2BRuntime, config)).rejects.toThrow(message)
+    await expect(ctx.plugin(E2BCloudRuntime, config)).rejects.toThrow(message)
     expect(sdk.create).not.toHaveBeenCalled()
   })
 
@@ -225,7 +214,7 @@ describe('E2BRuntime', () => {
     delete process.env.E2B_API_KEY
     try {
       const ctx = new Context()
-      await expect(ctx.plugin(E2BRuntime, {})).rejects.toThrow(/configure apiKey/)
+      await expect(ctx.plugin(E2BCloudRuntime, {})).rejects.toThrow(/configure apiKey/)
     } finally {
       if (original === undefined) delete process.env.E2B_API_KEY
       else process.env.E2B_API_KEY = original
@@ -233,15 +222,11 @@ describe('E2BRuntime', () => {
   })
 })
 
-describe('E2B helpers and invariant companion', () => {
-  it('quotes opaque shell arguments without interpolation', () => {
-    expect(quoteE2BShellArg("a'b $HOME")).toBe("'a'\"'\"'b $HOME'")
-  })
-
+describe('E2B Cloud invariant companion', () => {
   it('registers the package-owned empty invariant installer', async () => {
     const ctx = new Context()
     await ctx.plugin(InvariantRegistry, { enabled: true })
-    const fiber = await ctx.plugin(E2BInvariant).await()
+    const fiber = await ctx.plugin(E2BCloudInvariant).await()
     await fiber.dispose()
   })
 })

@@ -119,6 +119,31 @@ function entryType(entry: EntryInfo): FsInfo['type'] {
   }
 }
 
+/**
+ * Derive an opaque version for one entry.
+ *
+ * The write-time `dsh-version` attribute is what makes two writes of identical
+ * content distinguishable; the remaining facts alone repeat whenever size, mode
+ * and the millisecond-resolution mtime all match. Against a backend without
+ * extended attributes the attribute carries the committed file's inode instead
+ * (see {@link E2BFileSystem.withVersionAttribute}), which a staged write changes
+ * on every commit — so the one-version-per-write property holds either way and
+ * every caller here reads the same field.
+ * @param entry - the entry as the backend reported it, attribute synthesised when absent.
+ * @returns the opaque version.
+ */
+/**
+ * Whether a write failed only because the backend cannot store the version
+ * attribute. The SDK raises this before the request leaves, with a fixed
+ * message naming the envd version that introduced metadata support; matching it
+ * keeps a genuine transport failure from being mistaken for a missing feature.
+ * @param error - the thrown value.
+ * @returns whether the attribute, not the write, is what was refused.
+ */
+function isMetadataUnsupported(error: unknown): boolean {
+  return error instanceof Error && /File metadata requires envd [\d.]+ or later/.test(error.message)
+}
+
 function entryVersion(entry: EntryInfo): ReturnType<typeof FsVersion> {
   const facts = JSON.stringify([
     entry.metadata?.[VERSION_METADATA_KEY],
@@ -172,6 +197,47 @@ export class E2BFileSystem extends FileSystem {
   static inject = ['e2b']
 
   private readonly locks = new Map<string, Promise<unknown>>()
+
+  /**
+   * Whether this backend keeps the version attribute, learned from the first
+   * write and undefined until then. A read before that first write derives a
+   * version without the inode stand-in, so a compare-and-set carried across
+   * that single transition mismatches once and the caller re-reads; every
+   * version after it has the same shape.
+   */
+  private attributesSupported: boolean | undefined
+
+  private runningCommands = 0
+  private readonly commandTurns: (() => void)[] = []
+
+  /**
+   * Run one shell command while holding one of the backend's command slots.
+   *
+   * Every `commands.run` here spawns a process inside the sandbox, and the
+   * gVisor runtime behind the Dormice backend crashes its sentry (every
+   * in-flight operation fails with `containerManager.WaitPID: EOF`) when
+   * callers batch hundreds of spawns at once — a single `Promise.all` over a
+   * directory tree reached 200+ spawns per second in production. The slot cap
+   * bounds this backend's spawn concurrency no matter how wide the caller
+   * fans out; file reads and writes go through envd's file API, not a spawn,
+   * and stay unthrottled. Four slots is a stability invariant of the sandbox
+   * runtime, not a tunable: it costs only latency on a backend that could
+   * take more.
+   * @param operation - the command invocation to run inside a slot.
+   * @returns the operation's result.
+   */
+  private async withCommandSlot<T>(operation: () => Promise<T>): Promise<T> {
+    while (this.runningCommands >= 4) {
+      await new Promise<void>(resolve => this.commandTurns.push(resolve))
+    }
+    this.runningCommands += 1
+    try {
+      return await operation()
+    } finally {
+      this.runningCommands -= 1
+      this.commandTurns.shift()?.()
+    }
+  }
 
   override async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
     assertNotAborted(opts?.signal, 'resolve')
@@ -442,10 +508,10 @@ export class E2BFileSystem extends FileSystem {
 
   private async canonicalPath(sandbox: Sandbox, path: string, signal?: AbortSignal): Promise<string> {
     try {
-      const result = await sandbox.commands.run(
+      const result = await this.withCommandSlot(() => sandbox.commands.run(
         `set -o pipefail; realpath -mz -- ${quoteE2BShellArg(path)} | base64 -w0`,
         commandOpts(signal),
-      )
+      ))
       return decodeCanonicalPath(result.stdout)
     } catch (error: unknown) {
       if (error instanceof CommandExitError) throw new Error(error.stderr || error.message, { cause: error })
@@ -459,11 +525,74 @@ export class E2BFileSystem extends FileSystem {
       const sandbox = await this.ctx.e2b.getSandbox()
       const entry = await sandbox.files.getInfo(path, signalOpts(signal))
       assertNotAborted(signal, 'stat')
-      return entry
+      return await this.withVersionAttribute(entry, signal)
     } catch (error: unknown) {
       if (error instanceof FileNotFoundError) return undefined
       throw mapError(error, 'stat', displayPath, signal)
     }
+  }
+
+  /**
+   * Write the staged content, learning once whether this backend keeps the
+   * version attribute.
+   *
+   * Detection rides on the real write rather than a probe file: an E2B
+   * deployment older than envd 0.6.2 — the Dormice compat layer reports 0.6.1
+   * because it has no xattr store — makes the SDK refuse the option before the
+   * request leaves, so the first refusal is free and no probe artifact ever
+   * appears in the sandbox. The answer is a property of the backend, so it is
+   * remembered for the runtime's life.
+   * @param sandbox - the connected sandbox.
+   * @param path - staging path to write.
+   * @param content - full file content.
+   * @param versionId - value for the version attribute, when it can be stored.
+   * @param signal - abort signal.
+   */
+  private async writeStaged(
+    sandbox: Sandbox,
+    path: string,
+    content: string,
+    versionId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (this.attributesSupported === false) {
+      await sandbox.files.write(path, content, signalOpts(signal))
+      return
+    }
+    try {
+      await sandbox.files.write(path, content, {
+        metadata: { [VERSION_METADATA_KEY]: versionId },
+        ...signalOpts(signal),
+      })
+      this.attributesSupported = true
+    } catch (error: unknown) {
+      if (!isMetadataUnsupported(error)) throw error
+      this.attributesSupported = false
+      await sandbox.files.write(path, content, signalOpts(signal))
+    }
+  }
+
+  /**
+   * Give an entry the version attribute {@link entryVersion} reads.
+   *
+   * A backend that stores extended attributes already carries it. Without one,
+   * the file's inode stands in: a write commits a freshly staged file, so the
+   * inode differs on every write of the same path even when content, size, mode
+   * and mtime repeat. Reading it costs one `stat`, and only on that backend.
+   * @param entry - the entry as the backend reported it.
+   * @param signal - abort signal for the stat.
+   * @returns the entry, with the attribute present whenever it can be known.
+   */
+  private async withVersionAttribute(entry: EntryInfo, signal?: AbortSignal): Promise<EntryInfo> {
+    if (entry.metadata?.[VERSION_METADATA_KEY] !== undefined) return entry
+    if (this.attributesSupported !== false) return entry
+    const sandbox = await this.ctx.e2b.getSandbox()
+    const stat = await this
+      .withCommandSlot(() => sandbox.commands.run(`stat -c %i -- ${quoteE2BShellArg(entry.path)}`, commandOpts(signal)))
+      .catch(() => undefined)
+    const inode = stat?.stdout.trim()
+    if (inode === undefined || inode.length === 0) return entry
+    return { ...entry, metadata: { ...entry.metadata, [VERSION_METADATA_KEY]: `inode:${inode}` } }
   }
 
   private async requireRegular(target: FsTarget, signal?: AbortSignal): Promise<FsInfo> {
@@ -525,28 +654,25 @@ export class E2BFileSystem extends FileSystem {
       const created = await sandbox.files.makeDir(stagingDirectory, signalOpts(signal))
       if (!created) throw new Error('private staging directory already exists')
       stagingDirectoryCreated = true
-      await sandbox.commands.run(`chmod 700 -- ${quoteE2BShellArg(stagingDirectory)}`, commandOpts(signal))
+      await this.withCommandSlot(() => sandbox.commands.run(`chmod 700 -- ${quoteE2BShellArg(stagingDirectory)}`, commandOpts(signal)))
       assertNotAborted(signal, 'write')
-      await sandbox.files.write(temporary, content, {
-        metadata: { [VERSION_METADATA_KEY]: versionId },
-        ...signalOpts(signal),
-      })
+      await this.writeStaged(sandbox, temporary, content, versionId, signal)
       assertNotAborted(signal, 'write')
       const mode = existing === undefined ? 0o600 : existing.mode & 0o777
-      await sandbox.commands.run(
+      await this.withCommandSlot(() => sandbox.commands.run(
         `chmod ${mode.toString(8)} -- ${quoteE2BShellArg(temporary)}`,
         commandOpts(signal),
-      )
+      ))
       assertNotAborted(signal, 'write')
       let committed: EntryInfo
       if (createIfAbsent) {
         const staged = await sandbox.files.getInfo(temporary, signalOpts(signal))
         assertNotAborted(signal, 'write')
         const targetArg = quoteE2BShellArg(targetPath)
-        const publication = await sandbox.commands.run(
+        const publication = await this.withCommandSlot(() => sandbox.commands.run(
           `if ln -T -- ${quoteE2BShellArg(temporary)} ${targetArg}; then printf created; elif test -e ${targetArg} || test -L ${targetArg}; then printf exists; else exit 1; fi`,
           commandOpts(undefined),
-        )
+        ))
         if (publication.stdout === 'exists') {
           throw new FsError(
             `cannot overwrite existing "${target.displayPath}" without reading it first`,
@@ -565,7 +691,7 @@ export class E2BFileSystem extends FileSystem {
       } catch (_committedStagingCleanupFailure) {
         // The target is already committed; an empty private directory cannot turn that write into a failure.
       }
-      return entryVersion(committed)
+      return entryVersion(await this.withVersionAttribute(committed, signal))
     } catch (error: unknown) {
       if (stagingDirectoryCreated) {
         try {

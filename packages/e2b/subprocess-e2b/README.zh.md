@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-[`@deepseek-ai/dsh-subprocess`](../../subprocess/subprocess/README.zh.md) seam 的 E2B 实现。先加载 [`@deepseek-ai/dsh-e2b`](../e2b/README.zh.md)，再用本服务取代 `dsh-subprocess-local`。现有的 Bash、PTY 和 LSP 消费方随后会在共享远程沙箱中执行，无需 E2B 专用的能力包。
+[`@deepseek-ai/dsh-subprocess`](../../subprocess/subprocess/README.zh.md) seam 的 E2B 实现。先挂载一个 [E2B 沙箱能力缝](../e2b/README.zh.md)的 provider（提供方）——[`dsh-e2b-cloud`](../e2b-cloud/README.zh.md) 或 [`dsh-dormice`](../dormice/README.zh.md)——再用本服务取代 `dsh-subprocess-local`。现有的 Bash、PTY 和 LSP 消费方随后会在共享远程沙箱中执行，无需 E2B 专用的能力包。
 
 ## 配置
 
@@ -12,7 +12,7 @@
 
 ## 行为
 
-- **异步远程启动**：同步 seam 会立即返回一个句柄，同时由 `Sandbox.commands.run(..., { background: true })` 在远程启动进程。包装层发布进程组 ID 并由适配器完成验证之前，`pid` 为 `-1`；stdin 和常规观察会等待该发布。自有启动信号会在分配前中止环境和私有状态准备；分配开始后，取消会等待可清理的临时 SDK 句柄。
+- **异步远程启动**：同步 seam 会立即返回一个句柄，同时由 `Sandbox.commands.run(..., { background: true })` 在远程启动进程。包装层发布进程组 ID 并由适配器完成验证之前，`pid` 为 `-1`；stdin 和常规观察会等待该发布。自有启动信号会在分配前中止环境和私有状态准备；分配开始后，取消会等待可清理的临时 SDK 句柄。包装层若在发布之前就退出，其失败会点出 spec 的 `cwd`，并在该失败路径上做一次元数据探测，把沙箱中并不存在的工作目录（`cwd does not exist in the sandbox: <path>`）与在已确认存在的目录下提前退出区分开——因为 E2B 对不存在的 `cwd` 唯一的表现就是这次退出。
 - **执行世界坐标**：`cwd` 和私有 `runtimeRoot` 来自共享所有者；可执行文件查找会验证绝对路径，或根据沙箱 PATH 加显式覆盖来解析裸名称，并与所有 subprocess 提供方一致地拒绝含分隔符的相对路径。
 - **Linux 进程组**：带引号保护的包装层会在 `exec setsid --wait` 下启动每组 argv，并在 `ctx.e2b.runtimeRoot/processes` 下记录实际进程组 ID 和私有状态文件。句柄会等待该文件，而不会把 SDK 命令 PID 当作已发布的身份。终止操作以记录的负数 ID 发送 `SIGTERM`，等待调用方的 `graceMs`，再升级到 `SIGKILL` 和 SDK kill 回退；TERM 信号发送或探测失败也会强制触发该升级。进程表探测会把仅含僵尸或已死亡条目的进程组视为完全停稳。强制清理只有在有界探测发现进程组为空后才算成功；否则 `waitForExit()` 会公开可重试的失败，而已证明的完全停稳会让后续终止操作不再执行任何动作。发布失败与监控失败都会在拒绝前执行同一清理事务。服务 dispose（资源释放）会拒绝新的启动请求、终止并等待每个保留进程组退出，再等待 SDK 结算和私有清理完成，之后沙箱所有者才会释放沙箱。
 - **环境边界**：一次受信任的控制 shell 探测会从 passwd 条目解析沙箱用户的登录主目录，以 base64 ASCII 传输沙箱环境，再进行一次严格 UTF-8 解码；随后包装层移除环境中的 `DSH_*` 和形似凭据的名称（`*KEY*`、`*SECRET*`、`*TOKEN*`），并把每个有效的 `spec.env` 条目恢复为调用方显式选择。空名称、`=` 和违反 NUL 分帧规则的条目会在启动前被拒绝。在用户 profile 脚本运行前，此后的 E2B 命令 shell 与 PTY 登录 shell 会获得位于根目录下、全新随机生成的 `HOME`，并为每个被清理的环境变量名设置空值覆盖；之后，请求的 argv 会在不改变沙箱用户 umask 的前提下接收序列化环境。宿主环境变量绝不会隐式进入沙箱。私有环境文件在使用后会被删除；命令或终端设置失败时，会先删除其私有状态再拒绝。

@@ -2,35 +2,31 @@
 
 [English](README.md) | 中文
 
-一个 E2B 沙箱的共享生命周期所有者。文件系统与进程管理适配器注入 `ctx.e2b`，等待其唯一的 SDK 句柄，因此处于同一个远程 Linux 工作树与进程环境中。本包固定使用 `e2b@2.29.1`；可选组合见[包族索引](../README.zh.md)。
+E2B 沙箱能力缝的 Service Definition（服务定义）。文件系统与进程管理适配器注入 `ctx.e2b` 并等待其唯一的 SDK 句柄，因此无论沙箱由哪个 provider（提供方）供给，它们都处于同一个远程 Linux 工作树与进程环境中。本包固定使用 `e2b@2.29.1`，并重新导出适配器所需的 SDK 接口；provider 列表与可选组合见[包族索引](../README.zh.md)。
+
+本包自身不可加载——它只声明能力缝。请挂载一个 provider：[`dsh-e2b-cloud`](../e2b-cloud/README.zh.md) 对应托管的 E2B Cloud 沙箱，[`dsh-dormice`](../dormice/README.zh.md) 对应自托管的 Dormice 沙箱池。
+
+## 能力缝拥有什么
+
+`E2BRuntime` 是注册在 `e2b` 键上的抽象 Cordis 服务。其构造函数接收共享的绝对工作目录，拒绝非绝对的 Linux 路径，并派生出每个适配器都会读取的两个路径：
+
+- `cwd`——共享的远程工作目录。
+- `runtimeRoot`——即 `cwd/.dsh-e2b`，预留给适配器自有的进程与终端状态。该相对名称是固定的（`E2B_RUNTIME_DIRECTORY`），因此某个 provider 的沙箱写入的状态正好位于适配器查找的位置。
+
+Provider 实现唯一的方法 `getSandbox()`：它在上述两个目录都存在之后返回共享的活动 SDK 句柄。重复调用会等待同一次获取并返回同一个句柄；获取失败会传达给每一个调用方；资源释放会首先拒绝新的获取，而是否同时删除沙箱则属于 provider 的生命周期策略。
+
+本包导出两个 helper（辅助函数），因为两个适配器都要用它们应对 SDK 固定的 `/bin/bash -l -c` 层：
+
+- `quoteE2BShellArg(value)`——把一个不透明参数变成单个 shell 词，不做任何插值。
+- `e2bControlEnvs(overrides)`——为每个适配器内部命令提供位于根目录下、全新随机生成的 `HOME`，使登录 shell 无法在控制命令之前解析可变用户主目录中的配置文件。
 
 ## 配置
 
-```yaml
-- id: e2b
-  name: '@deepseek-ai/dsh-e2b'
-  config:
-    cwd: /home/user/workspace
-    timeoutMs: 300000
-
-- id: subprocess-e2b
-  name: '@deepseek-ai/dsh-subprocess-e2b'
-
-- id: fs-e2b
-  name: '@deepseek-ai/dsh-fs-e2b'
-```
-
-`apiKey` 可省略；省略时读取 `E2B_API_KEY`。该密钥只配置宿主 SDK 连接，绝不会安装进沙箱。`cwd` 默认为 `/home/user/workspace`，并且必须是绝对 POSIX 路径。`timeoutMs` 默认为 5 分钟并控制沙箱生命周期；超时会删除沙箱。
-
-## 生命周期与所有权
-
-构造阶段会启动一次沙箱创建。服务在 `getSandbox()` 成功返回前，会创建 `cwd` 和私有的 `cwd/.dsh-e2b` 适配器状态目录，验证该预留路径是真实目录而非符号链接或其他文件类型，再把该目录的 mode 设为 `0700`。每个适配器内部的 E2B 命令 shell 都会获得一个位于根目录下、全新随机生成的 `HOME`，因此 SDK 固定使用的登录 shell 不会在控制命令之前解析可变用户主目录中的配置文件。
-
-资源释放会先阻止继续获取新句柄，再等待初始化完成，然后删除沙箱。`SandboxNotFoundError` 表示沙箱已因超时或被另一个所有者删除，因此可视为完全停稳。初始目录设置失败时会尝试删除一次；若该尝试也失败，则由已配置的 E2B 超时约束沙箱的存活时间。提供方插件必须在该所有者之后加载，并在其之前 dispose（资源释放）。
+无。所有随部署变化的值（凭据、沙箱生命周期、工作目录、获取策略）都是 provider 的 `Config` 字段。
 
 ## 模型体验
 
-无。本共享运行时所有者不注册模型可见上下文；提供方适配器及其消费方拥有所有渲染效果。
+无。本 Service Definition 不注册模型可见上下文；provider、适配器及其消费方拥有所有渲染效果。
 
 #### KV Cache 影响
 
@@ -39,6 +35,5 @@
 ## 已知限制与延后工作
 
 - **这不是完整的 harness 运行时**：Cordis 服务、agent（智能体）／会话状态、会话日志、LLM（大语言模型）请求、skill（技能）和 SDK 侧缓冲仍留在宿主进程中。
-- **沙箱状态是短暂的**：资源释放和超时都会删除沙箱；重新连接、pause/leave 保留、模板、卷和快照均不在本 POC 范围内。
-- **没有配置部署平台**：网络策略、宿主工作区同步和沙箱发现均不在本 POC 范围内。
-- **`cwd` 是解析约定，而不是包含边界**：适配器和命令可以访问沙箱中的其他路径；E2B 网络访问也继续采用基础镜像的策略。
+- **`cwd` 是解析约定，而不是包含边界**：适配器和命令可以访问沙箱中的其他路径，网络访问也继续采用沙箱镜像的策略。
+- **能力缝固定了单一 SDK 版本**：provider 通过本包的重新导出访问 E2B SDK，因此若不把这里的固定版本一并移动，provider 无法运行在不同的 `e2b` 发行版上。

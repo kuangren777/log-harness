@@ -8,7 +8,7 @@ import {
   type EntryInfo,
   type Sandbox,
 } from '@deepseek-ai/dsh-e2b'
-import type E2BRuntime from '@deepseek-ai/dsh-e2b'
+import type { E2BRuntime } from '@deepseek-ai/dsh-e2b'
 import { FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import E2BFileSystem from '@deepseek-ai/dsh-fs-e2b'
 import * as E2BFsInvariant from '../src/invariant.ts'
@@ -35,6 +35,14 @@ function commandError(exitCode: number, stderr = ''): CommandExitError {
 class FakeRemote {
   readonly nodes = new Map<string, RemoteNode>()
   readonly writes: Array<{ path: string; data: string; metadata?: Record<string, string> }> = []
+
+  /** Refuse the metadata option the way an envd below 0.6.2 does. */
+  refuseMetadata = false
+
+  /** Inode per path, so a re-created file can be given a fresh one. */
+  readonly inodes = new Map<string, number>()
+
+  private nextInode = 1000
   readonly writeParentModes: number[] = []
   readonly renames: Array<{ from: string; to: string }> = []
   readonly links: Array<{ from: string; to: string }> = []
@@ -45,6 +53,12 @@ class FakeRemote {
   streamKeepOpen = false
   readonly streamCancel = vi.fn()
   nextCommandError: unknown
+  /** Consumed by the next `files.write` call, metadata-carrying or not. */
+  nextWriteError: unknown
+  /** Milliseconds each command stays in flight; >0 opens a window where unthrottled callers overlap. */
+  commandPauseMs = 0
+  private runningCommands = 0
+  maxConcurrentCommands = 0
   nextMakeDirResult: boolean | undefined
   nextInfoError: unknown
   nextListError: unknown
@@ -191,9 +205,18 @@ class FakeRemote {
       },
       write: async (path: string, data: string, options?: { metadata?: Record<string, string>; signal?: AbortSignal }): Promise<object> => {
         this.checkAbort(options)
+        if (this.refuseMetadata && options?.metadata !== undefined) {
+          throw new Error('File metadata requires envd 0.6.2 or later.')
+        }
+        if (this.nextWriteError !== undefined) {
+          const error = this.nextWriteError
+          this.nextWriteError = undefined
+          throw error
+        }
         const parent = dirname(path)
         if (!this.nodes.has(parent)) this.dir(parent)
         this.writeParentModes.push(this.required(parent).mode)
+        this.inodes.set(path, this.nextInode++)
         this.nodes.set(path, {
           type: FileType.FILE,
           data: bytes(data),
@@ -212,6 +235,9 @@ class FakeRemote {
           throw error
         }
         const node = this.required(from)
+        const movedInode = this.inodes.get(from)
+        this.inodes.delete(from)
+        if (movedInode !== undefined) this.inodes.set(to, movedInode)
         this.nodes.delete(from)
         this.nodes.set(to, node)
         this.renames.push({ from, to })
@@ -241,6 +267,15 @@ class FakeRemote {
         expect(home).toMatch(/^\/\.dsh-e2b-control-/)
         expect(options?.envs).toEqual({ HOME: home })
         this.commands.push(command)
+        // The counter closes with the pause: overlap can only appear while a
+        // command is deliberately held in flight, so the decrement before the
+        // per-command handlers keeps them byte-for-byte untouched.
+        this.runningCommands += 1
+        this.maxConcurrentCommands = Math.max(this.maxConcurrentCommands, this.runningCommands)
+        if (this.commandPauseMs > 0) {
+          await new Promise(resolve => setTimeout(resolve, this.commandPauseMs))
+        }
+        this.runningCommands -= 1
         if (this.nextCommandError !== undefined) {
           const error = this.nextCommandError
           this.nextCommandError = undefined
@@ -258,6 +293,10 @@ class FakeRemote {
             stdout: this.canonicalOutput ?? Buffer.from(canonical).toString('base64'),
             stderr: '',
           }
+        }
+        const inode = /^stat -c %i -- '([^']+)'$/.exec(command)
+        if (inode !== null) {
+          return { exitCode: 0, stdout: `${this.inodes.get(inode[1]!) ?? 0}\n`, stderr: '' }
         }
         const chmod = /^chmod ([0-7]+) -- '([^']+)'$/.exec(command)
         if (chmod !== null) this.required(chmod[2]!).mode = Number.parseInt(chmod[1]!, 8)
@@ -701,6 +740,18 @@ describe('E2BFileSystem atomic writes and edits', () => {
     expect(remote.removals).toHaveLength(removalsBeforeCollision)
   })
 
+  it('rethrows a staged write failure that is not the metadata-unsupported refusal', async () => {
+    const remote = new FakeRemote()
+    const { fs } = await setup(remote)
+    remote.nextWriteError = new Error('transport reset')
+
+    await expectCode(fs.writeText(await fs.resolve('broken.md'), 'x'), 'FS_IO_ERROR')
+
+    // No metadata-unsupported fallback: the staged write was attempted once,
+    // with the version attribute, and its failure was not swallowed.
+    expect(remote.writes).toHaveLength(0)
+  })
+
   it('applies literal edits atomically and restores the detected CRLF style', async () => {
     const remote = new FakeRemote()
     remote.file('/workspace/file.txt', 'one\r\ntwo\r\nthree\n')
@@ -797,10 +848,93 @@ describe('E2B filesystem adapter integration edges', () => {
     expect(getInfo).toHaveBeenCalledTimes(3)
   })
 
+  it('holds a wide resolve fan-out to at most four in-flight sandbox commands', async () => {
+    const remote = new FakeRemote()
+    remote.commandPauseMs = 2
+    const paths: string[] = []
+    for (let index = 0; index < 30; index += 1) {
+      const path = `/workspace/fan-${index}`
+      remote.file(path, 'x')
+      paths.push(path)
+    }
+    const { fs } = await setup(remote)
+
+    const resolved = await Promise.all(paths.map(async path => fs.resolve(path)))
+
+    expect(resolved.map(target => String(target.targetKey))).toEqual(paths)
+    expect(remote.commands.length).toBeGreaterThanOrEqual(30)
+    expect(remote.maxConcurrentCommands).toBeGreaterThan(1)
+    expect(remote.maxConcurrentCommands).toBeLessThanOrEqual(4)
+  })
+
   it('registers the package-owned empty invariant installer', async () => {
     const ctx = new Context()
     await ctx.plugin(InvariantRegistry, { enabled: true })
     const fiber = await ctx.plugin(E2BFsInvariant).await()
     await fiber.dispose()
+  })
+})
+
+describe('E2B filesystem adapter against a backend without extended attributes', () => {
+  it('writes without the attribute and still versions each write distinctly', async () => {
+    const remote = new FakeRemote()
+    remote.refuseMetadata = true
+    const { fs } = await setup(remote)
+
+    const target = await fs.resolve('note.md')
+    const first = await fs.writeText(target, 'one')
+    expect(remote.writes.every(write => write.metadata === undefined)).toBe(true)
+
+    // Same size, same mode, and the mock's clock is the only thing separating
+    // the two writes — without the inode standing in for the attribute these
+    // two versions would collide and a stale-guard would accept the second.
+    const second = await fs.writeText(target, 'two')
+    expect(second.version).not.toBe(first.version)
+
+    // The version a later read derives must be the one the write reported, or
+    // no compare-and-set could ever succeed against this backend.
+    const observed = await fs.stat(target)
+    expect(observed?.version).toBe(second.version)
+  })
+
+  it('still refuses a write whose expected version is stale', async () => {
+    const remote = new FakeRemote()
+    remote.refuseMetadata = true
+    const { fs } = await setup(remote)
+
+    const target = await fs.resolve('guarded.md')
+    const first = await fs.writeText(target, 'one')
+    await fs.writeText(target, 'two')
+    // `first.version` now names a superseded revision; the guard must reject it
+    // on the inode stand-in exactly as it would on the stored attribute.
+    await expectCode(
+      fs.writeText(target, 'three', { kind: 'replaceIfVersion', version: first.version }),
+      'FS_STALE_VERSION',
+    )
+  })
+
+  it('keeps using the attribute when the backend does store it', async () => {
+    const remote = new FakeRemote()
+    const { fs } = await setup(remote)
+    const target = await fs.resolve('kept.md')
+    await fs.writeText(target, 'one')
+    expect(remote.writes.some(write => write.metadata?.['dsh-version'] !== undefined)).toBe(true)
+  })
+
+  it('leaves an entry unversioned when the inode stat itself fails', async () => {
+    const remote = new FakeRemote()
+    remote.refuseMetadata = true
+    const { fs } = await setup(remote)
+    const target = await fs.resolve('unstattable.md')
+    await fs.writeText(target, 'one')
+
+    remote.nextCommandError = commandError(1, 'stat: cannot stat')
+    const commandsBefore = remote.commands.length
+
+    // The inode probe fails, so withVersionAttribute falls back to the entry
+    // as reported instead of rejecting the read.
+    await expect(fs.stat(target)).resolves.toBeDefined()
+    expect(remote.commands.slice(commandsBefore)).toEqual([`stat -c %i -- '${String(target.targetKey)}'`])
+    expect(remote.nextCommandError).toBeUndefined()
   })
 })

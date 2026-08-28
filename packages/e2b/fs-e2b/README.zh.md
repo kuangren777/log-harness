@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-[`@deepseek-ai/dsh-fs`](../../fs/fs/README.zh.md) 提供方约定的 E2B 实现。它没有配置：先加载 [`@deepseek-ai/dsh-e2b`](../e2b/README.zh.md)，再用本服务取代 `dsh-fs-local`。该提供方使用所有者的远程 cwd 和 SDK 句柄，因此文件工具观察到的环境与 E2B 后端 Bash 进程相同。
+[`@deepseek-ai/dsh-fs`](../../fs/fs/README.zh.md) 提供方约定的 E2B 实现。它没有配置：先挂载一个 [E2B 沙箱能力缝](../e2b/README.zh.md)的 provider（提供方）——[`dsh-e2b-cloud`](../e2b-cloud/README.zh.md) 或 [`dsh-dormice`](../dormice/README.zh.md)——再用本服务取代 `dsh-fs-local`。该提供方使用所有者的远程 cwd 和 SDK 句柄，因此文件工具观察到的环境与 E2B 后端 Bash 进程相同。
 
 ## 行为
 

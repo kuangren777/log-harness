@@ -8,7 +8,7 @@ import {
   type CommandResult,
   type Sandbox,
 } from '@deepseek-ai/dsh-e2b'
-import type E2BRuntime from '@deepseek-ai/dsh-e2b'
+import type { E2BRuntime } from '@deepseek-ai/dsh-e2b'
 import type { SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import E2BSubprocessRuntime from '@deepseek-ai/dsh-subprocess-e2b'
 import * as E2BSubprocessInvariant from '../src/invariant.ts'
@@ -102,6 +102,11 @@ class FakeSandbox {
   statusError: unknown
   nextRemoveError: unknown
   probeError: unknown
+  /** Paths `files.getInfo` reports as absent, standing for a cwd the sandbox does not have. */
+  readonly missingPaths = new Set<string>()
+  /** Rejection `files.getInfo` raises instead of answering, standing for a probe that cannot decide. */
+  infoError: unknown
+  readonly infoRequests: string[] = []
   signalError: unknown
   readonly signalErrors: unknown[] = []
   trapsTerm = false
@@ -226,6 +231,12 @@ class FakeSandbox {
         this.statusReads += 1
         this.afterStatusRead?.()
         return this.exitStatus
+      },
+      getInfo: async (path: string): Promise<{ path: string }> => {
+        this.infoRequests.push(path)
+        if (this.infoError !== undefined) throw this.infoError
+        if (this.missingPaths.has(path)) throw new FileNotFoundError(`missing: ${path}`)
+        return { path }
       },
       remove: async (path: string): Promise<void> => {
         this.removed.push(path)
@@ -1396,15 +1407,46 @@ describe('E2BSubprocessHandle', () => {
     expect(unsafeGroup.commandsSeen).not.toContain('kill -KILL -- -1')
     await expect(unsafe.waitForExit()).resolves.toBe(true)
 
+    // A present cwd leaves the wrapper's own early exit as the whole diagnosis,
+    // with the working directory named so the reader can rule it out.
     const absentGroup = new FakeSandbox()
     absentGroup.processGroupId = ''
     const absent = testHandle(runtime(absentGroup), spec(), '/runtime/absent-group')
     await flush()
     absentGroup.finish()
-    await expect(absent.done).rejects.toThrow(/exited before publishing/)
+    await expect(absent.done).rejects
+      .toThrow('subprocess-e2b: remote command exited before publishing its process-group id (cwd /workspace)')
+    expect(absentGroup.infoRequests).toEqual(['/workspace'])
     expect(absentGroup.handle.kills).toBe(1)
     expect(absentGroup.commandsSeen).toContain('kill -KILL -- -4242')
     await expect(absent.waitForExit()).resolves.toBe(true)
+  })
+
+  it('names a cwd the sandbox does not have as the publication failure', async () => {
+    // The GUI can hand over a directory that exists on the host process
+    // filesystem only; the sandbox reports it as nothing but this early exit.
+    const missingCwd = new FakeSandbox()
+    missingCwd.processGroupId = ''
+    missingCwd.missingPaths.add('/home/node')
+    const missing = testHandle(runtime(missingCwd), spec({ cwd: '/home/node' }), '/runtime/missing-cwd')
+    await flush()
+    missingCwd.finish()
+    await expect(missing.done).rejects.toThrow('subprocess-e2b: cwd does not exist in the sandbox: /home/node')
+    expect(missing.pid).toBe(-1)
+    await expect(missing.waitForExit()).resolves.toBe(true)
+
+    // A probe that cannot decide leaves absence unproven, so the message asks
+    // instead of asserting.
+    const undecided = new FakeSandbox()
+    undecided.processGroupId = ''
+    undecided.infoError = new Error('metadata request failed')
+    const asked = testHandle(runtime(undecided), spec({ cwd: '/home/node' }), '/runtime/undecided-cwd')
+    await flush()
+    undecided.finish()
+    await expect(asked.done).rejects.toThrow(
+      'subprocess-e2b: remote command exited before publishing its process-group id (cwd /home/node; does it exist in the sandbox?)',
+    )
+    await expect(asked.waitForExit()).resolves.toBe(true)
   })
 
   it('preserves publication failure and reports cleanup that cannot be verified', async () => {
