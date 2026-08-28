@@ -3,10 +3,11 @@
  * narrow RpcRequest<P> and echoes request.rpcId on the RpcResponse<T>.
  */
 
+import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { mkdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname } from 'node:path'
+import { dirname, extname } from 'node:path'
 import { z as zod } from 'zod'
 import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
@@ -36,9 +37,11 @@ import {
 } from '@deepseek-ai/dsh-agent-presets'
 import type { PresetBearingSession } from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-tools'
-// Type-only: resolves `ctx.get('fs')` to the filesystem seam owning the execution
-// world a session's cwd lives in; the composition may have no filesystem at all.
-import type {} from '@deepseek-ai/dsh-fs'
+// Resolves `ctx.get('fs')` to the filesystem seam owning the execution world a
+// session's cwd lives in; the composition may have no filesystem at all.
+// `FsError` narrows the seam's own read refusals to their stable codes at this
+// wire boundary, the same role GoalError plays for the goal domain.
+import { FsError } from '@deepseek-ai/dsh-fs'
 import type {
   ApiProxy, ConfigurableProviderView, CredentialView, GoalRef, HistoryEntry, HostFrame,
   ModelCatalogFailure, ModelProviderGroup,
@@ -125,6 +128,8 @@ const SESSION_SEARCH_PROVIDER_CALL_LIMIT = 100
 const COLD_SUMMARY_BATCH_SIZE = 16
 /** Default maximum artifact size eligible for one cold blankness read. */
 export const DEFAULT_COLD_BLANK_PROBE_MAX_BYTES = 1024
+/** Default inclusive byte cap on one `workspace.readFile` response. */
+export const DEFAULT_READ_FILE_MAX_BYTES = 8 * 1024 * 1024
 
 /** Conversation message event types (the pagination counting unit). */
 const MESSAGE_TYPES = new Set(['user/message', 'assistant/message'])
@@ -577,6 +582,67 @@ function directoryError(error: unknown): RpcError {
   return { code: 'internal', message: error instanceof Error ? error.message : String(error), details: {} }
 }
 
+/**
+ * Extension → media type for `workspace.readFile`. Extension-derived, never
+ * content-sniffed: the client picks a preview renderer from this label, and a
+ * sniffed type would disagree with the name the same file carries everywhere
+ * else. An unlisted extension is opaque bytes.
+ */
+const WORKSPACE_FILE_MEDIA_TYPES: Readonly<Record<string, string>> = {
+  '.md': 'text/markdown',
+  '.txt': 'text/plain',
+  '.json': 'application/json',
+  '.py': 'text/x-python',
+  '.ts': 'text/typescript',
+  '.tsx': 'text/typescript',
+  '.js': 'text/javascript',
+  '.jsx': 'text/javascript',
+  '.sh': 'text/x-shellscript',
+  '.yaml': 'text/yaml',
+  '.yml': 'text/yaml',
+  '.toml': 'text/x-toml',
+  '.csv': 'text/csv',
+  '.tex': 'text/x-tex',
+  '.bib': 'text/x-bibtex',
+  '.html': 'text/html',
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.univer': 'application/x-univer',
+}
+
+/** Non-`text/` media types whose content is still UTF-8 text on this wire. */
+const WORKSPACE_TEXT_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  'application/json',
+  'application/x-univer',
+  'image/svg+xml',
+])
+
+/**
+ * The media type one `workspace.readFile` response advertises.
+ * @param path - the canonical path of the file that was read.
+ * @returns the extension's media type, or `application/octet-stream`.
+ */
+function workspaceFileMediaType(path: string): string {
+  return WORKSPACE_FILE_MEDIA_TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream'
+}
+
+/**
+ * Whether a `workspace.readFile` response carries decoded text instead of base64.
+ * @param mediaType - the type {@link workspaceFileMediaType} derived.
+ * @returns true when the bytes decode as UTF-8 text for the client.
+ */
+function isWorkspaceTextMediaType(mediaType: string): boolean {
+  return mediaType.startsWith('text/') || WORKSPACE_TEXT_MEDIA_TYPES.has(mediaType)
+}
+
 /** Resolved Agent model and project-directory defaults consumed by the API implementation. */
 export interface ApiProxyDefaults {
   /**
@@ -604,6 +670,8 @@ export interface ApiProxyDefaults {
   sessionExportCompressionLevel?: SessionLogCompressionLevel
   /** Maximum artifact size eligible for one cold blankness read. */
   coldBlankProbeMaxBytes?: number
+  /** Inclusive byte cap on one `workspace.readFile` response; a larger file is refused, never truncated. */
+  readFileMaxBytes?: number
   /**
    * Skill providers whose catalog descriptions the client must not see. The
    * session log keeps the full `<available_skills>` message the model saw;
@@ -1062,6 +1130,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     ?? DEFAULT_SESSION_LOG_COMPRESSION_LEVEL
   const coldBlankProbeMaxBytes = defaults.coldBlankProbeMaxBytes
     ?? DEFAULT_COLD_BLANK_PROBE_MAX_BYTES
+  const readFileMaxBytes = defaults.readFileMaxBytes ?? DEFAULT_READ_FILE_MAX_BYTES
   /** Client-facing copy of a logged event; the log itself is never rewritten. */
   const protectedSkillProviders: ReadonlySet<string> = new Set(defaults.redactSkillCatalogProviders ?? [])
   const redactForClient = (event: SessionEvent): SessionEvent => redactEventForClient(event, protectedSkillProviders)
@@ -2859,6 +2928,97 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         }
         return ok(request, { archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds] })
+      },
+
+      // Reading never creates or resumes an agent, the `skill.list` stance:
+      // the session address resolves to a canonical cwd from the host-resident
+      // session header, and every byte comes from the filesystem seam that
+      // session's tools run in — in a sandboxed deployment those paths are not
+      // Host paths, so a Host read here would answer from the wrong world.
+      async readFile(request, signal) {
+        const { sessionId, path } = request.payload
+        const session = ctx.sessions.get(sessionId)
+        if (session === undefined) {
+          return err(request, {
+            code: 'session-not-found',
+            message: `session "${sessionId}" not found (not attached)`,
+            details: { sessionId },
+          })
+        }
+        if (session.header.cwd === undefined) {
+          // Every served session records its project at create time; a
+          // cwd-less header is a pre-project legacy log (not served).
+          return err(request, { code: 'internal', message: `session "${sessionId}" has no project cwd`, details: {} })
+        }
+        const cwd = session.header.cwd
+        const fs = ctx.get('fs')
+        if (fs === undefined) {
+          return err(request, {
+            code: 'internal',
+            message: 'filesystem is absent: this composition mounts no @deepseek-ai/dsh-fs backend',
+            details: {},
+          })
+        }
+        try {
+          const root = await fs.resolve(cwd, { signal })
+          const target = await fs.resolve(path, { cwd, signal })
+          // Containment is tested on resolved targets, so a symlink whose
+          // target leaves the project directory is refused with the traversal
+          // it is, not followed because its own path looked contained.
+          if (!fs.contains(root, target)) {
+            return err(request, {
+              code: 'path-out-of-scope',
+              message: `"${path}" resolves outside the session's project directory`,
+              details: { path, cwd },
+            })
+          }
+          const info = await fs.stat(target, signal)
+          if (info === undefined) {
+            return err(request, { code: 'file-not-found', message: `"${path}" does not exist`, details: { path } })
+          }
+          if (info.type !== 'file') {
+            return err(request, {
+              code: 'not-a-file',
+              message: `"${path}" is a ${info.type}, not a regular file`,
+              details: { path },
+            })
+          }
+          // The seam owns the cap: it refuses an oversized target instead of
+          // returning a truncated read, so the complete response is bounded.
+          const bytes = await fs.readBytes(target, signal, readFileMaxBytes)
+          const mediaType = workspaceFileMediaType(target.displayPath)
+          const text = isWorkspaceTextMediaType(mediaType)
+          return ok(request, {
+            path: target.displayPath,
+            size: bytes.length,
+            mediaType,
+            encoding: text ? 'utf8' as const : 'base64' as const,
+            content: text ? new TextDecoder().decode(bytes) : Buffer.from(bytes).toString('base64'),
+          })
+        } catch (error: unknown) {
+          // An abort is the caller's own timeout/disconnect, not a server
+          // failure — same code listDirectory and command.execute report.
+          if (signal.aborted) {
+            return err(request, { code: 'cancelled', message: 'file read was aborted', details: {} })
+          }
+          if (error instanceof FsError && error.code === 'FS_TOO_LARGE') {
+            return err(request, {
+              code: 'file-too-large',
+              message: error.message,
+              details: { path, maxBytes: readFileMaxBytes },
+            })
+          }
+          if (error instanceof FsError && error.code === 'FS_NOT_FOUND') {
+            // The backend rejects a path whose parent segment is not a
+            // directory before any target exists to stat.
+            return err(request, { code: 'file-not-found', message: error.message, details: { path } })
+          }
+          return err(request, {
+            code: 'internal',
+            message: `reading "${path}" failed: ${error instanceof Error ? error.message : String(error)}`,
+            details: {},
+          })
+        }
       },
     },
 

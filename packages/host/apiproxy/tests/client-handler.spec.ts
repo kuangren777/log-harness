@@ -88,6 +88,9 @@ function scriptedApi(overrides: {
       insertBefore: r => ok(r, { workspaceIds: [r.payload.workspaceId] }),
       insertSessionBefore: r => ok(r, { workspace: { workspaceId: 'w1' as never, path: '/t', title: 't', sessionIds: [], createdAt: '0', updatedAt: '0' } }),
       archiveSession: r => ok(r, { archivedSessionIds: [r.payload.sessionId] }),
+      readFile: r => ok(r, {
+        path: `/t/${r.payload.path}`, size: 2, mediaType: 'text/markdown', encoding: 'utf8' as const, content: '# ',
+      }),
     },
     skills: { list: r => ok(r, { skills: [] }), ...overrides.skills },
     agentPresets: {
@@ -433,12 +436,20 @@ describe('workspace domain round trip', () => {
     if (created.result.ok) expect(created.result.value.created).toBe(true)
     const archivedResponse = await c.workspace.archiveSession({ sessionId: 's-arch' as never })
     expect(archivedResponse.result).toEqual({ ok: true, value: { archivedSessionIds: ['s-arch'] } })
+    const read = await c.workspace.readFile({ sessionId: 's-read' as never, path: 'notes.md' })
+    expect(read.result).toEqual({
+      ok: true,
+      value: { path: '/t/notes.md', size: 2, mediaType: 'text/markdown', encoding: 'utf8', content: '# ' },
+    })
   })
 
-  it('rejects a pathless create payload at the handler schema', async () => {
+  it('rejects a pathless create payload and an empty readFile path at the handler schema', async () => {
     const response = await client(scriptedApi()).workspace.create({} as never)
     expect(response.result.ok).toBe(false)
     if (!response.result.ok) expect(response.result.error.code).toBe('bad-request')
+    const read = await client(scriptedApi()).workspace.readFile({ sessionId: 's-read' as never, path: '' })
+    expect(read.result.ok).toBe(false)
+    if (!read.result.ok) expect(read.result.error.code).toBe('bad-request')
   })
 })
 

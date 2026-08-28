@@ -26,6 +26,7 @@ import {
   workspaceInsertBeforeRequestSchema, workspaceInsertBeforeValueSchema,
   workspaceInsertSessionBeforeRequestSchema, workspaceInsertSessionBeforeValueSchema,
   workspaceListRequestSchema, workspaceListValueSchema,
+  workspaceReadFileRequestSchema, workspaceReadFileValueSchema,
   workspaceRenameRequestSchema, workspaceRenameValueSchema, workspaceViewSchema,
 } from '../src/api/workspace.schema.ts'
 import { skillEntrySchema, skillListRequestSchema, skillListValueSchema } from '../src/api/skills.schema.ts'
@@ -67,6 +68,10 @@ describe('rpcErrorSchema', () => {
     expect(rpcErrorSchema.parse({ code: 'workspace-invalid-path', message: 'm', details: { path: '/x' } }).code).toBe('workspace-invalid-path')
     expect(rpcErrorSchema.parse({ code: 'workspace-name-conflict', message: 'm', details: { name: 'x' } }).code).toBe('workspace-name-conflict')
     expect(rpcErrorSchema.parse({ code: 'workspace-move-invalid', message: 'm', details: { workspaceId: 'w', sessionId: 's' } }).code).toBe('workspace-move-invalid')
+    expect(rpcErrorSchema.parse({ code: 'path-out-of-scope', message: 'm', details: { path: 'x', cwd: '/w' } }).code).toBe('path-out-of-scope')
+    expect(rpcErrorSchema.parse({ code: 'file-not-found', message: 'm', details: { path: 'x' } }).code).toBe('file-not-found')
+    expect(rpcErrorSchema.parse({ code: 'not-a-file', message: 'm', details: { path: 'x' } }).code).toBe('not-a-file')
+    expect(rpcErrorSchema.parse({ code: 'file-too-large', message: 'm', details: { path: 'x', maxBytes: 16 } }).code).toBe('file-too-large')
     expect(rpcErrorSchema.parse({
       code: 'model-unavailable',
       message: 'm',
@@ -397,6 +402,18 @@ describe('workspace domain schemas', () => {
     expect(() => workspaceDeleteRequestSchema.parse({})).toThrow()
     expect(workspaceDeleteValueSchema.parse({ deleted: true })).toEqual({ deleted: true })
     expect(() => workspaceDeleteValueSchema.parse({ deleted: false })).toThrow()
+  })
+
+  it('readFile requires a session-addressed non-empty path and a closed encoding tag', () => {
+    expect(workspaceReadFileRequestSchema.parse({ sessionId: 's1', path: 'out/report.md' }).path).toBe('out/report.md')
+    expect(() => workspaceReadFileRequestSchema.parse({ sessionId: 's1', path: '' })).toThrow()
+    expect(() => workspaceReadFileRequestSchema.parse({ path: 'out/report.md' })).toThrow()
+    const value = { path: '/w/out/report.md', size: 3, mediaType: 'text/markdown', encoding: 'utf8', content: '# h' }
+    expect(workspaceReadFileValueSchema.parse(value).encoding).toBe('utf8')
+    expect(workspaceReadFileValueSchema.parse({ ...value, encoding: 'base64' }).encoding).toBe('base64')
+    expect(() => workspaceReadFileValueSchema.parse({ ...value, encoding: 'hex' })).toThrow()
+    expect(() => workspaceReadFileValueSchema.parse({ ...value, size: -1 })).toThrow()
+    expect(() => workspaceReadFileValueSchema.parse({ ...value, size: 1.5 })).toThrow()
   })
 
   it('insertBefore accepts an anchored or anchorless Workspace move and returns the complete order', () => {

@@ -7,7 +7,7 @@
 import { z } from 'zod'
 import type { RequestPayload, ResponseValue } from './rpc-map.ts'
 import type { Wire } from './rpc.schema.ts'
-import type { WorkspaceView } from './workspace.ts'
+import type { WorkspaceFileContent, WorkspaceView } from './workspace.ts'
 import { sessionIdSchema, workspaceIdSchema } from './sessions.schema.ts'
 
 export { workspaceIdSchema } from './sessions.schema.ts'
@@ -98,3 +98,18 @@ export const workspaceArchiveSessionRequestSchema = z.object({
 export const workspaceArchiveSessionValueSchema = z.object({
   archivedSessionIds: z.array(sessionIdSchema),
 }) satisfies z.ZodType<Wire<ResponseValue<'workspace.archiveSession'>>>
+
+/** workspace.readFile request payload: the session owning the project directory, and the file under it. */
+export const workspaceReadFileRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+  path: z.string().min(1),
+}) satisfies z.ZodType<Wire<RequestPayload<'workspace.readFile'>>>
+
+/** workspace.readFile response value: one file's complete content. */
+export const workspaceReadFileValueSchema = z.object({
+  path: z.string(),
+  size: z.number().int().min(0),
+  mediaType: z.string(),
+  encoding: z.union([z.literal('utf8'), z.literal('base64')]),
+  content: z.string(),
+}) satisfies z.ZodType<Wire<WorkspaceFileContent>>

@@ -35,6 +35,24 @@ export interface WorkspaceView {
   updatedAt: string
 }
 
+/**
+ * One file's complete content, read through the session's filesystem seam for a
+ * client preview surface. Never a partial read: a file past the deployment's
+ * `readFileMaxBytes` cap fails with `file-too-large` instead of truncating.
+ */
+export interface WorkspaceFileContent {
+  /** Canonical absolute path in the filesystem backend's execution world (not the requested spelling). */
+  path: string
+  /** Byte length of the file content before `encoding` is applied. */
+  size: number
+  /** Media type derived from the path extension; `application/octet-stream` for an unlisted one. */
+  mediaType: string
+  /** How `content` carries the bytes: UTF-8 decoded text, or base64 of the raw bytes. */
+  encoding: 'utf8' | 'base64'
+  /** The complete file content in `encoding`. */
+  content: string
+}
+
 /** Workspace-domain unary methods (the map keys workspace.* of RpcMethodMap). */
 export interface WorkspaceApi {
   /**
@@ -106,4 +124,27 @@ export interface WorkspaceApi {
    */
   archiveSession(request: RpcRequest<{ sessionId: SessionId }>):
   Promise<RpcResponse<{ archivedSessionIds: SessionId[] }>>
+
+  /**
+   * Read one file under a session's project directory through the filesystem
+   * seam that session's tools run in, for a client preview surface.
+   *
+   * The session addresses the directory: `path` is absolute or relative to
+   * that cwd, and a target the backend does not canonically contain fails with
+   * `path-out-of-scope` — a symlink out of the directory is refused with it,
+   * because containment is tested on resolved targets. An attached session is
+   * required (`session-not-found` otherwise, as in `skill.list`); a session
+   * whose header records no project, and a composition mounting no filesystem
+   * backend, both answer `internal`.
+   *
+   * The complete content is read or nothing is: an absent target answers
+   * `file-not-found`, a directory or special file `not-a-file`, and a file
+   * past the deployment's `readFileMaxBytes` cap `file-too-large` rather than
+   * a truncated body. Cancellation through the carrier's request signal
+   * answers `cancelled`.
+   */
+  readFile(
+    request: RpcRequest<{ sessionId: SessionId; path: string }>,
+    signal: AbortSignal,
+  ): Promise<RpcResponse<WorkspaceFileContent>>
 }

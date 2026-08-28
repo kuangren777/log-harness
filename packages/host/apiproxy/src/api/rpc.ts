@@ -41,6 +41,18 @@ export interface RpcErrorDetailsMap {
   'workspace-invalid-path': { path: string }
   'workspace-name-conflict': { name: string }
   'workspace-move-invalid': { workspaceId: string; sessionId: SessionId; beforeSessionId?: SessionId }
+  /** `workspace.readFile` was asked for a path the session's project directory does not canonically contain. */
+  'path-out-of-scope': { path: string; cwd: string }
+  /** `workspace.readFile` found no such target under the session's project directory. */
+  'file-not-found': { path: string }
+  /** `workspace.readFile` addressed a directory or special file; only regular files are readable. */
+  'not-a-file': { path: string }
+  /**
+   * `workspace.readFile` refused a file past the deployment's `readFileMaxBytes`
+   * cap. The cap rides the details; the message is the filesystem backend's own
+   * text and names the actual size.
+   */
+  'file-too-large': { path: string; maxBytes: number }
   'directory-unreadable': { path: string }
   'directory-exists': { path: string }
   'directory-create-failed': { path: string }

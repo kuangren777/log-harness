@@ -16,7 +16,11 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type { ApiProxy } from './api/index.ts'
-import { createApiProxy, DEFAULT_COLD_BLANK_PROBE_MAX_BYTES } from './api-proxy.ts'
+import {
+  createApiProxy,
+  DEFAULT_COLD_BLANK_PROBE_MAX_BYTES,
+  DEFAULT_READ_FILE_MAX_BYTES,
+} from './api-proxy.ts'
 import {
   DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
   type SessionLogCompressionLevel,
@@ -60,6 +64,14 @@ export interface Config {
    */
   coldBlankProbeMaxBytes?: number
   /**
+   * Inclusive byte cap on one `workspace.readFile` response. A larger file is
+   * refused with `file-too-large` rather than truncated. Base64 inflates a
+   * binary body by about a third on the wire, so the cap bounds the file, not
+   * the response.
+   * @default 8388608
+   */
+  readFileMaxBytes?: number
+  /**
    * Skill providers whose catalog descriptions are withheld from every client
    * copy of the `<available_skills>` message (live frames and history pages).
    * The session log keeps the full text the model saw. A deployment that
@@ -85,6 +97,7 @@ export class ApiProxyService extends Service implements ApiProxy {
     sessionExportCompressionLevel: z.number().step(1).min(0).max(9)
       .default(DEFAULT_SESSION_LOG_COMPRESSION_LEVEL) as z<SessionLogCompressionLevel>,
     coldBlankProbeMaxBytes: z.natural().default(DEFAULT_COLD_BLANK_PROBE_MAX_BYTES),
+    readFileMaxBytes: z.natural().default(DEFAULT_READ_FILE_MAX_BYTES),
     redactSkillCatalogProviders: z.array(z.string()).default([]),
   })
 
@@ -115,6 +128,9 @@ export class ApiProxyService extends Service implements ApiProxy {
       ...(config.coldBlankProbeMaxBytes === undefined
         ? {}
         : { coldBlankProbeMaxBytes: config.coldBlankProbeMaxBytes }),
+      ...(config.readFileMaxBytes === undefined
+        ? {}
+        : { readFileMaxBytes: config.readFileMaxBytes }),
       ...(config.redactSkillCatalogProviders === undefined
         ? {}
         : { redactSkillCatalogProviders: config.redactSkillCatalogProviders }),
