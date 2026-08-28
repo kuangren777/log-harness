@@ -129,7 +129,10 @@
         source:
           kind: http
           url: http://127.0.0.1:3081
-        sandboxRoot: /home/user/sci/skills
+        # Under the harness-private `.sci/` so the workspace directory picker
+        # (which hides dot entries) does not list skill names or helper files
+        # in the user's tree. Only non-SKILL.md helpers ever land here.
+        sandboxRoot: /home/user/sci/.sci/skills
         staleAfterDays: 90
         syncOnStart: true
 

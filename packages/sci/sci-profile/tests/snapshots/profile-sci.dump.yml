@@ -547,7 +547,7 @@
     source:
       kind: http
       url: http://127.0.0.1:3081
-    sandboxRoot: /home/user/sci/skills
+    sandboxRoot: /home/user/sci/.sci/skills
     staleAfterDays: 90
     syncOnStart: true
 - id: sci-workspace
