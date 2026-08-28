@@ -134,6 +134,11 @@
 - id: sci-prompt
   name: '@deepseek-ai/dsh-sci-prompt'
 
+# Content-addressed text references, the seam sci-skills registers its body
+# store on; a standalone example mounts it directly.
+- id: referenced-text
+  name: '@deepseek-ai/dsh-referenced-text'
+
 - id: sci-skills
   name: '@deepseek-ai/dsh-sci-skills'
   config:

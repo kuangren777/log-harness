@@ -106,6 +106,12 @@
     - id: attachment-local
       name: '@deepseek-ai/dsh-attachment-local'
 
+    # Content-addressed text references resolved at model-request time, the peer
+    # of the attachment seam for prose. The registry starts empty; a consumer
+    # (the science skill layer) registers a store that serves skill bodies.
+    - id: referenced-text
+      name: '@deepseek-ai/dsh-referenced-text'
+
     # Full-text session search is opt-in. `openAt: never` keeps
     # ctx.sessionQuery mounted — exact reads, titles, and lineage traces
     # (session export, subagent-fork Workspace inheritance) stay available —

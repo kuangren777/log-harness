@@ -123,6 +123,12 @@
 # The skill catalog. `syncOnStart` is off here: the bundled tree is already on
 # this machine, and copying it through the filesystem seam at every boot would
 # make a keyless snapshot wait on fifteen directory walks.
+# Content-addressed text references, the seam sci-skills registers its body
+# store on; the profile gets this from the base bundle, a standalone example
+# mounts it directly.
+- id: referenced-text
+  name: '@deepseek-ai/dsh-referenced-text'
+
 - id: sci-skills
   name: '@deepseek-ai/dsh-sci-skills'
   config:

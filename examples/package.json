@@ -15,6 +15,7 @@
     "@deepseek-ai/dsh-agent-spine-demo": "workspace:*",
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-attachment-local": "workspace:*",
+    "@deepseek-ai/dsh-referenced-text": "workspace:*",
     "@deepseek-ai/dsh-shell": "workspace:*",
     "@deepseek-ai/dsh-shell-env": "workspace:*",
     "@deepseek-ai/dsh-bash-local": "workspace:*",
@@ -28,6 +29,7 @@
     "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:*",
     "@deepseek-ai/dsh-credentials-local": "workspace:*",
     "@deepseek-ai/dsh-e2b": "workspace:*",
+    "@deepseek-ai/dsh-e2b-cloud": "workspace:*",
     "@deepseek-ai/dsh-fs-e2b": "workspace:*",
     "@deepseek-ai/dsh-fs-local": "workspace:*",
     "@deepseek-ai/dsh-fs-observation-policy": "workspace:*",
@@ -115,6 +117,17 @@
     "@deepseek-ai/dsh-web": "workspace:*",
     "@deepseek-ai/dsh-web-fetch-http": "workspace:*",
     "@deepseek-ai/dsh-workflow-worker-thread": "workspace:*",
-    "@deepseek-ai/dsh-agent-instructions": "workspace:*"
+    "@deepseek-ai/dsh-agent-instructions": "workspace:*",
+    "@deepseek-ai/dsh-sci-deliver": "workspace:*",
+    "@deepseek-ai/dsh-sci-guard": "workspace:*",
+    "@deepseek-ai/dsh-sci-manifest": "workspace:*",
+    "@deepseek-ai/dsh-sci-plan": "workspace:*",
+    "@deepseek-ai/dsh-sci-prompt": "workspace:*",
+    "@deepseek-ai/dsh-sci-skills": "workspace:*",
+    "@deepseek-ai/dsh-sci-tier": "workspace:*",
+    "@deepseek-ai/dsh-sci-workspace": "workspace:*",
+    "@deepseek-ai/dsh-storage": "workspace:*",
+    "@deepseek-ai/dsh-storage-domain": "workspace:*",
+    "@deepseek-ai/dsh-storage-json": "workspace:*"
   }
 }
