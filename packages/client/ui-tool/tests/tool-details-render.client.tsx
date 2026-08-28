@@ -4,10 +4,10 @@ import type {
   ChatConversationViewNode, ChatSnapshot, ConversationNode, RunningToolCall, SessionId,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SessionProviderComponent, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { DetailsSlotProps, DetailsToolOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/src/client/contract/slots.ts'
+import type { DetailsToolModeProps, DetailsToolOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/src/client/contract/slots.ts'
 import { ToolDetails } from '../src/client/tool/ToolDetails.tsx'
 
-/** Framework session-area seat used by direct DetailsPanel tests. */
+/** Framework session-area seat used by direct details-mode tests. */
 export const SessionProviderStub: SessionProviderComponent = ({ children }) => children('s1' as SessionId)
 
 /** Build the canonical Chat slice consumed by Tool rows and details tests. */
@@ -58,7 +58,7 @@ export function toolChatSnapshot(
 export function renderToolDetails(
   t: TranslateNS<'conversation'>,
   description?: HostDescription,
-): DetailsSlotProps['renderSlot'] {
+): DetailsToolModeProps['renderSlot'] {
   return (_key, owner) => {
     // PropsRenderSlots keeps its key generic even for this one-key share;
     // recover the concrete owner selected by the adapter's fixed slot.

@@ -20,7 +20,7 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
 import { CHAT_DIFF_MAX_LINES, diffCardModel } from '../src/client/tool/models/diff-card-model.ts'
 import { createChatStore } from '@deepseek-ai/dsh-client-ui-conversation/src/client/stores.ts'
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
-import { DetailsPanel } from '@deepseek-ai/dsh-client-ui-conversation/src/client/skeleton/DetailsPanel.tsx'
+import { DetailsToolMode } from '@deepseek-ai/dsh-client-ui-conversation/src/client/skeleton/DetailsPanel.tsx'
 import { FileMutationRow, fileMutationToolview } from '../src/client/tool/toolviews/file-mutation-row.tsx'
 import { renderToolDetails, SessionProviderStub, toolChatSnapshot } from './tool-details-render.client.tsx'
 import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
@@ -305,7 +305,7 @@ describe('fileMutationToolview registration', () => {
   })
 })
 
-describe('DetailsPanel diff Output section', () => {
+describe('DetailsToolMode diff Output section', () => {
   function mount(snapshot: ConversationSnapshot, selection: SelectionTarget | null, cwd?: string) {
     localStorage.clear()
     const chat = createChatStore().create()
@@ -325,10 +325,12 @@ describe('DetailsPanel diff Output section', () => {
       baselinesReady: true, recentWorkspaceId: undefined,
     })
     return render(
-      <DetailsPanel
+      <DetailsToolMode
         SessionProvider={SessionProviderStub}
         renderSlot={renderToolDetails(t)}
         sessionId={SID}
+        active
+        cwd={cwd}
         useSession={bindSnapshotSelector({ getSnapshot: () => snapshot, subscribe: () => () => {} })}
         useSessions={bindSnapshotSelector(sessions)}
         useWorkspaces={bindSnapshotSelector(workspaces)}
@@ -343,7 +345,6 @@ describe('DetailsPanel diff Output section', () => {
         useProjection={(() => undefined)}
         useStore={bindSnapshotSelector(chat)}
         actions={chat.actions}
-        closeDetails={vi.fn()}
         t={t}
       />,
     )
