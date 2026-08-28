@@ -1385,6 +1385,26 @@ export function runCoordinatorContract(name: string, makeFixture: () => Promise<
       }
     })
 
+    it('persists the ignorable marker a live append writes, and writes none by default', async () => {
+      const fix = await makeFixture()
+      const { ctx, fiber } = await freshCtx(fix)
+      try {
+        const session = ctx.sessions.create(SessionId('append-ignorable'), { meta: { cwd: WORK } })
+        send(session, oneTurnLog())
+        session.append('todo/write', { todos: [] }, { ignorable: true })
+        await ctx.sessions.flush(session)
+
+        const loaded = await ctx.sessionPersistence.load(session.id)
+        expect(loaded.events.filter(event => event.ignorable === true).map(event => event.type))
+          .toEqual(['todo/write'])
+        expect(loaded.events.filter(event => event.type !== 'todo/write').map(event => event.ignorable))
+          .toEqual(oneTurnLog().map(() => undefined))
+      } finally {
+        await fiber.dispose()
+        await fix.cleanup()
+      }
+    })
+
     it('round-trips a header with parentSession (fork lineage)', async () => {
       const fix = await makeFixture()
       const { ctx, fiber } = await freshCtx(fix)

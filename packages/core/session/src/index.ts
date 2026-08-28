@@ -14,7 +14,7 @@ import type { Scoped } from '@deepseek-ai/dsh-scope'
 import type { Message } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, SessionId } from './types.ts'
 import type { TypertLookup } from '@deepseek-ai/dsh-typert-protocol'
-import type { CreateSessionOptions, EpochHeader, PrepareSessionOptions, RequestContext, SessionEvent, SessionEventMap, SessionEventType, SessionHeader, SurfaceIntent, SurfaceEventType } from './types.ts'
+import type { AppendOptions, CreateSessionOptions, EpochHeader, PrepareSessionOptions, RequestContext, SessionEvent, SessionEventMap, SessionEventType, SessionHeader, SurfaceIntent, SurfaceEventType } from './types.ts'
 import { snapshotJsonValue } from './json.ts'
 import { deriveEventMessage, SurfaceManager } from './surface.ts'
 import type { SessionSurface } from './surface.ts'
@@ -576,14 +576,22 @@ export class Session {
    *
    * @param type - The event type (key of {@link SessionEventMap}).
    * @param data - The event payload; must be JSON-serializable.
-   * @param opts - Surface metadata: `surfaceOp` controls how the event enters
-   *   the ordered surface; `sourceEventSeqs` lists the seq numbers of earlier
-   *   events this one derives from. REQUIRED for
+   * @param opts - Surface metadata for a {@link SurfaceEventType} event,
+   *   {@link AppendOptions} for any other type. `surfaceOp` controls how the
+   *   event enters the ordered surface; `sourceEventSeqs` lists the seq numbers
+   *   of earlier events this one derives from. Both are REQUIRED for
    *   {@link SurfaceEventType} events (every message-producing event must
    *   declare how it joins the surface, the sole source of derived model
    *   history) and
-   *   rejected by the compiler for non-surface types like `turn/start` or
-   *   `assistant/chunk`.
+   *   rejected by the compiler for a literal non-surface type like
+   *   `turn/start` or `assistant/chunk`, which instead accept the optional
+   *   `ignorable: true`. The conditional distributes, so a caller generic over
+   *   a union of types (a relay or replay forwarder) may pass either member of
+   *   the union; the marker is inert on a surface event regardless, because a
+   *   reader consults it only for a type outside its known set and the surface
+   *   types are a closed set every build knows
+   *   to write {@link SessionEvent.ignorable} into the envelope. Omitting it
+   *   writes no marker, so the event stays required-on-read.
    * @returns the logged event — its assigned `seq`/`time` plus the SNAPSHOT of
    *   `data` that entered the log, so reading `event.data` back sees the logged
    *   value, never the caller's still-mutable input.
@@ -604,13 +612,14 @@ export class Session {
   append<T extends SessionEventType>(
     type: T,
     data: SessionEventMap[T],
-    ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent] : []
+    ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent] : [opts?: AppendOptions]
   ): SessionEvent<T> {
-    const surfaceOpts: SurfaceIntent | undefined = opts[0]
+    const appendOpts: (Partial<SurfaceIntent> & AppendOptions) | undefined = opts[0]
     const surfaceMetadata = {
-      ...surfaceOpts?.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: surfaceOpts.sourceEventSeqs },
-      ...surfaceOpts?.surfaceOp === undefined ? {} : { surfaceOp: surfaceOpts.surfaceOp },
+      ...appendOpts?.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: appendOpts.sourceEventSeqs },
+      ...appendOpts?.surfaceOp === undefined ? {} : { surfaceOp: appendOpts.surfaceOp },
     }
+    const ignorableMarker = appendOpts?.ignorable === undefined ? {} : { ignorable: appendOpts.ignorable }
     const dataSnapshot = snapshotJsonValue(data)
     if (dataSnapshot === undefined) {
       throw new Error(`session event "${type}" carries non-JSON-serializable data`)
@@ -630,6 +639,7 @@ export class Session {
       time: Date.now(),
       data: dataSnapshot,
       ...(surfaceMetadataSnapshot as { surfaceOp?: unknown; sourceEventSeqs?: unknown }),
+      ...ignorableMarker,
     } as unknown as SessionEvent<T>)
     this.surfaceManager.validateNext(event as SessionEvent)
 

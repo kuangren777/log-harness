@@ -900,6 +900,36 @@ describe('Session', () => {
     expect(session.events).toEqual([])
   })
 
+  it('writes the ignorable envelope marker only when the append requests it', () => {
+    const session = Session.create(SessionId('ignorable-marker'))
+    const marked = session.append('turn/start', { turn: 1 }, { ignorable: true })
+    const unmarked = session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+
+    expect(marked.ignorable).toBe(true)
+    expect(Object.hasOwn(unmarked, 'ignorable')).toBe(false)
+    // The durable envelope of a default append is byte-identical to a pre-marker log.
+    expect(JSON.stringify(unmarked))
+      .toBe(JSON.stringify({ type: 'turn/end', seq: 1, time: unmarked.time, data: { turn: 1, reason: { kind: 'completed' } } }))
+    expect(session.events.map(event => event.ignorable)).toEqual([true, undefined])
+  })
+
+  it('offers the ignorable option to log-only types and the surface intent to message-producing ones', () => {
+    const session = Session.create(SessionId('ignorable-typing'))
+    const message = createUserMessage({ content: [{ type: 'text', text: 'hi' }], source: { kind: 'user' } })
+    // Asserted through real calls: a reference to `session.append` would be an
+    // unbound method, and the compiler behaviour under test is what a caller
+    // hits at the call site.
+    session.append('turn/start', { turn: 1 }, { ignorable: true })
+    session.append('user/message', message, { surfaceOp: 'append' })
+    // @ts-expect-error a literal surface type takes a SurfaceIntent, never the ignorable marker
+    expect(() => session.append('user/message', message, { ignorable: true })).toThrow()
+    // @ts-expect-error a literal log-only type takes no surface intent — and the
+    // runtime refuses the marker too, so the compiler rule is not the only guard
+    expect(() => session.append('turn/end', { turn: 1, reason: { kind: 'completed' } }, { surfaceOp: 'append' }))
+      .toThrow(/not surface-eligible/)
+    expect(session.events.map(event => event.ignorable)).toEqual([true, undefined])
+  })
+
   it('deep-freezes seeded and appended event snapshots', () => {
     const seeded = Session.create(SessionId('seed-frozen'), [{
       type: 'turn/start',

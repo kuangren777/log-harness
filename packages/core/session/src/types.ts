@@ -378,6 +378,24 @@ export type SurfaceOp =
   | { op: 'replace'; start: number; end: number }
 
 /**
+ * Envelope options for a log-only {@link Session.append}. Optional on every
+ * non-{@link SurfaceEventType} event and rejected by the compiler on the
+ * message-producing ones, which take {@link SurfaceIntent} instead: the three
+ * surface types are a closed set every build knows, changed only by a
+ * {@link SESSION_FORMAT_VERSION} bump, so an {@link ignorable} marker on one
+ * could never take effect and would offer to drop model-visible content.
+ */
+export interface AppendOptions {
+  /**
+   * Sets the appended event's {@link SessionEvent.ignorable} marker; absent
+   * writes no marker, leaving the event required-on-read. Pass `true` only for
+   * a purely informational record whose loss cannot change how the rest of the
+   * log is reconstructed.
+   */
+  ignorable?: true
+}
+
+/**
  * Surface placement and cited source-event seqs for {@link Session.append}. Required on
  * message-producing events and forbidden on log-only events.
  */
