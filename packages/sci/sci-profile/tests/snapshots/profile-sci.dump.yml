@@ -61,6 +61,8 @@
     root: !!js dshHomePath('sessions')
 - id: attachment-local
   name: '@deepseek-ai/dsh-attachment-local'
+- id: referenced-text
+  name: '@deepseek-ai/dsh-referenced-text'
 # == @deepseek-ai/dsh-base, patched by @deepseek-ai/dsh-sci
 - id: session-query-sqlite
   name: '@deepseek-ai/dsh-session-query-sqlite'
