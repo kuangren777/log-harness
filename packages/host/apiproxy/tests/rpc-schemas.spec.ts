@@ -25,6 +25,7 @@ import {
   workspaceDeleteRequestSchema, workspaceDeleteValueSchema,
   workspaceInsertBeforeRequestSchema, workspaceInsertBeforeValueSchema,
   workspaceInsertSessionBeforeRequestSchema, workspaceInsertSessionBeforeValueSchema,
+  workspaceListDirectoryRequestSchema, workspaceListDirectoryValueSchema,
   workspaceListRequestSchema, workspaceListValueSchema,
   workspaceReadFileRequestSchema, workspaceReadFileValueSchema,
   workspaceRenameRequestSchema, workspaceRenameValueSchema, workspaceViewSchema,
@@ -72,6 +73,8 @@ describe('rpcErrorSchema', () => {
     expect(rpcErrorSchema.parse({ code: 'file-not-found', message: 'm', details: { path: 'x' } }).code).toBe('file-not-found')
     expect(rpcErrorSchema.parse({ code: 'not-a-file', message: 'm', details: { path: 'x' } }).code).toBe('not-a-file')
     expect(rpcErrorSchema.parse({ code: 'file-too-large', message: 'm', details: { path: 'x', maxBytes: 16 } }).code).toBe('file-too-large')
+    expect(rpcErrorSchema.parse({ code: 'not-a-directory', message: 'm', details: { path: 'x' } }).code).toBe('not-a-directory')
+    expect(rpcErrorSchema.parse({ code: 'too-many-entries', message: 'm', details: { path: 'x', maxEntries: 5 } }).code).toBe('too-many-entries')
     expect(rpcErrorSchema.parse({
       code: 'model-unavailable',
       message: 'm',
@@ -414,6 +417,21 @@ describe('workspace domain schemas', () => {
     expect(() => workspaceReadFileValueSchema.parse({ ...value, encoding: 'hex' })).toThrow()
     expect(() => workspaceReadFileValueSchema.parse({ ...value, size: -1 })).toThrow()
     expect(() => workspaceReadFileValueSchema.parse({ ...value, size: 1.5 })).toThrow()
+  })
+
+  it('listDirectory admits the empty path readFile rejects and closes the entry kind tag', () => {
+    expect(workspaceListDirectoryRequestSchema.parse({ sessionId: 's1', path: '' }).path).toBe('')
+    expect(workspaceListDirectoryRequestSchema.parse({ sessionId: 's1', path: 'out' }).path).toBe('out')
+    expect(() => workspaceListDirectoryRequestSchema.parse({ path: 'out' })).toThrow()
+    const entry = { name: 'out', path: '/w/out', kind: 'directory' }
+    expect(workspaceListDirectoryValueSchema.parse({ path: '/w', entries: [entry] }).entries[0]?.kind).toBe('directory')
+    expect(workspaceListDirectoryValueSchema.parse({
+      path: '/w', entries: [{ name: 'a.md', path: '/w/a.md', kind: 'file', size: 3 }],
+    }).entries[0]?.size).toBe(3)
+    expect(workspaceListDirectoryValueSchema.parse({ path: '/w', entries: [] }).entries).toEqual([])
+    expect(() => workspaceListDirectoryValueSchema.parse({ path: '/w', entries: [{ ...entry, kind: 'symlink' }] })).toThrow()
+    expect(() => workspaceListDirectoryValueSchema.parse({ path: '/w', entries: [{ ...entry, kind: 'file', size: -1 }] })).toThrow()
+    expect(() => workspaceListDirectoryValueSchema.parse({ path: '/w', entries: [{ name: 'out', kind: 'directory' }] })).toThrow()
   })
 
   it('insertBefore accepts an anchored or anchorless Workspace move and returns the complete order', () => {

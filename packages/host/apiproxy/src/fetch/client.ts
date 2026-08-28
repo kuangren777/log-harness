@@ -37,6 +37,7 @@ import {
   workspaceDeleteValueSchema,
   workspaceInsertBeforeValueSchema,
   workspaceInsertSessionBeforeValueSchema,
+  workspaceListDirectoryValueSchema,
   workspaceListValueSchema,
   workspaceReadFileValueSchema,
   workspaceRenameValueSchema,
@@ -122,6 +123,7 @@ export interface IApiClient {
     insertSessionBefore(payload: RequestPayload<'workspace.insertSessionBefore'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.insertSessionBefore'>>>
     archiveSession(payload: RequestPayload<'workspace.archiveSession'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.archiveSession'>>>
     readFile(payload: RequestPayload<'workspace.readFile'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.readFile'>>>
+    listDirectory(payload: RequestPayload<'workspace.listDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.listDirectory'>>>
   }
   skills: {
     list(payload: RequestPayload<'skill.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'skill.list'>>>
@@ -201,6 +203,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'workspace.insertSessionBefore': workspaceInsertSessionBeforeValueSchema,
   'workspace.archiveSession': workspaceArchiveSessionValueSchema,
   'workspace.readFile': workspaceReadFileValueSchema,
+  'workspace.listDirectory': workspaceListDirectoryValueSchema,
   'skill.list': skillListValueSchema,
   'agentPreset.list': agentPresetListValueSchema,
   'agentPreset.select': agentPresetSelectValueSchema,
@@ -455,6 +458,7 @@ export abstract class AbstractApiClient implements IApiClient {
     insertSessionBefore: (payload, signal) => this.callUnary('workspace.insertSessionBefore', payload, signal),
     archiveSession: (payload, signal) => this.callUnary('workspace.archiveSession', payload, signal),
     readFile: (payload, signal) => this.callUnary('workspace.readFile', payload, signal),
+    listDirectory: (payload, signal) => this.callUnary('workspace.listDirectory', payload, signal),
   }
 
   readonly skills: IApiClient['skills'] = {

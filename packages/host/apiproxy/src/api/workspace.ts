@@ -53,6 +53,34 @@ export interface WorkspaceFileContent {
   content: string
 }
 
+/**
+ * One direct child of a listed directory. Metadata only — listing never reads
+ * file content, so a client picks its per-row affordance from `kind` and asks
+ * for bytes with a separate `workspace.readFile`.
+ */
+export interface WorkspaceDirectoryEntry {
+  /** Basename inside the listed directory, including a leading dot. */
+  name: string
+  /** Canonical path of the entry itself; a symlink keeps its own path, not its target's. */
+  path: string
+  /** What the entry resolves to: a directory, a regular file, or anything else (socket, device, dangling symlink). */
+  kind: 'directory' | 'file' | 'other'
+  /** Byte size of a regular file, when the backend reports one. */
+  size?: number
+}
+
+/**
+ * One directory level, listed through the session's filesystem seam for a
+ * client file browser. Dotfiles are included — hiding them is a client
+ * decision, not a gateway one.
+ */
+export interface WorkspaceDirectoryListing {
+  /** Canonical absolute path of the listed directory in the backend's execution world. */
+  path: string
+  /** Direct children: every directory first, then everything else, each group by name. */
+  entries: WorkspaceDirectoryEntry[]
+}
+
 /** Workspace-domain unary methods (the map keys workspace.* of RpcMethodMap). */
 export interface WorkspaceApi {
   /**
@@ -147,4 +175,29 @@ export interface WorkspaceApi {
     request: RpcRequest<{ sessionId: SessionId; path: string }>,
     signal: AbortSignal,
   ): Promise<RpcResponse<WorkspaceFileContent>>
+
+  /**
+   * List one directory level under a session's project directory through the
+   * filesystem seam that session's tools run in, for a client file browser.
+   *
+   * Addressing and the containment fence match {@link readFile}: `path` is
+   * absolute or relative to the session's cwd, an empty `path` is that cwd
+   * itself, and a target the backend does not canonically contain fails with
+   * `path-out-of-scope`. An attached session is required
+   * (`session-not-found` otherwise); a session whose header records no
+   * project, and a composition mounting no filesystem backend, both answer
+   * `internal`.
+   *
+   * The complete level is listed or nothing is: an absent target answers
+   * `file-not-found`, a regular or special file `not-a-directory`, and a
+   * directory with more children than the deployment's `listDirectoryMaxEntries`
+   * cap `too-many-entries` rather than a partial level. Entries carry metadata
+   * only, dotfiles included, with every directory before everything else and
+   * each group in name order. Cancellation through the carrier's request signal
+   * answers `cancelled`.
+   */
+  listDirectory(
+    request: RpcRequest<{ sessionId: SessionId; path: string }>,
+    signal: AbortSignal,
+  ): Promise<RpcResponse<WorkspaceDirectoryListing>>
 }

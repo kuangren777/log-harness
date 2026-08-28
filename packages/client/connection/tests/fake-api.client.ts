@@ -175,6 +175,10 @@ export class FakeApiClient implements IApiClient {
       encoding: 'utf8' as const,
       content: '',
     }))),
+    listDirectory: (payload: unknown) => this.record('workspace.listDirectory', payload, Promise.resolve(ok({
+      path: `/f/ws/${(payload as { path: string }).path}`,
+      entries: [],
+    }))),
   }
 
   // Payloads stay `unknown` (lint-lane note above); response rows are the real

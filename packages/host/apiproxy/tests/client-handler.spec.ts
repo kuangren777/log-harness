@@ -91,6 +91,10 @@ function scriptedApi(overrides: {
       readFile: r => ok(r, {
         path: `/t/${r.payload.path}`, size: 2, mediaType: 'text/markdown', encoding: 'utf8' as const, content: '# ',
       }),
+      listDirectory: r => ok(r, {
+        path: `/t/${r.payload.path}`,
+        entries: [{ name: 'notes.md', path: `/t/${r.payload.path}/notes.md`, kind: 'file' as const, size: 2 }],
+      }),
     },
     skills: { list: r => ok(r, { skills: [] }), ...overrides.skills },
     agentPresets: {
@@ -441,6 +445,11 @@ describe('workspace domain round trip', () => {
       ok: true,
       value: { path: '/t/notes.md', size: 2, mediaType: 'text/markdown', encoding: 'utf8', content: '# ' },
     })
+    const listed = await c.workspace.listDirectory({ sessionId: 's-read' as never, path: 'out' })
+    expect(listed.result).toEqual({
+      ok: true,
+      value: { path: '/t/out', entries: [{ name: 'notes.md', path: '/t/out/notes.md', kind: 'file', size: 2 }] },
+    })
   })
 
   it('rejects a pathless create payload and an empty readFile path at the handler schema', async () => {
@@ -450,6 +459,10 @@ describe('workspace domain round trip', () => {
     const read = await client(scriptedApi()).workspace.readFile({ sessionId: 's-read' as never, path: '' })
     expect(read.result.ok).toBe(false)
     if (!read.result.ok) expect(read.result.error.code).toBe('bad-request')
+    // The same empty path is the project directory itself for a listing, so
+    // listDirectory's schema admits what readFile's rejects.
+    const listed = await client(scriptedApi()).workspace.listDirectory({ sessionId: 's-read' as never, path: '' })
+    expect(listed.result.ok).toBe(true)
   })
 })
 

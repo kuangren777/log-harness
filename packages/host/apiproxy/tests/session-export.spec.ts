@@ -131,9 +131,15 @@ describe('session export compression config', () => {
       sessionExportCompressionLevel: 6,
       coldBlankProbeMaxBytes: 1024,
       readFileMaxBytes: 8 * 1024 * 1024,
+      listDirectoryMaxEntries: 5000,
       redactSkillCatalogProviders: [],
     })
-    const rest = { coldBlankProbeMaxBytes: 1024, readFileMaxBytes: 8 * 1024 * 1024, redactSkillCatalogProviders: [] }
+    const rest = {
+      coldBlankProbeMaxBytes: 1024,
+      readFileMaxBytes: 8 * 1024 * 1024,
+      listDirectoryMaxEntries: 5000,
+      redactSkillCatalogProviders: [],
+    }
     expect(ApiProxyService.Config({ sessionExportCompressionLevel: 0 }))
       .toEqual({ sessionExportCompressionLevel: 0, ...rest })
     expect(ApiProxyService.Config({ sessionExportCompressionLevel: 9 }))
@@ -146,7 +152,12 @@ describe('session export compression config', () => {
 
 describe('cold blank probe config', () => {
   it('accepts a per-Session byte bound including zero and rejects invalid bounds', () => {
-    const rest = { sessionExportCompressionLevel: 6, readFileMaxBytes: 8 * 1024 * 1024, redactSkillCatalogProviders: [] }
+    const rest = {
+      sessionExportCompressionLevel: 6,
+      readFileMaxBytes: 8 * 1024 * 1024,
+      listDirectoryMaxEntries: 5000,
+      redactSkillCatalogProviders: [],
+    }
     expect(ApiProxyService.Config({ coldBlankProbeMaxBytes: 0, redactSkillCatalogProviders: [] }))
       .toEqual({ coldBlankProbeMaxBytes: 0, ...rest })
     expect(ApiProxyService.Config({ coldBlankProbeMaxBytes: 2048, redactSkillCatalogProviders: [] }))
@@ -161,11 +172,32 @@ describe('workspace.readFile byte cap config', () => {
   it('defaults to 8 MiB, accepts an explicit bound including zero, and rejects invalid bounds', () => {
     expect(ApiProxyService.Config({}).readFileMaxBytes).toBe(8 * 1024 * 1024)
     expect(ApiProxyService.Config({ readFileMaxBytes: 0, redactSkillCatalogProviders: [] })).toEqual({
-      sessionExportCompressionLevel: 6, coldBlankProbeMaxBytes: 1024, readFileMaxBytes: 0, redactSkillCatalogProviders: [],
+      sessionExportCompressionLevel: 6,
+      coldBlankProbeMaxBytes: 1024,
+      readFileMaxBytes: 0,
+      listDirectoryMaxEntries: 5000,
+      redactSkillCatalogProviders: [],
     })
     expect(ApiProxyService.Config({ readFileMaxBytes: 4096 }).readFileMaxBytes).toBe(4096)
     for (const value of [-1, 1.5]) {
       expect(() => ApiProxyService.Config({ readFileMaxBytes: value })).toThrow()
+    }
+  })
+})
+
+describe('workspace.listDirectory entry cap config', () => {
+  it('defaults to 5000, accepts an explicit bound including zero, and rejects invalid bounds', () => {
+    expect(ApiProxyService.Config({}).listDirectoryMaxEntries).toBe(5000)
+    expect(ApiProxyService.Config({ listDirectoryMaxEntries: 0, redactSkillCatalogProviders: [] })).toEqual({
+      sessionExportCompressionLevel: 6,
+      coldBlankProbeMaxBytes: 1024,
+      readFileMaxBytes: 8 * 1024 * 1024,
+      listDirectoryMaxEntries: 0,
+      redactSkillCatalogProviders: [],
+    })
+    expect(ApiProxyService.Config({ listDirectoryMaxEntries: 50 }).listDirectoryMaxEntries).toBe(50)
+    for (const value of [-1, 1.5]) {
+      expect(() => ApiProxyService.Config({ listDirectoryMaxEntries: value })).toThrow()
     }
   })
 })

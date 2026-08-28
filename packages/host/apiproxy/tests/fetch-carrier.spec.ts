@@ -201,6 +201,13 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
         }
         return { rpcId: request.rpcId, result: { ok: true as const, value } }
       },
+      async listDirectory(request) {
+        const value = {
+          path: `/w/${request.payload.path}`,
+          entries: [{ name: 'out', path: `/w/${request.payload.path}/out`, kind: 'directory' as const }],
+        }
+        return { rpcId: request.rpcId, result: { ok: true as const, value } }
+      },
     },
     agentPresets: {
       list(request: RpcRequest<{}>) {

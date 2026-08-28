@@ -42,6 +42,7 @@ import type {} from '@deepseek-ai/dsh-tools'
 // `FsError` narrows the seam's own read refusals to their stable codes at this
 // wire boundary, the same role GoalError plays for the goal domain.
 import { FsError } from '@deepseek-ai/dsh-fs'
+import type { FileSystem, FsTarget } from '@deepseek-ai/dsh-fs'
 import type {
   ApiProxy, ConfigurableProviderView, CredentialView, GoalRef, HistoryEntry, HostFrame,
   ModelCatalogFailure, ModelProviderGroup,
@@ -130,6 +131,8 @@ const COLD_SUMMARY_BATCH_SIZE = 16
 export const DEFAULT_COLD_BLANK_PROBE_MAX_BYTES = 1024
 /** Default inclusive byte cap on one `workspace.readFile` response. */
 export const DEFAULT_READ_FILE_MAX_BYTES = 8 * 1024 * 1024
+/** Default inclusive entry cap on one `workspace.listDirectory` response. */
+export const DEFAULT_LIST_DIRECTORY_MAX_ENTRIES = 5000
 
 /** Conversation message event types (the pagination counting unit). */
 const MESSAGE_TYPES = new Set(['user/message', 'assistant/message'])
@@ -643,6 +646,85 @@ function isWorkspaceTextMediaType(mediaType: string): boolean {
   return mediaType.startsWith('text/') || WORKSPACE_TEXT_MEDIA_TYPES.has(mediaType)
 }
 
+/**
+ * The execution world one session-addressed workspace file operation answers
+ * from, or the refusal that stops it before any I/O.
+ */
+type WorkspaceFsScope =
+  | { kind: 'scope'; fs: FileSystem; cwd: string }
+  | { kind: 'refused'; error: RpcError }
+
+/**
+ * Resolve the filesystem seam and project directory a session's file
+ * operations run against. `workspace.readFile` and `workspace.listDirectory`
+ * share this prologue: neither creates nor resumes an Agent (the `skill.list`
+ * stance), and both take the cwd from the host-resident session header instead
+ * of the Host process.
+ * @param ctx - the gateway context holding the session store and the optional `fs` seam.
+ * @param sessionId - the attached session that addresses the project directory.
+ * @returns the seam plus that session's cwd, or the refusal to answer with.
+ */
+function workspaceFsScope(ctx: Context, sessionId: SessionId): WorkspaceFsScope {
+  const session = ctx.sessions.get(sessionId)
+  if (session === undefined) {
+    return {
+      kind: 'refused',
+      error: {
+        code: 'session-not-found',
+        message: `session "${sessionId}" not found (not attached)`,
+        details: { sessionId },
+      },
+    }
+  }
+  if (session.header.cwd === undefined) {
+    // Every served session records its project at create time; a cwd-less
+    // header is a pre-project legacy log (not served).
+    return {
+      kind: 'refused',
+      error: { code: 'internal', message: `session "${sessionId}" has no project cwd`, details: {} },
+    }
+  }
+  const fs = ctx.get('fs')
+  if (fs === undefined) {
+    return {
+      kind: 'refused',
+      error: {
+        code: 'internal',
+        message: 'filesystem is absent: this composition mounts no @deepseek-ai/dsh-fs backend',
+        details: {},
+      },
+    }
+  }
+  return { kind: 'scope', fs, cwd: session.header.cwd }
+}
+
+/**
+ * Resolve one requested path against a session's project directory and fence
+ * it there.
+ * @param fs - the seam owning both canonicalization and the containment test.
+ * @param cwd - the session's project directory, the fence root.
+ * @param path - the requested path; absolute or relative to `cwd`, empty for `cwd` itself.
+ * @param signal - aborts either resolution round-trip.
+ * @returns the resolved target, or undefined when the project directory does
+ *   not canonically contain it.
+ */
+async function resolveWorkspaceTarget(
+  fs: FileSystem,
+  cwd: string,
+  path: string,
+  signal: AbortSignal,
+): Promise<FsTarget | undefined> {
+  const root = await fs.resolve(cwd, { signal })
+  // The seam rejects an empty path as a non-path, and the root target already
+  // is the answer an empty request addresses.
+  if (path === '') return root
+  const target = await fs.resolve(path, { cwd, signal })
+  // Containment is tested on resolved targets, so a symlink whose target
+  // leaves the project directory is refused with the traversal it is, not
+  // followed because its own path looked contained.
+  return fs.contains(root, target) ? target : undefined
+}
+
 /** Resolved Agent model and project-directory defaults consumed by the API implementation. */
 export interface ApiProxyDefaults {
   /**
@@ -672,6 +754,8 @@ export interface ApiProxyDefaults {
   coldBlankProbeMaxBytes?: number
   /** Inclusive byte cap on one `workspace.readFile` response; a larger file is refused, never truncated. */
   readFileMaxBytes?: number
+  /** Inclusive entry cap on one `workspace.listDirectory` response; a larger directory is refused, never partial. */
+  listDirectoryMaxEntries?: number
   /**
    * Skill providers whose catalog descriptions the client must not see. The
    * session log keeps the full `<available_skills>` message the model saw;
@@ -1131,6 +1215,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   const coldBlankProbeMaxBytes = defaults.coldBlankProbeMaxBytes
     ?? DEFAULT_COLD_BLANK_PROBE_MAX_BYTES
   const readFileMaxBytes = defaults.readFileMaxBytes ?? DEFAULT_READ_FILE_MAX_BYTES
+  const listDirectoryMaxEntries = defaults.listDirectoryMaxEntries ?? DEFAULT_LIST_DIRECTORY_MAX_ENTRIES
   /** Client-facing copy of a logged event; the log itself is never rewritten. */
   const protectedSkillProviders: ReadonlySet<string> = new Set(defaults.redactSkillCatalogProviders ?? [])
   const redactForClient = (event: SessionEvent): SessionEvent => redactEventForClient(event, protectedSkillProviders)
@@ -2937,35 +3022,12 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       // Host paths, so a Host read here would answer from the wrong world.
       async readFile(request, signal) {
         const { sessionId, path } = request.payload
-        const session = ctx.sessions.get(sessionId)
-        if (session === undefined) {
-          return err(request, {
-            code: 'session-not-found',
-            message: `session "${sessionId}" not found (not attached)`,
-            details: { sessionId },
-          })
-        }
-        if (session.header.cwd === undefined) {
-          // Every served session records its project at create time; a
-          // cwd-less header is a pre-project legacy log (not served).
-          return err(request, { code: 'internal', message: `session "${sessionId}" has no project cwd`, details: {} })
-        }
-        const cwd = session.header.cwd
-        const fs = ctx.get('fs')
-        if (fs === undefined) {
-          return err(request, {
-            code: 'internal',
-            message: 'filesystem is absent: this composition mounts no @deepseek-ai/dsh-fs backend',
-            details: {},
-          })
-        }
+        const scope = workspaceFsScope(ctx, sessionId)
+        if (scope.kind === 'refused') return err(request, scope.error)
+        const { fs, cwd } = scope
         try {
-          const root = await fs.resolve(cwd, { signal })
-          const target = await fs.resolve(path, { cwd, signal })
-          // Containment is tested on resolved targets, so a symlink whose
-          // target leaves the project directory is refused with the traversal
-          // it is, not followed because its own path looked contained.
-          if (!fs.contains(root, target)) {
+          const target = await resolveWorkspaceTarget(fs, cwd, path, signal)
+          if (target === undefined) {
             return err(request, {
               code: 'path-out-of-scope',
               message: `"${path}" resolves outside the session's project directory`,
@@ -3016,6 +3078,70 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           return err(request, {
             code: 'internal',
             message: `reading "${path}" failed: ${error instanceof Error ? error.message : String(error)}`,
+            details: {},
+          })
+        }
+      },
+
+      // Listing shares readFile's stance and fence: no Agent, the session's own
+      // cwd as the containment root, and the filesystem seam that session's
+      // tools run in as the only world consulted. Metadata only — a client asks
+      // for bytes with a separate readFile.
+      async listDirectory(request, signal) {
+        const { sessionId, path } = request.payload
+        const scope = workspaceFsScope(ctx, sessionId)
+        if (scope.kind === 'refused') return err(request, scope.error)
+        const { fs, cwd } = scope
+        try {
+          const target = await resolveWorkspaceTarget(fs, cwd, path, signal)
+          if (target === undefined) {
+            return err(request, {
+              code: 'path-out-of-scope',
+              message: `"${path}" resolves outside the session's project directory`,
+              details: { path, cwd },
+            })
+          }
+          // The seam refuses an absent or non-directory target itself, so no
+          // stat precedes the listing that already owns both questions.
+          const children = await fs.listDir(target, signal)
+          // The bound applies to the complete level: a directory past it is
+          // refused outright rather than served as a silently partial listing.
+          if (children.length > listDirectoryMaxEntries) {
+            return err(request, {
+              code: 'too-many-entries',
+              message: `"${path}" holds ${children.length} entries, past this deployment's limit of ${listDirectoryMaxEntries}`,
+              details: { path, maxEntries: listDirectoryMaxEntries },
+            })
+          }
+          const entries = children
+            .map(child => ({
+              name: child.name,
+              // The entry's own path, not its resolved target's: a symlink row
+              // stays where the user sees it while `kind` describes what
+              // opening it would reach.
+              path: child.target.displayPath,
+              kind: child.type,
+              ...child.size === undefined ? {} : { size: child.size },
+            }))
+            .sort((left, right) => (
+              left.kind === right.kind || (left.kind !== 'directory' && right.kind !== 'directory')
+                ? left.name.localeCompare(right.name)
+                : left.kind === 'directory' ? -1 : 1
+            ))
+          return ok(request, { path: target.displayPath, entries })
+        } catch (error: unknown) {
+          if (signal.aborted) {
+            return err(request, { code: 'cancelled', message: 'directory listing was aborted', details: {} })
+          }
+          if (error instanceof FsError && error.code === 'FS_NOT_DIRECTORY') {
+            return err(request, { code: 'not-a-directory', message: error.message, details: { path } })
+          }
+          if (error instanceof FsError && error.code === 'FS_NOT_FOUND') {
+            return err(request, { code: 'file-not-found', message: error.message, details: { path } })
+          }
+          return err(request, {
+            code: 'internal',
+            message: `listing "${path}" failed: ${error instanceof Error ? error.message : String(error)}`,
             details: {},
           })
         }

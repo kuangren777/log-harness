@@ -7,7 +7,7 @@
 import { z } from 'zod'
 import type { RequestPayload, ResponseValue } from './rpc-map.ts'
 import type { Wire } from './rpc.schema.ts'
-import type { WorkspaceFileContent, WorkspaceView } from './workspace.ts'
+import type { WorkspaceDirectoryListing, WorkspaceFileContent, WorkspaceView } from './workspace.ts'
 import { sessionIdSchema, workspaceIdSchema } from './sessions.schema.ts'
 
 export { workspaceIdSchema } from './sessions.schema.ts'
@@ -113,3 +113,24 @@ export const workspaceReadFileValueSchema = z.object({
   encoding: z.union([z.literal('utf8'), z.literal('base64')]),
   content: z.string(),
 }) satisfies z.ZodType<Wire<WorkspaceFileContent>>
+
+/**
+ * workspace.listDirectory request payload: the session owning the project
+ * directory, and the directory under it. An empty `path` lists that cwd, so
+ * unlike `workspace.readFile` this schema admits the empty string.
+ */
+export const workspaceListDirectoryRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+  path: z.string(),
+}) satisfies z.ZodType<Wire<RequestPayload<'workspace.listDirectory'>>>
+
+/** workspace.listDirectory response value: one complete directory level, metadata only. */
+export const workspaceListDirectoryValueSchema = z.object({
+  path: z.string(),
+  entries: z.array(z.object({
+    name: z.string(),
+    path: z.string(),
+    kind: z.union([z.literal('directory'), z.literal('file'), z.literal('other')]),
+    size: z.number().int().min(0).optional(),
+  })),
+}) satisfies z.ZodType<Wire<WorkspaceDirectoryListing>>

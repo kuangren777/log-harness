@@ -2802,6 +2802,21 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           content: '',
         })
       },
+      // The fixture keeps no file store: every listable path answers one fixed
+      // level holding a directory and a file, which is enough for a surface to
+      // exercise the call, its session addressing, and per-kind rows.
+      listDirectory: (request) => {
+        const missing = requireSession(request)
+        if (missing !== undefined) return missing
+        const base = `/f/ws/${request.payload.path}`
+        return ok(request, {
+          path: base,
+          entries: [
+            { name: 'out', path: `${base}/out`, kind: 'directory' as const },
+            { name: 'notes.md', path: `${base}/notes.md`, kind: 'file' as const, size: 0 },
+          ],
+        })
+      },
     },
     agentPresets: {
       // Both trusts appear, because a surface must present a locally authored
@@ -3218,6 +3233,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'workspace.insertSessionBefore': return this.api.workspace.insertSessionBefore(request)
       case 'workspace.archiveSession': return this.api.workspace.archiveSession(request)
       case 'workspace.readFile': return this.api.workspace.readFile(request, signal)
+      case 'workspace.listDirectory': return this.api.workspace.listDirectory(request, signal)
       case 'skill.list': return this.api.skills.list(request)
       case 'agentPreset.list': return this.api.agentPresets.list(request)
       case 'agentPreset.select': return this.api.agentPresets.select(request)

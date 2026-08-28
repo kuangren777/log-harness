@@ -19,6 +19,7 @@ import type { ApiProxy } from './api/index.ts'
 import {
   createApiProxy,
   DEFAULT_COLD_BLANK_PROBE_MAX_BYTES,
+  DEFAULT_LIST_DIRECTORY_MAX_ENTRIES,
   DEFAULT_READ_FILE_MAX_BYTES,
 } from './api-proxy.ts'
 import {
@@ -72,6 +73,14 @@ export interface Config {
    */
   readFileMaxBytes?: number
   /**
+   * Inclusive entry cap on one `workspace.listDirectory` response. A directory
+   * with more direct children is refused with `too-many-entries` rather than
+   * listed partially, so a client never mistakes a truncated level for a
+   * complete one.
+   * @default 5000
+   */
+  listDirectoryMaxEntries?: number
+  /**
    * Skill providers whose catalog descriptions are withheld from every client
    * copy of the `<available_skills>` message (live frames and history pages).
    * The session log keeps the full text the model saw. A deployment that
@@ -98,6 +107,7 @@ export class ApiProxyService extends Service implements ApiProxy {
       .default(DEFAULT_SESSION_LOG_COMPRESSION_LEVEL) as z<SessionLogCompressionLevel>,
     coldBlankProbeMaxBytes: z.natural().default(DEFAULT_COLD_BLANK_PROBE_MAX_BYTES),
     readFileMaxBytes: z.natural().default(DEFAULT_READ_FILE_MAX_BYTES),
+    listDirectoryMaxEntries: z.natural().default(DEFAULT_LIST_DIRECTORY_MAX_ENTRIES),
     redactSkillCatalogProviders: z.array(z.string()).default([]),
   })
 
@@ -131,6 +141,9 @@ export class ApiProxyService extends Service implements ApiProxy {
       ...(config.readFileMaxBytes === undefined
         ? {}
         : { readFileMaxBytes: config.readFileMaxBytes }),
+      ...(config.listDirectoryMaxEntries === undefined
+        ? {}
+        : { listDirectoryMaxEntries: config.listDirectoryMaxEntries }),
       ...(config.redactSkillCatalogProviders === undefined
         ? {}
         : { redactSkillCatalogProviders: config.redactSkillCatalogProviders }),

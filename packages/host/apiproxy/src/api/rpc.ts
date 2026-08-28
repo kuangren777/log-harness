@@ -53,6 +53,14 @@ export interface RpcErrorDetailsMap {
    * text and names the actual size.
    */
   'file-too-large': { path: string; maxBytes: number }
+  /** `workspace.listDirectory` addressed a regular or special file; only directories are listable. */
+  'not-a-directory': { path: string }
+  /**
+   * `workspace.listDirectory` refused a directory with more children than the
+   * deployment's `listDirectoryMaxEntries` cap. The cap rides the details; a
+   * partial level is never returned.
+   */
+  'too-many-entries': { path: string; maxEntries: number }
   'directory-unreadable': { path: string }
   'directory-exists': { path: string }
   'directory-create-failed': { path: string }

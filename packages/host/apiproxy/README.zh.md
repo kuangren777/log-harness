@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-所有客户端共用的 API 网关由三部分组成：TypeScript API 约定（`src/api/`，不依赖 Node，可从浏览器导入）、fetch 载体对（`src/fetch/`：宿主侧的 `toFetchHandler`，以及客户端侧的 `AbstractApiClient` 与平台子类）和宿主侧实现（`src/api-proxy.ts`：`createApiProxy` 加上默认导出的 `ApiProxyService` 网关插件，其配置为 `{nativeOpen?, sessionExportCompressionLevel?, coldBlankProbeMaxBytes?, readFileMaxBytes?, redactSkillCatalogProviders?}`，提供 `ctx.apiProxy`）。`redactSkillCatalogProviders` 列出若干 skill 提供方：发往客户端的每一份 `<available_skills>` 消息副本——实时帧与历史页一律——都会隐去这些提供方条目的描述（`src/client-redaction.ts`）；会话日志仍保留模型看到的完整文本，模型的请求只从日志重建，绝不取自客户端帧。该包不注册任何路由；HTTP 等载体自行包装 `ctx.apiProxy`。随发行版交付的 Web 组合位于 [`packages/bundle/web-app/cordis.patch.yml`](../../bundle/web-app/cordis.patch.yml)，其默认 Agent（智能体）模型选择属于 base 组合包中的 [`@deepseek-ai/dsh-agent-default-model`](../../core/agent-default-model/README.zh.md)。
+所有客户端共用的 API 网关由三部分组成：TypeScript API 约定（`src/api/`，不依赖 Node，可从浏览器导入）、fetch 载体对（`src/fetch/`：宿主侧的 `toFetchHandler`，以及客户端侧的 `AbstractApiClient` 与平台子类）和宿主侧实现（`src/api-proxy.ts`：`createApiProxy` 加上默认导出的 `ApiProxyService` 网关插件，其配置为 `{nativeOpen?, sessionExportCompressionLevel?, coldBlankProbeMaxBytes?, readFileMaxBytes?, listDirectoryMaxEntries?, redactSkillCatalogProviders?}`，提供 `ctx.apiProxy`）。`redactSkillCatalogProviders` 列出若干 skill 提供方：发往客户端的每一份 `<available_skills>` 消息副本——实时帧与历史页一律——都会隐去这些提供方条目的描述（`src/client-redaction.ts`）；会话日志仍保留模型看到的完整文本，模型的请求只从日志重建，绝不取自客户端帧。该包不注册任何路由；HTTP 等载体自行包装 `ctx.apiProxy`。随发行版交付的 Web 组合位于 [`packages/bundle/web-app/cordis.patch.yml`](../../bundle/web-app/cordis.patch.yml)，其默认 Agent（智能体）模型选择属于 base 组合包中的 [`@deepseek-ai/dsh-agent-default-model`](../../core/agent-default-model/README.zh.md)。
 
 ## 共享 Agent 默认值（`agent-default-model` Settings 分节）
 
@@ -46,6 +46,8 @@ Workspace 列表与 Session 列表是相互独立的重连基线。`workspace.cr
 
 `workspace.readFile` 为客户端预览面板提供单个文件的完整内容，读取走所指定会话的工具实际运行的文件系统 seam，而不是 Host 进程——沙箱部署里那些路径不是 Host 路径，从 Host 读会答自另一个世界。目录由会话给出：`path` 为绝对路径，或相对该会话的 cwd；包含关系在解析后的 target 上判定，因此指向项目目录之外的符号链接会以 `path-out-of-scope` 被拒绝，而不是被跟随。读取不获取 Agent、也不恢复任何东西，与 `skill.list` 立场一致，因此未附加的会话回答 `session-not-found`；无 cwd 的 legacy 头部与未组合文件系统后端的组合都回答 `internal`。响应携带规范路径、字节大小、由扩展名派生的 `mediaType`（未列出的扩展名为 `application/octet-stream`），以及按 `encoding` 编码的内容：`text/*`、JSON、Univer 与 SVG 为 `utf8`，其余为 `base64`。要么给出完整内容，要么什么都不给——目标不存在回答 `file-not-found`，目录或特殊文件回答 `not-a-file`，超过部署 `readFileMaxBytes` 上限（默认 8 MiB）的文件回答 `file-too-large`，其 details 携带该上限、实际大小则在后端自己的消息里，绝不返回被截断的内容。该上限约束的是文件而非响应：base64 会让二进制体积膨胀约三分之一，因此 8 MiB 的读取到达时约为 11 MB 的 JSON。
 
+`workspace.listDirectory` 为同一个面板提供单层目录，走同一个 seam 与同一道围栏。`path` 为绝对路径，或相对所指定会话的 cwd，空 `path` 即该 cwd 本身；seam 的 `listDir` 只给元数据，因此客户端从 `kind`（`directory`、`file`，套接字、设备与悬空符号链接为 `other`）决定每行的交互方式，再用单独的 `workspace.readFile` 取字节。符号链接的 `kind` 报告它解析到的类型，而该行的 `path` 仍是条目自身的路径，因此浏览器展示的仍是用户看到的那棵树。条目返回时所有目录排在其余条目之前，组内按名称排序，且包含 dotfile——是否隐藏由客户端决定。要么给出完整的一层，要么什么都不给：目标不存在回答 `file-not-found`，普通文件或特殊文件回答 `not-a-directory`，项目目录之外的目标回答 `path-out-of-scope`，直接子项数超过部署 `listDirectoryMaxEntries` 上限（默认 5000）的目录回答 `too-many-entries` 并在 details 中携带该上限，绝不悄悄返回不完整的一层。
+
 `session.create` 会在会话工具实际运行的执行世界里确保项目目录，而不是无条件在 Host 上创建。组合了文件系统服务时，它通过该 seam 解析并 stat 该 cwd，拒绝不存在或非目录的路径——沙箱后端的路径不是 Host 路径，而该 seam 不创建目录；没有该服务的组合仍像以前一样在 Host 上递归创建目录。两种情况下失败都回答 `internal`，并带上 `failed to ensure project directory "<cwd>"`。
 
 `session.search` 是以 `session.list` 所列会话为范围的有界内容搜索投影。网关向可选的 `ctx.sessionQuery` 服务请求全局排序后的当前内容视图中的 user、assistant 和 steering 匹配项，并持续消费该结果流，直到获得至多 20 个可见会话／snippet 对及一个前瞻项；返回前仍会依据从列表推导的授权集合重新校验每个命中。提供方分页初始请求 20 个命中；如果第一页请求因这一上限被拒绝，网关会依次探测 10、5、2、1，并在续传和陈旧世代重启中沿用探测所得的页面大小。返回的 snippet 最多包含 240 个 Unicode 码点，响应 schema 则会在每个客户端边界独立强制执行该上限。将授权集合保留在宿主内存中，可在不削弱可见性或排序的前提下避开有效大型语料库的 SQLite 变量上限。
@@ -84,6 +86,7 @@ Workspace 列表与 Session 列表是相互独立的重连基线。`workspace.cr
 - **预留 seam 不进入 `RpcMethodMap`**：`prompt.mode: 'inject'`、`job.list` 和描述字段 `hostInstanceId` 都是已记录的预留项；模型发现使用 `llm.models`。未知方法会在信封解析时直接失败，而不会返回「尚未实现」错误码。
 - **没有协议版本字段**：客户端与宿主一同发布；只有出现独立发布的客户端后，`host.describe` 才会增加版本协商字段。
 - **`workspace.readFile` 只对已附加的会话提供整文件**：完整内容随一次 JSON 响应返回，因此预览面板无法分页或按 range 请求文件，冷会话也必须先打开才能预览其产物。两者都源自当前消费方（针对用户正在查看的会话的右侧文件面板）；range 参数与从冷会话头部取 cwd 的查找暂缓至确有需求时再做。
+- **`workspace.listDirectory` 一次只给一层，且只对已附加的会话**：没有递归遍历，也没有续传游标，因此树视图对每个展开的节点各发一次调用，而超过 `listDirectoryMaxEntries` 的目录是完全无法浏览，而不是分页浏览。两者都源自当前消费方（对项目目录按需展开的文件面板）；递归与分页暂缓至确有需求时再做。
 - **搜索失败会包含提供方诊断信息**：网关是单用户本地服务。将其暴露给多名用户的载体必须用可安全公开的诊断信息替代内部搜索细节。
 - **Linux 原生选择器依赖桌面工具**：在 `native` 能力下，Zenity 和 KDialog 均未安装时，`host.pickDirectory` 会给出包含解决建议的错误提示；组合层面的回退是 browse 后端（见 [native 后端 README](../directory-picker-native/README.zh.md)）。
 - **冷列表提示只向“保持可见、排序偏旧”降级**：projection cache miss 或陈旧的 `lastPromptAt` 会回退到 `createdAt`，除非符合资格的小工件提供精确折叠，因此最近工作过的大 Session 可能在下一个 checkpoint 前排得偏低。大于 `coldBlankProbeMaxBytes` 的空白工件，或来自不提供 `locate()` 的后端的空白工件会保持可见。该阈值在 `readFrom()` 前检查，而非由 persistence 强制，因此工件并发增长可能增加一次探测的读取成本，但不会改变空白状态的安全方向。[有界空白验证决策](../../../.agents/notes/implemented/bug-fix/2026-08-13-bounded-cold-blank-verification.zh.md)规定了这个安全方向；权威且精确的最近时间索引仍属于[最后活动索引提案](../../../.agents/notes/proposed/architecture/2026-07-29-durable-last-activity-index.zh.md)的范围。

@@ -221,6 +221,16 @@ export class FakeApiClient implements IApiClient {
     content: '',
   }))
 
+  // Spelled out for the same reason as onWorkspaceReadFile: WorkspaceDirectoryListing
+  // is not part of the Client type re-export chain either.
+  onWorkspaceListDirectory: (payload: unknown) => Promise<RpcResponse<{
+    path: string
+    entries: { name: string; path: string; kind: 'directory' | 'file' | 'other'; size?: number }[]
+  }>> = payload => Promise.resolve(ok({
+    path: `/f/ws/${(payload as { path: string }).path}`,
+    entries: [],
+  }))
+
   readonly workspace: IApiClient['workspace'] = {
     list: (payload: unknown) => this.record('workspace.list', payload, this.onWorkspaceList(payload).then(response => (
       response.result.ok
@@ -238,6 +248,8 @@ export class FakeApiClient implements IApiClient {
       this.record('workspace.archiveSession', payload, this.onWorkspaceArchiveSession(payload)),
     readFile: (payload: unknown) =>
       this.record('workspace.readFile', payload, this.onWorkspaceReadFile(payload)),
+    listDirectory: (payload: unknown) =>
+      this.record('workspace.listDirectory', payload, this.onWorkspaceListDirectory(payload)),
   }
 
   // Payloads stay `unknown` (lint-lane note above); response rows are the real
