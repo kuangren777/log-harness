@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "title": "Treatment effect by group",
+  "language": "en",
+  "style": "nature",
+  "entry": "code/plot.py",
+  "history": [],
+  "annotations": "none"
+}

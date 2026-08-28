@@ -1,0 +1,3 @@
+name: 蜂群 / Swarm
+description: 先用 declare_research_plan 声明研究计划，再按计划扇出到子智能体与 Workflow；一次声明授权一次扇出。
+order: 20

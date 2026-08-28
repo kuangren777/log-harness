@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "title": "Survival by cohort",
+  "language": "en",
+  "style": "two-column IEEE with grayscale-safe dashes",
+  "entry": "code/survival.R",
+  "history": [],
+  "annotations": []
+}

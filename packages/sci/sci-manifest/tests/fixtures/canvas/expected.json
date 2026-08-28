@@ -1,0 +1,28 @@
+{
+  "valid-three-nodes.json": { "assets": ["hero.png", "demo.mp4"], "errors": [] },
+  "valid-empty-board.json": { "assets": [], "errors": [] },
+  "valid-no-size.json": { "assets": [], "errors": [] },
+  "invalid-dangling-edge.json": {
+    "assets": [],
+    "errors": ["canvas manifest.edges[0] \"e1\" has target \"n9\", which is not a node id in this canvas"]
+  },
+  "invalid-duplicate-node-id.json": {
+    "assets": [],
+    "errors": ["canvas manifest.nodes[1].id duplicates an earlier node id \"n1\""]
+  },
+  "invalid-missing-asset.json": {
+    "assets": [],
+    "errors": ["canvas manifest.nodes[0].data.src references a missing asset \"ghost.png\""]
+  },
+  "invalid-node-type.json": {
+    "assets": ["hero.png"],
+    "errors": ["canvas manifest.nodes[0].type must be one of image, video, text"]
+  },
+  "invalid-absolute-src.json": {
+    "assets": [],
+    "errors": [
+      "canvas manifest.nodes[0].size.width must be a number greater than 0",
+      "canvas manifest.nodes[0].data.src", "not an absolute path"
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "valid-minimal.json": { "errors": [] },
+  "valid-rendered.json": { "errors": [] },
+  "valid-r-entry.json": { "errors": [] },
+  "invalid-history-not-array.json": { "errors": ["sciplot manifest.history must be an array"] },
+  "invalid-entry-extension.json": { "errors": ["sciplot manifest.entry", ".py, .r, .sh, .jl"] },
+  "invalid-missing-language.json": { "errors": ["sciplot manifest.language must be a non-empty string"] },
+  "invalid-annotations-not-array.json": {
+    "errors": ["sciplot manifest.version must be 1", "sciplot manifest.annotations must be an array"]
+  }
+}

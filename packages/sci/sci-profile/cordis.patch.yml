@@ -70,6 +70,11 @@
   config:
     redactSkillCatalogProviders:
       - sci
+    # This process runs in a container with no desktop: `host.openPath` would
+    # spawn `xdg-open` that does not exist ("path open failed: spawn xdg-open
+    # ENOENT"). Advertising `canOpenPath: false` lets every client surface hide
+    # or replace its open-path affordance instead of failing on click.
+    nativeOpen: false
 
 - insert:
     - id: dormice

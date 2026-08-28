@@ -1,0 +1,3 @@
+name: 单体 / Solo
+description: 一个智能体、单线程一遍过、不扇出：文件、Shell、检索、Skills、交付都在这条线程里做完。
+order: 10

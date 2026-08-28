@@ -1,0 +1,26 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cosmokit" },
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
+    { "path": "../../core/session" },
+    { "path": "../../interaction/commands" },
+    { "path": "../../interaction/user-approval" },
+    { "path": "../../session-query/session-query" },
+    { "path": "../../storage/storage" },
+    { "path": "../../storage/storage-domain" },
+    { "path": "../../workflow/tool-workflow" },
+    { "path": "../sci-deliver" },
+    { "path": "../sci-memory" },
+    { "path": "../sci-plan" },
+    { "path": "../sci-skills" },
+    { "path": "../sci-workspace" },
+    { "path": "../../runtime-diagnostics/invariants" }
+  ]
+}

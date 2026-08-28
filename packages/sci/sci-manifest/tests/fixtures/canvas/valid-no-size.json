@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "nodes": [
+    { "id": "only", "type": "text", "position": { "x": 0, "y": -40 },
+      "data": { "markdown": "placeholder while the figure renders" } }
+  ],
+  "edges": []
+}

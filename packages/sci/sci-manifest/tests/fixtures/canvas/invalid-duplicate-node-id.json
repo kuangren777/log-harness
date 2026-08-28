@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "nodes": [
+    { "id": "n1", "type": "text", "position": { "x": 0, "y": 0 },
+      "data": { "markdown": "one" } },
+    { "id": "n1", "type": "text", "position": { "x": 300, "y": 0 },
+      "data": { "markdown": "two" } }
+  ],
+  "edges": []
+}

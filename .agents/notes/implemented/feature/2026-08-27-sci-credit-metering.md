@@ -1,0 +1,43 @@
+# Agent Note: `dsh-sci-credit` meters model calls against the gate's USD ledger
+
+Status: implemented
+
+English | [中文](2026-08-27-sci-credit-metering.zh.md)
+
+## Problem
+
+The multi-tenant `sci` deployment now has a ledger, a price list, and three payment channels in the gate (`ClawsGO-System/13-Billing`, B1 and B3), and nothing in the harness that spends from it. A tenant whose plan and purchased pools are both empty could keep issuing model calls indefinitely, and a tenant who paid had no record in its own session log of what a turn cost.
+
+The two obvious placements were both wrong. Reading the session JSONL from the gate cannot refuse a call before it happens, needs cross-VM directory access, and re-derives money from a log format that carries no compatibility promise. Charging in the relay was ruled out by the deployment requirement that this product share nothing with CaMeL-api.
+
+## Decision
+
+`@deepseek-ai/dsh-sci-credit` owns one `llm/stream` waterfall listener — the single seam every model call passes through (`packages/llm/llm/src/index.ts`) — and does three things around it.
+
+Before `next()` it reads `GET /gate/api/credit/balance` with the VM bearer token, reusing an answer younger than `balanceTtlMs` (default 2 s) and coalescing concurrent reads onto one request, because a tool loop issues model calls a second apart and would otherwise spend a round trip per step re-asking one question. An `exhausted` tenant is refused by yielding one terminal `{kind:'error'}` finish with code `CREDIT_EXHAUSTED` and a bilingual sentence naming `creditUrl`, and `next()` is never called, so the refusal costs no provider tokens. A gate that cannot answer refuses the same way with `CREDIT_GATE_UNAVAILABLE` under the default `failMode: 'closed'`; the message is deliberately a different one, because telling a funded tenant that its credit is exhausted would send it to a page that cannot fix anything.
+
+During the call every chunk is yielded unchanged and the last `usage` chunk is kept. After the iterable settles — on a finish, on a throw, and on a consumer that abandons the iterator, all three reached through one `finally` — the usage is priced and `POST /gate/api/credit/charge` records it under a per-call UUID. The post is never awaited by the stream; a gate that refuses it sends the payload to `$DSH_HOME/.sci/credit-spool.jsonl` and a doubling backoff drains it later. `duplicate: true` is a delivered charge, which is what makes the drain safe to repeat.
+
+Pricing is integer arithmetic over `BigInt`, because the ledger is integer micro-USD and a float intermediate would make identical calls disagree in the last digit across hosts. `inputTokens` and `cacheWriteTokens` price at the uncached-input rate, `cacheReadTokens` at the cached rate, `outputTokens` at the output rate, each rounded half up, summed, and then multiplied by the peak multiplier with one final half-up rounding. **`reasoningTokens` is not priced.** `packages/llm/llm-deepseek/src/translate.ts::mapUsage` maps `completion_tokens` straight to `outputTokens` and reports `completion_tokens_details.reasoning_tokens` beside it *without* subtracting — the OpenAI-compatible convention in which reasoning output is already inside the completion count — so pricing it again would bill every reasoning token twice. Peak and off-peak follow the request's START time in UTC on the gate's published schedule, start inclusive and end exclusive; a card that states its windows on any other clock is refused rather than read as UTC, which keeps the previous card in force instead of mispricing every call in silence. An unlisted model is priced by the card's most expensive row and marked `unknownModel`.
+
+Each priced call appends `sci/credit-charged` with the envelope's `ignorable` marker. It is a projection source only — the model never reads it and nothing later in the log is interpreted differently by its presence — and it exists so an audit can reconcile a session against the ledger, whose `ref` is `req:<requestId>`. The `./invariant` companion asserts that no two records in one session share a `requestId`, because the ledger's UNIQUE `ref` would collapse two metered calls onto one charge.
+
+## Alternatives considered
+
+**Assert the converse invariant — every usage-bearing `assistant/message` has exactly one `sci/credit-charged`.** Rejected because the live event stream cannot decide it. The record is appended after the response it prices, a call that ends in an error finish reports usage without producing an `assistant/message` at all, and an undelivered charge legitimately waits in the spool across a process restart. Asserting it would fire on correct behaviour; the honest form of that check is a reconciliation between the log and the ledger, which the gate's own `ref` index already supports.
+
+**Await the charge before yielding the terminal finish.** Rejected because it puts a network round trip and a possible retry chain in front of every turn's last chunk, and a gate outage would then stall sessions rather than merely defer their accounting. The spool exists so the accounting can be late without the session being slow.
+
+**Price by multiplying the prices first and rounding once.** Rejected: rounding once per component keeps each line of the sum reproducible from the ledger row alone, which is what makes a disputed charge checkable by hand. Multiplying first compounds one rounding error per component and produces a number nobody can re-derive.
+
+**Fail open by default.** Rejected. Fail-open metering serves unlimited compute to an unpaid tenant for as long as the gate is down, which is the failure that costs real money; a refused request costs one retry. `failMode: 'open'` is available for a deployment that has decided otherwise, and it reports the degraded state at most once per `degradedLogIntervalMs` so an outage is not buried in one line per model call.
+
+## Consequences
+
+A `sci` VM refuses model calls once its tenant's pools are empty, and every admitted call leaves a ledger row and a session record priced at the official list rate. The refusal names the top-up page, so the failure is actionable rather than opaque. `vmToken` is required with no default: the VM orchestrator bakes `SCI_GATE_VM_TOKEN` into the container's Env, and a deployment without a gate removes the `sci-credit` row from its patch layer rather than blanking the token — a blank one loads as a hard error instead of silently charging nothing.
+
+A charge that reaches neither the gate nor the spool is lost. It is reported at error severity with its request id and amount and the session record marks it `spooled: false`, but nothing collects it; the README lists this and the other bounds. The spool takes no cross-process lock, so two harness processes on one `$DSH_HOME` would each drain it — harmless because the gate keys on `requestId`, but not prevented.
+
+## Testing
+
+Package tests cover the peak-window boundaries second by second (Monday 00:59:59 against 01:00:00, Friday 09:59:59 against 10:00:00, the gap between the two windows, Saturday and Sunday inside a window), half-up rounding at the component and the multiplier, the unlisted-model fallback and every tie-break arm, and the reasoning-token convention as an equality against the same call without reasoning. The gate client is pinned over an injected transport for the balance cache lifetime, concurrent coalescing, invalidation, every malformed answer, and the non-UTC card refusal; the spool over a real filesystem for the owner-only modes, concurrent appends, a partial drain that keeps file order, a truncated tail, and a read failure that is not absence. The listener is exercised through the real `llm/stream` waterfall behind `ctx.llm.stream()` with a mock adapter and a real session store: the exhausted refusal calling no adapter, both fail modes, the throttled degraded log, chunk pass-through, a charge after a mid-stream throw, the duplicate answer, a spooled charge delivered by a driven backoff, the rate-card boot fetch and its fallback, and teardown mid-fetch. A Loader-composition suite boots a `cordis.yml` against a real loopback HTTP gate with no injected transport, clock, id mint, or timer, and asserts the minted UUID, the charge, and the two load-time refusals. Per-file coverage is 100%.

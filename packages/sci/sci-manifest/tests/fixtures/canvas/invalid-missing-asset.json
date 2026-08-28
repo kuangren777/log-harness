@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "nodes": [
+    { "id": "n1", "type": "image", "position": { "x": 0, "y": 0 },
+      "data": { "src": "ghost.png", "title": "Never generated" } }
+  ],
+  "edges": []
+}

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "nodes": [
+    { "id": "n1", "type": "chart", "position": { "x": 0, "y": 0 },
+      "data": { "src": "hero.png" } }
+  ],
+  "edges": []
+}

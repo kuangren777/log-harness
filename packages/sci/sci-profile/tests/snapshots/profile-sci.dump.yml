@@ -421,6 +421,7 @@
   config:
     redactSkillCatalogProviders:
       - sci
+    nativeOpen: false
 # == @deepseek-ai/dsh-web-app
 - id: cordis-host-runner
   name: '@deepseek-ai/dsh-cordis-host-runner'

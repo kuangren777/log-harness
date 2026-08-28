@@ -55,6 +55,9 @@
 - id: tool-fs-search
   name: '@deepseek-ai/dsh-tool-fs-search'
   config:
+    # Tools run inside the sandbox, whose PATH has ripgrep (sci-sandbox image);
+    # the harness's bundled rg binary path does not exist there.
+    rgPath: rg
     # Required with no default (an explicit deployment choice): over-cap glob
     # pages take the modification-time head, matching the standard preset.
     sampleOverCapGlobResults: false

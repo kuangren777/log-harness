@@ -1,0 +1,10 @@
+{
+  "valid-minimal.json": { "errors": [] },
+  "valid-with-versions.json": { "errors": [] },
+  "valid-nested-entry.json": { "errors": [] },
+  "invalid-versions-not-array.json": { "errors": ["paper manifest.versions must be an array"] },
+  "invalid-entry-absolute.json": { "errors": ["paper manifest.entry", "not an absolute path"] },
+  "invalid-entry-extension.json": { "errors": ["paper manifest.entry", ".tex"] },
+  "invalid-missing-title.json": { "errors": ["paper manifest.title must be a non-empty string"] },
+  "invalid-timestamp.json": { "errors": ["paper manifest.createdAt", "ISO-8601 UTC timestamp"] }
+}
