@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-27-referenced-text-blocks.md
-2026-08-27-referenced-text-blocks.md: b3837c2d9dddabe0e8907b58affba329be92f19c
-2026-08-27-referenced-text-blocks.zh.md: 30caab272100439c981b47d2592fbf6678c1fa9d
+2026-08-27-referenced-text-blocks.md: b53df720edf2ce817884117ce581a4ad14db4c0b
+2026-08-27-referenced-text-blocks.zh.md: 564f220e999b784285681e0d91f640b52dce009b
