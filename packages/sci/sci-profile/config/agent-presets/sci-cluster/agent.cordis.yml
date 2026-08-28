@@ -1,0 +1,170 @@
+# The `sci-cluster` agent preset: `sci-balanced` plus declaration-gated fan-out.
+#
+# Everything the balanced preset's header says about planes and realms holds
+# here unchanged; only the differences are commented below. Read
+# `../sci-balanced/agent.cordis.yml` first — the shared rows are restated
+# verbatim rather than included, because a preset composition is what ONE agent
+# mounts and `dsh-agent-presets` discovers whole directories, not fragments.
+
+# ── identity ────────────────────────────────────────────────────────────────
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are a research agent powered by the {{model}} model. Your project root is {{cwd}}.
+
+# The six persona charters, as one prompt section the orchestrating thread
+# copies into each child prompt. Mounted only here: this harness binds a persona
+# per MOUNTED `tool-subagent` row rather than per call, so the roster is text
+# the caller uses, and a tier that cannot fan out would be reading about agents
+# it may not start.
+- id: sci-profile-personas
+  name: '@deepseek-ai/dsh-sci-profile'
+
+# ── the tier ────────────────────────────────────────────────────────────────
+
+# The cluster tier's G1 latch, not a guard: `declare_research_plan` writes one
+# plan id, the next fan-out consumes it atomically, and the one after that is
+# refused until the model declares again. `declare_research_plan` is absent from
+# `fanoutTools` here — it is the token's SOURCE, and gating it would make the
+# first declaration unreachable.
+- id: sci-tier
+  name: '@deepseek-ai/dsh-sci-tier'
+  config:
+    tier: cluster
+    fanoutTools:
+      - workflow
+      - subagent
+      - subagent_fork
+      - subagent_codex
+      - subagent_claude_code
+      - ralph
+
+- id: sci-plan
+  name: '@deepseek-ai/dsh-sci-plan'
+
+# ── shell, filesystem, and background work ─────────────────────────────────
+
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    # Required with no default (an explicit deployment choice): over-cap glob
+    # pages take the modification-time head, matching the standard preset.
+    sampleOverCapGlobResults: false
+
+- id: tool-jobs
+  name: '@deepseek-ai/dsh-tool-jobs'
+
+# ── skills ──────────────────────────────────────────────────────────────────
+
+# User skills from the sandbox (preset-layer, since the web layer disables the
+# host row); built-ins come from the host `sci-skills` vault row by reference.
+# Rationale in the sci-balanced preset.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── compaction ──────────────────────────────────────────────────────────────
+
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+# ── delegation and workflows ────────────────────────────────────────────────
+
+# The `subagents` registry and its spawn backend live in the host composition:
+# the registry is a process singleton whose cross-session queries the api-proxy
+# serves to the browser, and a provider name may be registered only once. This
+# preset contributes the delegation TOOLS, which resolve that host registry.
+# `workflows` is different — nothing outside an agent reads it — so every row
+# that reaches it shares one entry-local realm here.
+#
+# `tool-subagent-report` is NOT here and belongs to the host plane: it registers
+# a continuable SETUP on that singleton rather than a tool this agent calls, and
+# the setup list is not scope-aware, so one copy per mounted preset registers
+# `report` once per live session and throws on the second.
+#
+# Absent by tier policy rather than by plane: `tool-subagent-fork`,
+# `tool-subagent` on the codex and claude-code providers, and `tool-ralph`. A
+# research cluster fans out to fresh children from a declared plan; resuming a
+# completed prefix and looping a fixed prompt are neither, and each extra
+# fan-out name is one more path the G1 latch has to cover.
+- id: delegation
+  name: cordis:group
+  group: true
+  isolate:
+    workflowEngine: true
+  config:
+    - id: tool-subagent-control
+      name: '@deepseek-ai/dsh-tool-subagent-control'
+
+    - id: tool-subagent-list-agents
+      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+
+    - id: tool-subagent
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent
+        backgroundMode: continuable
+
+    - id: workflow-worker-thread
+      name: '@deepseek-ai/dsh-workflow-worker-thread'
+      config:
+        provider: spawn
+
+    - id: tool-workflow
+      name: '@deepseek-ai/dsh-tool-workflow'
+
+# ── remaining model-facing rows ────────────────────────────────────────────
+
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    # Required with no default. Cluster runs fan out by design; parallel
+    # in-progress marks stay allowed, as in the standard preset.
+    allowParallelInProgress: true
+
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    fetch: true
+    searchTimeoutMs: 60000
+
+# Delivery stays with the orchestrating thread as well as the `deliverer`
+# persona: a child that finishes with something to hand over reports the path,
+# and this thread delivers it.
+- id: sci-deliver
+  name: '@deepseek-ai/dsh-sci-deliver'
+  config:
+    projectRoot: /home/user/sci/projects
+    spoolDir: /home/user/sci/.sci/spool
+    snapshotDir: /home/user/sci/.sci/snapshots

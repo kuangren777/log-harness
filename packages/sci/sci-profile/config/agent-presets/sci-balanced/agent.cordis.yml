@@ -1,0 +1,157 @@
+# The `sci-balanced` agent preset: one research thread, one pass, no fan-out.
+#
+# This file is an AGENT-PLANE composition, mounted ONCE under a standing scope
+# that every session naming the preset joins by scope parentage. The host
+# composition (`dsh-base` + `dsh-web-app` + this bundle's `cordis.patch.yml`)
+# keeps everything a preset must not own: the registries themselves, the
+# sandbox and approval stack, persistence, the model route, and every
+# science-layer Service.
+#
+# A service row here MUST sit inside a group carrying an `isolate` realm, or
+# `dsh-agent-presets` rejects it at mount: without one it publishes into the
+# root realm, where a second preset publishing the same name collides and a
+# host reader would resolve one preset's instance for every session. `true`
+# means an entry-local realm — this standing mount's own private instance.
+# Nothing in this file publishes a service except the compaction group below.
+#
+# Not mounted, deliberately: `tool-ralph`, `tool-terminal`,
+# `tool-str-replace-editor`, `tool-subagent*`, `tool-workflow`,
+# `tool-goal`, and the `planning` group. The first five are the fan-out and
+# shell-editor surfaces this tier refuses; the last two are orthogonal to the
+# tier and out of scope for this release.
+
+# ── identity ────────────────────────────────────────────────────────────────
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are a research agent powered by the {{model}} model. Your project root is {{cwd}}.
+
+# ── the tier ────────────────────────────────────────────────────────────────
+
+# The tier section plus the balanced-tier guard. `fanoutTools` is both halves of
+# the same list: it is what `ctx.tools.guard()` denies at call time, and it is
+# what the plugin checks the mounted catalog against at LOAD time — a fan-out
+# tool already in this preset's catalog throws, because a composition that
+# states one tier and can execute another is a misconfiguration, not a
+# runtime condition. `declare_research_plan` is listed for that load-time
+# check: declaring a plan in a tier that cannot spend it is meaningless.
+- id: sci-tier
+  name: '@deepseek-ai/dsh-sci-tier'
+  config:
+    tier: balanced
+    fanoutTools:
+      - workflow
+      - subagent
+      - subagent_fork
+      - subagent_codex
+      - subagent_claude_code
+      - ralph
+      - declare_research_plan
+
+# The one legitimate exit from this tier: the model states what a cluster would
+# add, the user decides, and `sci.tier.fork` (a host row) opens the wider
+# session. Mounted only here — offering it in `sci-cluster` would suggest an
+# upgrade out of the tier the session is already in.
+- id: sci-tier-suggest
+  name: '@deepseek-ai/dsh-sci-tier/suggest'
+
+# ── shell, filesystem, and background work ─────────────────────────────────
+
+# Both shell and filesystem tools consume the HOST registries; their executors
+# (`bash-sandbox`) and the `fs` provider stay in the host composition, as do the
+# `sci-workspace` path gate and the `sci-guard` authorization gate that screen
+# every call these tools make.
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    # Required with no default (an explicit deployment choice): over-cap glob
+    # pages take the modification-time head, matching the standard preset.
+    sampleOverCapGlobResults: false
+
+# Only the model-facing controls; the background-job registry is a host row.
+- id: tool-jobs
+  name: '@deepseek-ai/dsh-tool-jobs'
+
+# ── skills ──────────────────────────────────────────────────────────────────
+
+# Two skill tiers. Built-ins are platform property served by the host
+# `sci-skills` row from the loopback vault by content-addressed reference —
+# never on the sandbox disk, never inline in the log. The user's own skills are
+# theirs: this preset-layer `skill-filesystem` reads them through `ctx.fs` (the
+# sandbox) from `<project>/.dsh/skills`, `<project>/.agents/skills`, and the
+# user roots, inline and unprotected, exactly as every other dsh preset does.
+# The web layer disables the HOST `skill-filesystem` row because presets own
+# local discovery, so it is mounted here. Built-ins are not on the sandbox at
+# all, so the two providers cannot re-list each other; on a name clash the local
+# ranks (100–500) beat the built-in rank (600), so a user may shadow a built-in.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── compaction ──────────────────────────────────────────────────────────────
+
+# `compaction-basic` reads `toolResultPrune` through `ctx.get`, so the pruner
+# shares this realm rather than sitting outside it. `tokenMeter` is deliberately
+# NOT in the realm: the meter stays on the host plane and these rows resolve
+# that one instance.
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+# ── remaining model-facing rows ────────────────────────────────────────────
+
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    # Required with no default. Research sessions legitimately run parallel
+    # strands (a render while sources are read), so parallel in-progress marks
+    # stay allowed, as in the standard preset.
+    allowParallelInProgress: true
+
+# `fetch` is on: research reads the pages it cites, and the citation chapter
+# requires a link behind every claim.
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    fetch: true
+    searchTimeoutMs: 60000
+
+# `deliver_files` plus the spool drain. The three absolute paths have no
+# defaults on purpose: `spoolDir` must be the SAME directory the in-sandbox
+# `sci` command writes to, or a shell delivery is silently never read, and a
+# wrong `snapshotDir` writes delivered bytes where no card can find them.
+- id: sci-deliver
+  name: '@deepseek-ai/dsh-sci-deliver'
+  config:
+    projectRoot: /home/user/sci/projects
+    spoolDir: /home/user/sci/.sci/spool
+    snapshotDir: /home/user/sci/.sci/snapshots

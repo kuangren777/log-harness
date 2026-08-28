@@ -94,14 +94,19 @@
     persona: >-
       You are a research agent powered by the {{model}} model. Your project root is {{cwd}}.
 
-# ── skills: one provider, and only one ─────────────────────────────────────
+# ── skills: two tiers, two providers ───────────────────────────────────────
 
-# `skill-filesystem` stays off. `sci-skills` is the sole provider for this
-# profile because it owns the lifecycle projection: a skill it has retired still
-# exists on disk, and a second provider scanning the same tree would list the
-# retired skill back into the catalog.
-- id: skill-filesystem
-  disabled: true
+# Built-in skills are platform property: `sci-skills` serves them from the
+# loopback vault by content-addressed reference, so no built-in body ever
+# lands on the sandbox disk or in the session log. User skills are the user's
+# own: the base `skill-filesystem` row (kept enabled) reads them through
+# `ctx.fs` — the sandbox — from `<project>/.dsh/skills`, `<project>/.agents/skills`,
+# and the user roots, inline and unprotected, exactly as dsh does everywhere.
+# The two never collide on disk: built-ins are not on the sandbox at all, so the
+# old reason to disable the local provider (re-listing a retired built-in from
+# the shared tree) no longer exists. On a name clash the local provider's lower
+# ranks (100–500) win over the built-in rank (600), so a user can shadow a
+# built-in in their own project.
 
 # ── the science layer's host-plane rows ────────────────────────────────────
 
