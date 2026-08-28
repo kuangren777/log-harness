@@ -1,6 +1,7 @@
 /**
  * The web app's command-line provider: it parses the `dsh --profile web` flag
- * family (`--host`, `--port`, `--trusted-host`, `--no-open`) and its `--help`
+ * family (`--host`, `--port`, `--trusted-host`,
+ * `--privileged-trusted-hosts`, `--no-open`) and its `--help`
  * text, then provides the immutable values as {@link WEB_STARTUP_SERVICE}.
  * Ordinary rows inject that service before reading it from lazy config.
  * @module @deepseek-ai/dsh-web-app/startup
@@ -29,6 +30,8 @@ export interface WebStartupValues {
   port?: number
   /** Explicit `--trusted-host` authorities, in argument order. */
   trustedHosts: string[]
+  /** Whether `--privileged-trusted-hosts` opened the privileged method set to those authorities. */
+  privilegedTrustedHosts: boolean
 }
 
 /** The web flag family, as commander parsed it. */
@@ -36,6 +39,7 @@ interface WebOptions {
   host?: string
   open: boolean
   port?: string
+  privilegedTrustedHosts?: boolean
   trustedHost?: string[]
 }
 
@@ -52,6 +56,7 @@ function webCommand(): Command {
     .option('--no-open', 'do not open the Web UI in the default browser')
     .option('--port <port>', 'listen port; pass 0 to let the OS pick a free one')
     .option('--trusted-host <authority...>', 'extra authority the /api browser-trust fence accepts (host or host:port; repeatable)')
+    .option('--privileged-trusted-hosts', 'let --trusted-host authorities reach privileged methods (settings, credentials, preset authoring); only behind an authenticating reverse proxy')
     .addHelpText('after', `
 Examples:
   dsh --profile web                          serve on the composed host and port
@@ -62,9 +67,10 @@ Examples:
 
 /**
  * Parse and provide the Web invocation as an ordinary Cordis service. The
- * command's action publishes the flags this invocation named; `--host 0.0.0.0`
- * or a non-numeric `--port` is a usage error, so on rejection (and on `--help`)
- * nothing is provided.
+ * command's action publishes the flags this invocation named; `--host 0.0.0.0`,
+ * a non-numeric `--port`, or `--privileged-trusted-hosts` with no authority to
+ * widen is a usage error, so on rejection (and on `--help`) nothing is
+ * provided.
  * @param ctx - plugin context carrying the command line.
  */
 export function apply(ctx: Context): void {
@@ -77,11 +83,16 @@ export function apply(ctx: Context): void {
     if (options.port !== undefined && !/^\d+$/.test(options.port)) {
       program.error(`error: --port must be a number, got ${JSON.stringify(options.port)}`)
     }
+    const trustedHosts = options.trustedHost ?? []
+    if (options.privilegedTrustedHosts === true && trustedHosts.length === 0) {
+      program.error('error: --privileged-trusted-hosts needs at least one --trusted-host authority to widen')
+    }
     ctx.provide(WEB_STARTUP_SERVICE, {
       openBrowser: options.open,
       ...options.host !== undefined && { host: options.host },
       ...options.port !== undefined && { port: Number(options.port) },
-      trustedHosts: options.trustedHost ?? [],
+      trustedHosts,
+      privilegedTrustedHosts: options.privilegedTrustedHosts === true,
     } satisfies WebStartupValues)
   })
   parseCmdline(ctx, program)

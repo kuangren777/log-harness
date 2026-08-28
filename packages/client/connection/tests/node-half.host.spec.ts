@@ -9,8 +9,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ApiProxy } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import { RpcId, type ClientRequest } from '@deepseek-ai/dsh-host-apiproxy/api'
-import type { WebServer, WebRoute, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
-import { API_PATH, apply, HOST_EVENTS_PATH, inject, MUX_EVENTS_PATH, type HostConnectionHandle } from '../src/index.ts'
+import type { IndexInjection, WebServer, WebRoute, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
+import {
+  API_PATH, apply, CONNECTION_BOOT_GLOBAL, HOST_EVENTS_PATH, inject, MUX_EVENTS_PATH,
+  type HostConnectionHandle,
+} from '../src/index.ts'
 import { DEFAULT_MAX_REQUEST_BODY_BYTES } from '../src/http-bridge.ts'
 
 /** Structural webServer fake recording both route registries. */
@@ -75,9 +78,13 @@ function fakeResponse(): { response: ServerResponse; state: { status?: number; b
   return { response, state }
 }
 
-async function mounted(config?: { trustedHosts?: string[] }): Promise<{
+async function mounted(config?: {
+  trustedHosts?: string[]
+  privilegedTrustedHosts?: boolean
+}): Promise<{
   routes: WebRoute[]
   upgrades: WebUpgradeRoute[]
+  injections: () => IndexInjection[]
   dispose: () => Promise<void>
 }> {
   const ctx = new Context()
@@ -87,8 +94,27 @@ async function mounted(config?: { trustedHosts?: string[] }): Promise<{
   ctx.provide('apiProxy', {} as unknown as ApiProxy)
   const fiber = ctx.plugin({ inject: [...inject], apply }, config)
   await fiber.await()
-  return { routes, upgrades, dispose: () => fiber.dispose() }
+  return {
+    routes,
+    upgrades,
+    // Collect the table the way an index render or a boot payload does.
+    injections: () => {
+      const table: IndexInjection[] = []
+      ctx.emit('webserver/index-inject', table)
+      return table
+    },
+    dispose: () => fiber.dispose(),
+  }
 }
+
+/** Every method the configuration-plane fence pins to loopback by default. */
+const PRIVILEGED_METHODS = [
+  'host.pickDirectory', 'host.openPath',
+  'settings.describe', 'settings.openDocument', 'settings.update', 'settings.replace', 'settings.mutate',
+  'credentials.describe', 'credentials.set', 'credentials.unset',
+  'llm.discoverModels',
+  'agentPreset.read', 'agentPreset.copy', 'agentPreset.openDocument', 'agentPreset.remove',
+]
 
 describe('connection node half', () => {
   it('reserves enough default carrier capacity for the 200 MiB image batch', () => {
@@ -174,16 +200,10 @@ describe('connection node half', () => {
     // host fetch a caller-chosen URL. The same declared authority reaches
     // ordinary reads (carrier-level 404 from the empty proxy proves the fence
     // passed), but each privileged method stays loopback-only and 403s.
-    for (const method of [
-      'host.pickDirectory', 'host.openPath',
-      'settings.describe', 'settings.openDocument', 'settings.update', 'settings.replace', 'settings.mutate',
-      'credentials.describe', 'credentials.set', 'credentials.unset',
-      'llm.discoverModels',
-      // A composition names the plugins a session runs: reading one is
-      // reconnaissance, and copy/remove/openDocument manage the roster and
-      // drive the host desktop.
-      'agentPreset.read', 'agentPreset.copy', 'agentPreset.openDocument', 'agentPreset.remove',
-    ]) {
+    // A composition names the plugins a session runs: reading one is
+    // reconnaissance, and copy/remove/openDocument manage the roster and
+    // drive the host desktop.
+    for (const method of PRIVILEGED_METHODS) {
       const denied = fakeResponse()
       await routes[0]!.handler(
         fakeRequest({ host: 'harness.example' }, `${API_PATH}/${method}`),
@@ -217,6 +237,72 @@ describe('connection node half', () => {
     }), declared.response)
     expect(declared.state.status).toBe(404)
     await dispose()
+  })
+
+  it('opts declared authorities into the privileged plane only with privilegedTrustedHosts', async () => {
+    const { routes, dispose } = await mounted({
+      trustedHosts: ['harness.example'],
+      privilegedTrustedHosts: true,
+    })
+    // The opt-in declares that an authenticating proxy fronts this process, so
+    // the privileged set takes the same trust list as every other method: the
+    // fence passes and the empty carrier answers 404 for these GETs.
+    for (const method of PRIVILEGED_METHODS) {
+      const allowed = fakeResponse()
+      await routes[0]!.handler(
+        fakeRequest({ host: 'harness.example' }, `${API_PATH}/${method}`),
+        allowed.response,
+      )
+      expect([method, allowed.state.status]).toEqual([method, 404])
+    }
+    // The opt-in widens nothing beyond the declared list.
+    for (const method of PRIVILEGED_METHODS) {
+      const denied = fakeResponse()
+      await routes[0]!.handler(
+        fakeRequest({ host: 'other.example' }, `${API_PATH}/${method}`),
+        denied.response,
+      )
+      expect([method, denied.state.status, denied.state.body]).toEqual([method, 403, 'forbidden'])
+    }
+    await dispose()
+  })
+
+  it('leaves the privileged plane pinned when the opt-in has no authority to widen', async () => {
+    // A no-op by construction: with no trustedHosts the opt-in's list is the
+    // empty one the pin already uses, so loopback stays the only caller.
+    const { routes, dispose } = await mounted({ privilegedTrustedHosts: true })
+    const denied = fakeResponse()
+    await routes[0]!.handler(
+      fakeRequest({ host: 'harness.example' }, `${API_PATH}/settings.describe`),
+      denied.response,
+    )
+    expect(denied.state).toMatchObject({ status: 403, body: 'forbidden' })
+    const loopback = fakeResponse()
+    await routes[0]!.handler(
+      fakeRequest({ host: '127.0.0.1:3080' }, `${API_PATH}/settings.describe`),
+      loopback.response,
+    )
+    expect(loopback.state.status).toBe(404)
+    await dispose()
+  })
+
+  it('publishes the resolved opt-in to the page as one global injection row', async () => {
+    const off = await mounted({ trustedHosts: ['harness.example'] })
+    expect(off.injections()).toEqual([{
+      kind: 'global',
+      name: CONNECTION_BOOT_GLOBAL,
+      value: { privilegedTrustedHosts: false },
+    }])
+    await off.dispose()
+    const on = await mounted({ trustedHosts: ['harness.example'], privilegedTrustedHosts: true })
+    expect(on.injections()).toEqual([{
+      kind: 'global',
+      name: CONNECTION_BOOT_GLOBAL,
+      value: { privilegedTrustedHosts: true },
+    }])
+    await on.dispose()
+    // The row belongs to the fiber: a disposed Connection contributes nothing.
+    expect(on.injections()).toEqual([])
   })
 
   it('provides a disposable dedicated RPC channel without requiring apiProxy', async () => {
@@ -340,6 +426,58 @@ describe('connection node half', () => {
     await route.handler(fakePost({ host: 'harness.example' }, '/api/goals/create', request), loopbackOnly.response)
     expect(loopbackOnly.state.status).toBe(403)
     await removeLoopback()
+    await fiber.dispose()
+  })
+
+  it('extends the opt-in to loopback-authority RPC channels, dedicated and shared', async () => {
+    const ctx = new Context()
+    const routes: WebRoute[] = []
+    ctx.provide('webServer', fakeHttpServer(routes, []) as WebServer)
+    ctx.provide('apiProxy', {} as unknown as ApiProxy)
+    const fiber = ctx.plugin({ inject: [...inject], apply }, {
+      trustedHosts: ['harness.example'],
+      privilegedTrustedHosts: true,
+    })
+    await fiber.await()
+    const connection = ctx.get('connection') as HostConnectionHandle
+    const removeChannel = connection.rpc.handle('/loopback', async () => ({ ok: true, value: null }), {
+      authority: 'loopback',
+    })
+    const removeInterceptor = connection.rpc.intercept(
+      '/api',
+      endpoint => endpoint === 'goals/create',
+      async () => ({ ok: true, value: { accepted: true } }),
+      { authority: 'loopback' },
+    )
+    const channelRoute = routes.find(candidate => candidate.path === '/loopback')!
+    const sharedRoute = routes.find(candidate => candidate.path === API_PATH)!
+
+    const dedicated = fakeResponse()
+    await channelRoute.handler(fakePost({ host: 'harness.example' }, '/loopback/read', {
+      type: 'client-request', rpcId: 'rpc-opted-in', method: 'read', payload: {},
+    }), dedicated.response)
+    expect(dedicated.state.status).toBe(200)
+
+    const shared = fakeResponse()
+    await sharedRoute.handler(fakePost({ host: 'harness.example' }, '/api/goals/create', {
+      type: 'client-request', rpcId: 'rpc-shared-opted-in', method: 'goals/create', payload: {},
+    }), shared.response)
+    expect(JSON.parse(String(shared.state.body))).toMatchObject({
+      rpcId: 'rpc-shared-opted-in',
+      result: { ok: true, value: { accepted: true } },
+    })
+
+    // An undeclared authority stays out of both.
+    for (const [route, path] of [[channelRoute, '/loopback/read'], [sharedRoute, '/api/goals/create']] as const) {
+      const denied = fakeResponse()
+      await route.handler(fakePost({ host: 'other.example' }, path, {
+        type: 'client-request', rpcId: 'rpc-untrusted', method: path.split('/').slice(2).join('/'), payload: {},
+      }), denied.response)
+      expect(denied.state).toMatchObject({ status: 403, body: 'forbidden' })
+    }
+
+    await removeInterceptor()
+    await removeChannel()
     await fiber.dispose()
   })
 
@@ -493,6 +631,27 @@ describe('connection node half over a real HTTP server', () => {
       }
       // Loopback reaches everything, configuration included.
       expect(await call(port, 'settings.describe', `127.0.0.1:${String(port)}`)).toBe(404)
+    } finally {
+      await close()
+      await dispose()
+    }
+  })
+
+  it('admits the declared authority to every configuration method once opted in, over real HTTP', async () => {
+    // Same real parse, opposite policy: the deployment has declared an
+    // authenticating front, so the Host header a proxied browser sends passes
+    // the privileged fence and reaches the carrier (404 from the empty proxy).
+    const { routes, dispose } = await mounted({
+      trustedHosts: ['harness.example'],
+      privilegedTrustedHosts: true,
+    })
+    const { port, close } = await serve(routes)
+    try {
+      for (const method of PRIVILEGED_METHODS) {
+        expect([method, await call(port, method, 'harness.example')]).toEqual([method, 404])
+      }
+      // Still a fence: an authority this deployment never declared is refused.
+      expect(await call(port, 'settings.describe', 'other.example')).toBe(403)
     } finally {
       await close()
       await dispose()

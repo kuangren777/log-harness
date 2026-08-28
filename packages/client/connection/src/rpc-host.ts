@@ -44,12 +44,25 @@ export class HostConnectionService extends Service implements HostConnectionHand
   private readonly interceptors = new Map<string, ConnectionRpcInterceptor>()
 
   /**
+   * Trust list a loopback-authority channel fences with: the deployment's
+   * authorities once it has declared an authenticating front, otherwise empty,
+   * which admits loopback alone.
+   */
+  private readonly loopbackTrustedHosts: readonly string[]
+
+  /**
    * Provide the Host half over the active HTTP server.
    * @param ctx - owning Connection plugin context.
    * @param trustedHosts - deployment authorities accepted by trusted-host channels.
+   * @param privilegedTrustedHosts - whether `authority: 'loopback'` channels accept `trustedHosts` too.
    */
-  constructor(ctx: Context, private readonly trustedHosts: readonly string[]) {
+  constructor(
+    ctx: Context,
+    private readonly trustedHosts: readonly string[],
+    privilegedTrustedHosts: boolean,
+  ) {
     super(ctx, 'connection')
+    this.loopbackTrustedHosts = privilegedTrustedHosts ? trustedHosts : []
   }
 
   /** Generic channel registry scoped to the Context reading this service. */
@@ -79,7 +92,8 @@ export class HostConnectionService extends Service implements HostConnectionHand
         if (endpoint === undefined || interceptor === undefined || !interceptor.matches(endpoint)) {
           return fallback.fetch(request)
         }
-        if (interceptor.options.authority === 'loopback' && !isTrustedApiRequest(request, [])) {
+        if (interceptor.options.authority === 'loopback'
+          && !isTrustedApiRequest(request, this.loopbackTrustedHosts)) {
           return Promise.resolve(new Response('forbidden', { status: 403 }))
         }
         return interceptor.fetchHandler.fetch(request)
@@ -94,7 +108,7 @@ export class HostConnectionService extends Service implements HostConnectionHand
     options: ConnectionRpcHandlerOptions,
   ): () => Promise<void> {
     assertChannel(channel)
-    const trustedHosts = options.authority === 'loopback' ? [] : this.trustedHosts
+    const trustedHosts = options.authority === 'loopback' ? this.loopbackTrustedHosts : this.trustedHosts
     const fetchHandler = rpcFetchHandler(channel, handler)
     const route: WebRoute = {
       kind: 'prefix',

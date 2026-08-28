@@ -142,6 +142,7 @@
         printUrl: true
         surfaceContext: true
         trustedHosts: !!js ctx.webStartup.trustedHosts
+        privilegedTrustedHosts: !!js ctx.webStartup.privilegedTrustedHosts
 
     # The client-plugin reload chain, always mounted: it is idle until a
     # rebuild watcher (pnpm run dev:web) actually rewrites client bundles. It
@@ -169,6 +170,9 @@
         # A deployment adding authorities keeps this expression and concatenates
         # its literals, for example: ['app.internal', ...ctx.webRuntime.trustedHosts].
         trustedHosts: !!js ctx.webRuntime.trustedHosts
+        # Off unless the invocation passed --privileged-trusted-hosts, which is
+        # sound only behind an authenticating reverse proxy.
+        privilegedTrustedHosts: !!js ctx.webRuntime.privilegedTrustedHosts
 
     - id: api-remotes
       name: '@deepseek-ai/dsh-api-remotes'
@@ -435,7 +439,10 @@
 #
 # Only the SHIPPED root is an assembly fact: it sits beside the installed app's
 # own config, so `apps/cli`'s `composeProfile` resolves and patches it in — the
-# same treatment `distIndex` gets on the webserver row. The writable root is
+# same treatment `distIndex` gets on the webserver row — unless the composition
+# declares its own non-empty `roots` (a profile such as `sci` points at its
+# bundle's `config/agent-presets/` via `dshBundlePath`), in which case the
+# launcher leaves that list untouched and the built-ins are not offered. The writable root is
 # `dsh-agent-presets`' own default (`includeUserRoot`), so a composition that
 # never reaches that patch still finds a person's presets.
 - insert:

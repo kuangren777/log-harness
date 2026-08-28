@@ -428,7 +428,7 @@ describe('SettingsScopeBinder.bind', () => {
     const wire = { settings: { describe: describeCall } }
     const mirror = new SettingsDescribeMirror(wire as never)
     const ctx = new Context()
-    ctx.provide('connection', { api: wire, isLoopback: true } as never)
+    ctx.provide('connection', { api: wire, isLoopback: true, configurationPlane: 'host' } as never)
     let theme!: SettingsScope<UiTestSettings>
     let locale!: SettingsScope<UiTestSettings>
     new TestRemote(ctx)
@@ -457,7 +457,9 @@ describe('SettingsScopeBinder.bind', () => {
     const wire = { settings: { describe: describeCall } }
     const mirror = new SettingsDescribeMirror(wire as never, 'memory')
     const ctx = new Context()
-    ctx.provide('connection', { api: wire, isLoopback: false } as never)
+    // A page whose deployment did not opt trusted hosts into the privileged
+    // plane: no durable settings, whatever its authority.
+    ctx.provide('connection', { api: wire, isLoopback: false, configurationPlane: 'memory' } as never)
     let scope!: SettingsScope<UiTestSettings>
     new TestRemote(ctx)
     await ctx.plugin(SettingsScopeBinder, { mirror, schema: settingsSchema }).await()

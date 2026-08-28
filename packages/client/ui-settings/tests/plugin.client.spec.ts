@@ -11,8 +11,11 @@ import { apply, inject } from '../src/client/index.ts'
 import { SettingsSchemaService } from '../src/client/schema.ts'
 import { SettingsScopeBinder } from '../src/client/settings-scope.ts'
 
-/** Boot the browser half over a fake loopback connection and test remote. */
-function bench() {
+/**
+ * Boot the browser half over a fake connection and test remote.
+ * @param configurationPlane - the plane the fake connection reports.
+ */
+function bench(configurationPlane: 'host' | 'memory' = 'host') {
   const describeCall = vi.fn().mockResolvedValue({
     rpcId: 'plugin-bench' as never,
     result: { ok: true, value: { writable: true, hasDocument: true, namespaces: [] } },
@@ -20,7 +23,10 @@ function bench() {
   const ctx = new Context()
   ctx.provide('connection', {
     api: { settings: { describe: describeCall } },
-    isLoopback: true,
+    // The mirror keys off the plane, not the page authority: a public
+    // authority whose deployment opted in reports 'host' with isLoopback false.
+    isLoopback: configurationPlane === 'host',
+    configurationPlane,
   } as never)
   new TestRemote(ctx)
   return { ctx, describeCall, fiber: ctx.plugin({ inject: [...inject], apply }) }
@@ -33,6 +39,17 @@ describe('settings domain base plugin', () => {
     expect(ctx.get('settingsScope')).toBeInstanceOf(SettingsScopeBinder)
     expect(ctx.get('settingsSchema')).toBeInstanceOf(SettingsSchemaService)
     await vi.waitFor(() => { expect(describeCall).toHaveBeenCalledTimes(1) })
+  })
+
+  it('follows the connection plane: a memory-plane page reads no settings at all', async () => {
+    const { ctx, describeCall, fiber } = bench('memory')
+    await fiber.await()
+    expect(ctx.get('settingsScope')).toBeInstanceOf(SettingsScopeBinder)
+    ctx.remote.$dispatch('settings/document-updated', ['ui-test', 0])
+    ctx.emit('connection/reset')
+    await Promise.resolve()
+    expect(describeCall).not.toHaveBeenCalled()
+    await fiber.dispose()
   })
 
   it('refreshes the mirror on document commits and connection resets, once each', async () => {

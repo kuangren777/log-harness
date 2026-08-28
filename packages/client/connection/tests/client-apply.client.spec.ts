@@ -9,6 +9,7 @@ import type { RpcMessage } from '../src/client/api.ts'
 import { RpcId } from '../src/client/api.ts'
 import { FixtureApiClient } from '../src/client/fixture.ts'
 import { WebApiClient } from '../src/client/web-api-client.ts'
+import { CONNECTION_BOOT_GLOBAL, type ConnectionBootGlobal } from '../src/boot-global.ts'
 
 type Win = { location?: { hostname: string; search: string; origin?: string } }
 type WebSocketGlobal = { WebSocket?: typeof WebSocket }
@@ -49,6 +50,7 @@ class FakeWebSocket extends EventTarget {
 
 afterEach(() => {
   delete (globalThis as Win).location
+  delete (globalThis as ConnectionBootGlobal).__DSH_CONNECTION__
   sockets.length = 0
   if (originalWebSocket === undefined) delete (globalThis as WebSocketGlobal).WebSocket
   else globalThis.WebSocket = originalWebSocket
@@ -68,6 +70,8 @@ describe('connection client apply', () => {
     const handle = await mount()
     expect(handle.api).toBeInstanceOf(WebApiClient)
     expect(handle.isLoopback).toBe(true)
+    // Loopback owns the configuration plane without any Host-published flag.
+    expect(handle.configurationPlane).toBe('host')
   })
 
   it('selects the fixture client under ?fixture (and with no location at all stays real)', async () => {
@@ -81,7 +85,25 @@ describe('connection client apply', () => {
 
   it('reports non-loopback page authority through the connection handle', async () => {
     ;(globalThis as Win).location = { hostname: '192.0.2.20', search: '' }
-    expect((await mount()).isLoopback).toBe(false)
+    const handle = await mount()
+    expect(handle.isLoopback).toBe(false)
+    // No Host-published opt-in: the configuration plane stays in the page.
+    expect(handle.configurationPlane).toBe('memory')
+  })
+
+  it('takes the configuration plane from the Host-published opt-in on a public authority', async () => {
+    ;(globalThis as Win).location = { hostname: 'harness.example', search: '' }
+    ;(globalThis as ConnectionBootGlobal)[CONNECTION_BOOT_GLOBAL] = { privilegedTrustedHosts: true }
+    const opted = await mount()
+    expect(opted.isLoopback).toBe(false)
+    expect(opted.configurationPlane).toBe('host')
+
+    // The published false is the same answer as no global at all, and the
+    // desktop-action flag never moves with it.
+    ;(globalThis as ConnectionBootGlobal)[CONNECTION_BOOT_GLOBAL] = { privilegedTrustedHosts: false }
+    const pinned = await mount()
+    expect(pinned.isLoopback).toBe(false)
+    expect(pinned.configurationPlane).toBe('memory')
   })
 
   it('start() hands out one loop, rejects a second consumer, and stop() aborts the streams', async () => {

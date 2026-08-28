@@ -59,6 +59,7 @@ export const apply = ctx => globalThis.__webStartupApply(ctx)
     '    openBrowser: !!js ctx.webStartup.openBrowser',
     '    port: !!js ctx.webStartup.port ?? 3080',
     '    trustedHosts: !!js ctx.webStartup.trustedHosts',
+    '    privilegedTrustedHosts: !!js ctx.webStartup.privilegedTrustedHosts',
     '- id: provider',
     `  name: ${pathToFileURL(join(dir, 'provider.mjs')).href}`,
     '',
@@ -94,12 +95,14 @@ describe('web command-line provider', () => {
       '--port', '8080',
       '--trusted-host', 'lab.internal', 'lab-2.internal',
       '--trusted-host', '10.0.0.9',
+      '--privileged-trusted-hosts',
     ])
     expect(values).toEqual({
       host: '127.0.0.1',
       openBrowser: false,
       port: 8080,
       trustedHosts: ['lab.internal', 'lab-2.internal', '10.0.0.9'],
+      privilegedTrustedHosts: true,
     })
     expect(observed.readerConfig).toEqual(values)
     expect(observed.exits).toEqual([])
@@ -107,12 +110,13 @@ describe('web command-line provider', () => {
 
   it('leaves deployment values to each consumer when flags omit them', async () => {
     const { values, observed } = await bootProvider([])
-    expect(values).toEqual({ openBrowser: true, trustedHosts: [] })
+    expect(values).toEqual({ openBrowser: true, trustedHosts: [], privilegedTrustedHosts: false })
     expect(observed.readerConfig).toEqual({
       host: '127.0.0.1',
       openBrowser: true,
       port: 3080,
       trustedHosts: [],
+      privilegedTrustedHosts: false,
     })
   })
 
@@ -121,6 +125,7 @@ describe('web command-line provider', () => {
     expect(observed.out).toContain('dsh --profile web')
     expect(observed.out).toContain('--no-open')
     expect(observed.out).toContain('--trusted-host')
+    expect(observed.out).toContain('--privileged-trusted-hosts')
     expect(values).toBeUndefined()
     expect(observed.readerConfig).toBeUndefined()
     expect(observed.exits).toEqual([0])
@@ -132,6 +137,20 @@ describe('web command-line provider', () => {
     expect(values).toBeUndefined()
     expect(observed.readerConfig).toBeUndefined()
     expect(observed.exits).toEqual([1])
+  })
+
+  it('keeps the privileged opt-in off by default and refuses it with no authority to widen', async () => {
+    const alone = await bootProvider(['--privileged-trusted-hosts'])
+    expect(alone.observed.out)
+      .toContain('--privileged-trusted-hosts needs at least one --trusted-host authority to widen')
+    expect(alone.values).toBeUndefined()
+    expect(alone.observed.readerConfig).toBeUndefined()
+    expect(alone.observed.exits).toEqual([1])
+
+    // Authorities alone stay outside the privileged plane.
+    const authoritiesOnly = await bootProvider(['--trusted-host', 'lab.internal'])
+    expect(authoritiesOnly.values)
+      .toMatchObject({ trustedHosts: ['lab.internal'], privilegedTrustedHosts: false })
   })
 
   it('rejects the intentionally unsupported all-interfaces host before the consumer activates', async () => {

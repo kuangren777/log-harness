@@ -10,6 +10,7 @@ import { FixtureApiClient } from './fixture.ts'
 import { WebApiClient } from './web-api-client.ts'
 import { createWebConnectionRpc, type RpcFetch } from './rpc.ts'
 import { isLoopbackHostname } from '../loopback-hostname.ts'
+import type { ConnectionBootGlobal } from '../boot-global.ts'
 import type { ClientConnectionRpc } from '../rpc.ts'
 
 // ---- Contract re-exports (browser-safe apiproxy channels + core types) ----
@@ -78,6 +79,16 @@ interface ClientTransportGlobal {
 }
 
 /**
+ * Whether the Host published the trusted-host privilege opt-in for this page.
+ * A page the Host did not render (a hand-built harness, a shell owning its own
+ * transport) carries no global and reads as not opted in.
+ * @returns the published flag, or false when the global is absent.
+ */
+function privilegedTrustedHostsFlag(): boolean {
+  return (globalThis as ConnectionBootGlobal).__DSH_CONNECTION__?.privilegedTrustedHosts === true
+}
+
+/**
  * The ctx.connection service API: the API client plus a one-shot
  * controller starter (the runtime plugin supplies sinks when its object layer
  * is ready — connection stays consumer-agnostic).
@@ -87,6 +98,13 @@ export interface ConnectionHandle {
   readonly api: IApiClient
   /** Whether the current page authority is loopback; non-browser contexts default to true. */
   readonly isLoopback: boolean
+  /**
+   * Whether the configuration plane (settings, credentials, preset authoring)
+   * is reachable from this page: loopback, or a deployment that opted trusted
+   * hosts in with `privilegedTrustedHosts`. `'memory'` keeps every durable
+   * write in the page instead of failing against a fence that would refuse it.
+   */
+  readonly configurationPlane: 'host' | 'memory'
   /** Generation-scoped Host facts, including the account home and native path-open capability. */
   readonly hostDescription: HostDescriptionSource
   /** Generic logical RPC channels over the same Connection transport. */
@@ -113,6 +131,7 @@ export function apply(ctx: Context): void {
   const transport = (globalThis as ClientTransportGlobal).__DSH_TRANSPORT__
   const api: IApiClient = fixtureClient ?? transport?.createApiClient() ?? new WebApiClient()
   const rpc = fixtureClient?.rpc ?? createWebConnectionRpc(transport?.fetch)
+  const isLoopback = pageLocation === undefined || isLoopbackHostname(pageLocation.hostname)
   let started = false
   let description: HostDescription | undefined
   const descriptionListeners = new Set<() => void>()
@@ -129,7 +148,8 @@ export function apply(ctx: Context): void {
   }
   const handle: ConnectionHandle = {
     api,
-    isLoopback: pageLocation === undefined || isLoopbackHostname(pageLocation.hostname),
+    isLoopback,
+    configurationPlane: isLoopback || privilegedTrustedHostsFlag() ? 'host' : 'memory',
     hostDescription: {
       getSnapshot: () => description,
       subscribe: (listener) => {

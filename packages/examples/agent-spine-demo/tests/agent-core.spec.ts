@@ -546,6 +546,7 @@ describe('dsh-agent-spine-demo bundle', () => {
                 {
                   "description": "Hot-added skill",
                   "name": "hot-skill",
+                  "provider": "filesystem",
                 },
               ],
               "form": "catalog",

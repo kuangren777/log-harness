@@ -21,14 +21,25 @@ vi.mock('node:os', () => ({
 
 describe('resolveLanTrust', () => {
   it('samples non-internal IPv4 addresses once for an all-interfaces bind: trust and display share them', () => {
-    const { lanAddresses, trustedHosts } = resolveLanTrust('0.0.0.0', ['harness.internal:3080'])
+    const { lanAddresses, trustedHosts } = resolveLanTrust('0.0.0.0', ['harness.internal:3080'], false)
     expect(lanAddresses).toEqual(['192.168.1.5', '10.0.0.7'])
     expect(trustedHosts).toEqual(['192.168.1.5', '10.0.0.7', 'harness.internal:3080'])
   })
 
   it('derives nothing for a loopback bind — extras alone stand, no LAN URL to print', () => {
-    expect(resolveLanTrust('127.0.0.1', [])).toEqual({ lanAddresses: [], trustedHosts: [] })
-    expect(resolveLanTrust('127.0.0.1', ['lab.internal']))
-      .toEqual({ lanAddresses: [], trustedHosts: ['lab.internal'] })
+    expect(resolveLanTrust('127.0.0.1', [], false))
+      .toEqual({ lanAddresses: [], trustedHosts: [], privilegedTrustedHosts: false })
+    expect(resolveLanTrust('127.0.0.1', ['lab.internal'], false))
+      .toEqual({ lanAddresses: [], trustedHosts: ['lab.internal'], privilegedTrustedHosts: false })
+  })
+
+  it('carries the invocation privilege opt-in beside the authorities it applies to', () => {
+    // The snapshot is what the connection row reads: the fence list and whether
+    // the deployment declared an authenticating front for it.
+    expect(resolveLanTrust('127.0.0.1', ['lab.internal'], true)).toEqual({
+      lanAddresses: [],
+      trustedHosts: ['lab.internal'],
+      privilegedTrustedHosts: true,
+    })
   })
 })
