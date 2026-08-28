@@ -13,7 +13,7 @@ The `sci` profile keeps every user's workspace in one long-lived Dormice sandbox
 | Workspace transfer | `tar -czf … \| base64 -w0` over the command channel, `files.write` + `tar -xzf` on the other side | `exclude`, `maxWorkspaceBytes` |
 | Event `sci/fork-completed` | appended on the calling agent's session, `ignorable: true` | — |
 
-`inject = ['tools', 'e2b']`. The plugin belongs in the cluster (Swarm) preset only: the balanced tier has no fan-out, and `AENV_API_KEY` is injected only into cluster processes. The key is read by this process and never forwarded into either sandbox.
+`inject = ['tools', 'e2b']`. The plugin belongs in the cluster (Swarm) preset only: the balanced tier has no fan-out, and `AENV_API_KEY` is injected only into cluster processes. The shipped cluster preset gates the row on that variable (`disabled: !!js process.env.AENV_API_KEY === undefined`), so a deployment without an AgentENV server simply has no `fork_workspace`; once the key is set, any other misconfiguration fails at load. The key is read by this process and never forwarded into either sandbox.
 
 ## One fork
 

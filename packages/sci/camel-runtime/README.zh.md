@@ -13,7 +13,7 @@
 | 工作区传输 | 命令通道上的 `tar -czf … \| base64 -w0`，另一侧 `files.write` + `tar -xzf` | `exclude`、`maxWorkspaceBytes` |
 | 事件 `sci/fork-completed` | 追加到调用方 agent 的会话，`ignorable: true` | — |
 
-`inject = ['tools', 'e2b']`。本插件只属于集群（蜂群）preset：均衡档没有扇出，`AENV_API_KEY` 也只注入集群进程。密钥由本进程读取，绝不转发进任何一侧沙箱。
+`inject = ['tools', 'e2b']`。本插件只属于集群（蜂群）preset：均衡档没有扇出，`AENV_API_KEY` 也只注入集群进程。随包发布的集群 preset 用该变量门控这一行（`disabled: !!js process.env.AENV_API_KEY === undefined`），没有 AgentENV 服务的部署就没有 `fork_workspace`；一旦设了密钥，其他任何配置错误都在加载时失败。密钥由本进程读取，绝不转发进任何一侧沙箱。
 
 ## 一次 fork
 

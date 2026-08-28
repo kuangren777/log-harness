@@ -183,9 +183,13 @@
 # `fork_workspace` snapshots it into AgentENV microVMs and runs one variant per
 # fork, writing results back under `.sci/forks/`. The AgentENV key comes from
 # `AENV_API_KEY` in this process's environment and is never forwarded into any
-# sandbox. The balanced preset has no fan-out and therefore no fork row.
+# sandbox. The row is gated on that key: a deployment without an AgentENV
+# server mounts no fork tool instead of failing every cluster session at load,
+# while a deployment that sets the key still fails loud on any other
+# misconfiguration. The balanced preset has no fan-out and therefore no fork row.
 - id: camel-runtime
   name: '@deepseek-ai/dsh-camel-runtime'
+  disabled: !!js process.env.AENV_API_KEY === undefined
   config:
     endpoint: !!js process.env.AENV_ENDPOINT ?? 'http://127.0.0.1:8000'
     template: !!js process.env.AENV_TEMPLATE ?? 'sci'
