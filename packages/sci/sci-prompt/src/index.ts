@@ -4,7 +4,7 @@
  * `apply` contributes two model-visible surfaces to `ctx.systemPrompt`, both
  * owned by the mounting fiber and disposed with it:
  *
- * - Seven ordered **chapters** as prompt sections (`systemPrompt.section`): the
+ * - Nine ordered **chapters** as prompt sections (`systemPrompt.section`): the
  *   full behavioral specs the model reads once at the top of the conversation.
  * - Four standing **reminders** as dynamic context (`systemPrompt.context`):
  *   one-line summaries the harness re-evaluates every assembly and materializes
@@ -51,6 +51,8 @@ const SECTION_ORCHESTRATION = 'sci:announcing-subagent-orchestration'
 const SECTION_RUNTIME_ENV = 'sci:runtime-environment'
 /** Registry key of the "Using skills" chapter. */
 const SECTION_USING_SKILLS = 'sci:using-skills'
+/** Registry key of the "Office documents" chapter. */
+const SECTION_OFFICE_DOCUMENTS = 'sci:office-documents'
 
 // --- Standing-reminder context names (registry keys) ----------------------
 
@@ -156,6 +158,16 @@ const CHAPTER_USING_SKILLS =
   + 'helped you build, never the skill\'s own wording. Loading a skill is a '
   + 'working step, not a document to recite.'
 
+const CHAPTER_OFFICE_DOCUMENTS =
+  'Office documents. Spreadsheets, text documents, and slide decks are built '
+  + 'with the `univer_*` tools: create a `.univer` file in the project\'s '
+  + '`workspace/` with `univer_new`, edit it with `univer_execute`, and inspect '
+  + 'it with `univer_status`/`univer_inspect`. When the user needs an Office '
+  + 'file, export it with `univer_export` (xlsx, csv, docx, pptx) into '
+  + '`workspace/` and then hand it over with `deliver_files`; the `.univer` '
+  + 'file itself is the working copy, not the deliverable. Do not generate '
+  + 'Office files with python libraries or LibreOffice.'
+
 // --- Standing-reminder prose (one-line summary + chapter pointer + escape) -
 // The three-part shape is deliberate: an enforceable one-line summary, a
 // pointer naming the chapter that holds the full spec (so the rule stays
@@ -209,6 +221,7 @@ const CHAPTERS: readonly { name: string; order: number; text: string }[] = [
   { name: SECTION_ORCHESTRATION, order: 150, text: CHAPTER_ORCHESTRATION },
   { name: SECTION_RUNTIME_ENV, order: 160, text: CHAPTER_RUNTIME_ENV },
   { name: SECTION_USING_SKILLS, order: 170, text: CHAPTER_USING_SKILLS },
+  { name: SECTION_OFFICE_DOCUMENTS, order: 180, text: CHAPTER_OFFICE_DOCUMENTS },
 ]
 
 /** The unconditional standing reminders, as ordered `systemPrompt.context` inputs. */

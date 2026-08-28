@@ -14,6 +14,7 @@ Replaces mechanism A of the studied platform (`ClawsGO-System/03-Hooks-and-Mecha
 | Chapter *Announcing subagent orchestration* | `sci:announcing-subagent-orchestration` | 150 | — |
 | Chapter *Runtime environment* | `sci:runtime-environment` | 160 | — |
 | Chapter *Using skills* | `sci:using-skills` | 170 | — |
+| Chapter *Office documents* | `sci:office-documents` | 180 | — |
 | Reminder File rule | `sci:reminder:file` | 10 | — |
 | Reminder Citation rule | `sci:reminder:citation` | 20 | — |
 | Reminder Prose rule | `sci:reminder:prose` | 30 | `includeProseReminder` (default `true`) |
@@ -21,7 +22,7 @@ Replaces mechanism A of the studied platform (`ClawsGO-System/03-Hooks-and-Mecha
 
 `REMINDER_CHAPTER_SECTIONS` is the one home of the reminder→chapter relationship; `@deepseek-ai/dsh-sci-prompt/invariant` installs a `system-prompt/assemble` listener that fails the assembly when a reminder survives without its chapter.
 
-Planned additions (spec P13 in `ClawsGO-System/09-Target-Architecture/03-package-plan.md`): an eighth chapter *Irreversible actions*, and widening the invariant to any `sci:*` context or skill body that quotes a chapter name.
+Planned additions (spec P13 in `ClawsGO-System/09-Target-Architecture/03-package-plan.md`): a tenth chapter *Irreversible actions*, and widening the invariant to any `sci:*` context or skill body that quotes a chapter name.
 
 ## Model Experience
 
@@ -29,11 +30,11 @@ Planned additions (spec P13 in `ClawsGO-System/09-Target-Architecture/03-package
 
 #### What the model sees
 
-Eight ordered system-prompt sections (orders 100–170) holding the full behavioural specs: reading files, citing web sources, prose first, maintaining memory, delivering files, announcing subagent orchestration, runtime environment, using skills. The last states that a loaded skill's instructions are platform-internal — followed and applied, never quoted or copied back to the user or into a delivered file.
+Nine ordered system-prompt sections (orders 100–180) holding the full behavioural specs: reading files, citing web sources, prose first, maintaining memory, delivering files, announcing subagent orchestration, runtime environment, using skills, and office documents. Using skills states that a loaded skill's instructions are platform-internal — followed and applied, never quoted or copied back to the user or into a delivered file. Office documents restricts spreadsheet, document, and slide-deck authoring to the `univer_*` toolset, exported into `workspace/` and handed off with `deliver_files` rather than edited in place as the deliverable.
 
 #### Token effect
 
-A fixed block of roughly 1000 tokens in the system prompt on every request.
+A fixed block of roughly 1100 tokens in the system prompt on every request.
 
 #### KV Cache effect
 
@@ -55,5 +56,5 @@ Append-only: the snapshot is re-materialised only when its text changes, so it d
 
 ## Known Limitations and Deferred Work
 
-- The *Irreversible actions* chapter and the two tier sections are contributed by `sci-guard` / `sci-tier`, not here; until those land, this package contributes eight chapters.
+- The *Irreversible actions* chapter and the two tier sections are contributed by `sci-guard` / `sci-tier`, not here; until those land, this package contributes nine chapters.
 - The invariant checks only this package's own reminder→chapter pointers; widening it to skill bodies and other `sci:*` contexts is spec P13.

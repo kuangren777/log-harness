@@ -14,6 +14,7 @@
 | 章节 *Announcing subagent orchestration* | `sci:announcing-subagent-orchestration` | 150 | — |
 | 章节 *Runtime environment* | `sci:runtime-environment` | 160 | — |
 | 章节 *Using skills* | `sci:using-skills` | 170 | — |
+| 章节 *Office documents* | `sci:office-documents` | 180 | — |
 | Reminder File rule | `sci:reminder:file` | 10 | — |
 | Reminder Citation rule | `sci:reminder:citation` | 20 | — |
 | Reminder Prose rule | `sci:reminder:prose` | 30 | `includeProseReminder`（默认 `true`） |
@@ -21,7 +22,7 @@
 
 `REMINDER_CHAPTER_SECTIONS` 是 reminder→章节关系的唯一归属；`@deepseek-ai/dsh-sci-prompt/invariant` 安装一个 `system-prompt/assemble` 监听器，reminder 失去其章节时组装失败。
 
-计划补充（`ClawsGO-System/09-Target-Architecture/03-package-plan.md` 的 P13）：第八章 *Irreversible actions*；不变式扩展到任何引用章节名的 `sci:*` context 与 skill 正文。
+计划补充（`ClawsGO-System/09-Target-Architecture/03-package-plan.md` 的 P13）：第十章 *Irreversible actions*；不变式扩展到任何引用章节名的 `sci:*` context 与 skill 正文。
 
 ## Model Experience
 
@@ -29,11 +30,11 @@
 
 #### What the model sees
 
-八个有序 system-prompt section（order 100–170），承载完整的行为规范：读文件、引用网络来源、散文优先、维护记忆、交付文件、宣布 subagent 编排、运行时环境、使用 skill。最后一章声明：已加载的 skill 指令是平台内部材料——遵循并应用，绝不逐字引用或复制给用户、也不写进交付物。
+九个有序 system-prompt section（order 100–180），承载完整的行为规范：读文件、引用网络来源、散文优先、维护记忆、交付文件、宣布 subagent 编排、运行时环境、使用 skill、Office 文档。Using skills 一章声明：已加载的 skill 指令是平台内部材料——遵循并应用，绝不逐字引用或复制给用户、也不写进交付物。Office documents 一章要求电子表格、文本文档、幻灯片一律用 `univer_*` 工具集创作，导出到 `workspace/` 后用 `deliver_files` 交付，而不是就地把工作副本当交付物。
 
 #### Token effect
 
-system prompt 里一段固定约 1000 token 的块，每次请求都有。
+system prompt 里一段固定约 1100 token 的块，每次请求都有。
 
 #### KV Cache effect
 
@@ -55,5 +56,5 @@ system prompt 里一段固定约 1000 token 的块，每次请求都有。
 
 ## Known Limitations and Deferred Work
 
-- *Irreversible actions* 章节与两个档位 section 由 `sci-guard` / `sci-tier` 贡献，不在本包；在它们落地之前，本包贡献八个章节。
+- *Irreversible actions* 章节与两个档位 section 由 `sci-guard` / `sci-tier` 贡献，不在本包；在它们落地之前，本包贡献九个章节。
 - 不变式只检查本包自己的 reminder→章节指针；扩展到 skill 正文与其他 `sci:*` context 是 P13 的范围。
