@@ -11,6 +11,7 @@ The `sci` product layer: a research-agent profile that reproduces the behaviour 
 | [`sci-skills/`](sci-skills/README.md) | Bundled skill tree, content-hash sync into the sandbox, lifecycle curation, listing provider. | `ctx.skills` provider |
 | [`sci-workspace/`](sci-workspace/README.md) | Path policy and shell pre-screen on `tools/pre-execute`: delivery workspace, append-only `versions/`, manifest ownership. | `tools/pre-execute` |
 | [`sci-deliver/`](sci-deliver/README.md) | `deliver_files` tool and the in-sandbox `sci deliver` spool, one validation chain. | `ctx.tools` |
+| [`camel-runtime/`](camel-runtime/README.md) | `fork_workspace` tool: the Dormice workspace snapshotted into AgentENV microVMs, one variant per fork, results back in `.sci/forks/`. | `ctx.tools`, `ctx.e2b` consumer |
 | [`sci-memory/`](sci-memory/README.md) | Memory nodes with `originSessionId`, write-timing projection, recall RPC. | `tools/post-execute`, RPC |
 | [`sci-plan/`](sci-plan/README.md) | `declare_research_plan` tool and the `sci/plan-declared` event. | `ctx.tools` |
 | [`sci-guard/`](sci-guard/README.md) | Irreversible-action classifier: unsigned binaries, egress, credentials, destructive deletes → approval. | `tools/pre-execute` |

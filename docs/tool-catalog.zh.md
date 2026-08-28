@@ -22,6 +22,8 @@
 | `@deepseek-ai/dsh-sci-tier` | `suggest_tier_upgrade` | `ctx.tools` | `tool/call`、`sci/tier-upgrade-suggested`、`tool/result` | - | suggest_tier_upgrade 是均衡档位唯一与扇出相关的工具：它记录任务已超出单次处理的范围，把选择权留给用户，而不是让 agent 悄悄启动蜂群。 |
 | `@deepseek-ai/dsh-sci-plan` | `declare_research_plan` | `ctx.tools` | `tool/call`、`sci/plan-declared`、`tool/result` | - | declare_research_plan 在扇出前点名各条并行工作线；档位门禁消费其 sci/plan-declared 事件，在声明之前拒绝扇出工具。 |
 | `@deepseek-ai/dsh-sci-deliver` | `deliver_files` | `ctx.tools`、`ctx.fs`、`ctx.systemPrompt` | `tool/call`、`sci/delivered`、`sci/delivery-failed`、`tool/result` | - | deliver_files 是文件送达用户的唯一途径；沙箱内的 `sci deliver` CLI 把同一份请求写进 spool，插件在轮次开始时拾取，走同一条校验链。 |
+| `@deepseek-ai/dsh-camel-runtime` | `fork_workspace` | `ctx.tools`、`ctx.e2b` | `tool/call`、`sci/fork-completed`、`tool/result` | - | fork_workspace 是集群档在隔离环境里跑竞争变体的唯一途径：每个变体都从 Dormice 工作区的同一份 AgentENV 快照恢复，只有 stdout、stderr、退出码与收集目录回流。 |
+| `@deepseek-ai/dsh-office-univer` | `univer_api`、`univer_compile_svg`、`univer_execute`、`univer_export`、`univer_import`、`univer_inspect`、`univer_lint`、`univer_new`、`univer_resources`、`univer_screenshot`、`univer_status`、`univer_unit`、`univer_worktree` | `ctx.tools`、`ctx.univer`、`ctx.attachments` | `tool/call`、`tool/result`、`univer_worktree` 的 merge 与 discard 会触发一次 tools/pre-execute 审批 ask | - | 本目录收录的是 `@deepseek-ai/dsh-office-univer/tools` 在不撤下任何工具时注册的集合。每一个名字都可以通过该行的 `disabledTools` 撤下；宿主没有 Chromium 或没有出网的部署，应当撤下 `univer_screenshot`、`univer_lint` 与 `univer_resources`；`univer_screenshot` 还额外要求挂载附件存储。以默认的 `tools: true` 挂载包入口会注册同一个集合。 |
 | `@deepseek-ai/dsh-tool-ask-user` | `ask_user_question` | `ctx.tools`、`ctx.userQuestions` | `tool/call`、`tool/result after a UI/provider answers the question` | - | ask_user_question 会暂停工具调用，直到当前 UI 提供方返回人类答案。 |
 | `@deepseek-ai/dsh-tools` | `run_code` | `ctx.tools`、`ctx.codeRuntime (execution time)`、`ctx.systemPrompt` | `tool/call`、`one tool/code-dispatch-start + tool/code-dispatch pair per bridged sub-call`、`tool/result` | - | 在 `mode: code`／`mode: both` 下，它由工具注册表所有，作为可过滤能力层之外的保留传输机制（参见 Code Mode Agent Note）。在 `code` 下，它是注册表对协议格式（wire format）的唯一贡献；其他可见能力在使用已加载运行时语言生成的 SDK 章节中声明。程序通过 binding 调用这些能力，调用按照原生并发约定调度：启动顺序和策略遵循提交顺序，并发安全的函数体最多重叠执行 `maxParallelSubCalls` 个。调用会重新进入完整且受守卫保护的工具流水线，并将每个嵌套执行关联到此外层结果。 |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`、`ctx.systemPrompt`、`ctx.userQuestions (execution time, opportunistic)` | `tool/call`、`plan/mode inactive on an approved review`、`tool/result` | - | 规划未激活时，exit_plan_mode 仍保留在面向模型的 schema 中，这样状态转换不会在规划策略变更之外额外造成工具目录变动。其执行路径会拒绝规划模式之外的调用；在规划模式下，它通过用户交互 seam 提交计划（批准／根据反馈继续规划），批准后会在步骤边界记录规划模式已停用。 |
@@ -196,6 +198,665 @@ declare_research_plan 在扇出前点名各条并行工作线；档位门禁消�
 来源：[`packages/sci/sci-deliver/src/index.ts`](../packages/sci/sci-deliver/src/index.ts)
 
 deliver_files 是文件送达用户的唯一途径；沙箱内的 `sci deliver` CLI 把同一份请求写进 spool，插件在轮次开始时拾取，走同一条校验链。
+
+<a id="deepseek-aidsh-camel-runtime"></a>
+
+## `@deepseek-ai/dsh-camel-runtime`
+
+### `fork_workspace`
+
+把当前工作区分叉成若干隔离副本，在每个副本里并行跑一条 shell 命令。每个变体都从工作区此刻的同一份快照出发，所以可以用它尝试相互竞争的假设、参数扫描或有风险的变换，而不碰真实文件。每个变体的 stdout、stderr、退出码，以及（给了 `collect` 时）指定的输出目录，会落到真实工作区的 .sci/forks/&lt;forkId&gt;/&lt;variant&gt;/。每次调用最多 8 个变体。变体之间、变体与真实工作区互不可见；没收集的内容在变体结束时丢弃。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "variants": {
+      "type": "array",
+      "description": "The variants to run, each in its own forked copy of the workspace.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Short lowercase identifier; names the result directory."
+          },
+          "command": {
+            "type": "string",
+            "description": "Shell command to run in the variant, from the workspace root."
+          }
+        },
+        "required": [
+          "name",
+          "command"
+        ]
+      }
+    },
+    "collect": {
+      "type": "string",
+      "description": "Workspace-relative directory whose contents are copied back from each variant. Omit to keep only stdout and stderr."
+    },
+    "timeoutSeconds": {
+      "type": "integer",
+      "description": "Per-variant wall-clock budget in seconds. Default 600, max 3600."
+    }
+  },
+  "required": [
+    "variants"
+  ]
+}
+```
+
+来源：[`packages/sci/camel-runtime/src/index.ts`](../packages/sci/camel-runtime/src/index.ts)
+
+fork_workspace 是集群档在隔离环境里跑竞争变体的唯一途径：每个变体都从 Dormice 工作区的同一份 AgentENV 快照恢复，只有 stdout、stderr、退出码与收集目录回流。
+
+<a id="deepseek-aidsh-office-univer"></a>
+
+## `@deepseek-ai/dsh-office-univer`
+
+### `univer_api`
+
+查询随包的、版本匹配的 Univer Facade API。当不知道相关的类名或 API 标签时用 find。对已知的类、类型或精确的 Class.member API 标签用 show；要查看某个已知类上的 API，就 show 这个类本身。find 不区分大小写。每个 query 独立执行并各自返回匹配结果：多个 query 不会按 AND 组合，find 也不会揣测意图。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "find discovers unknown class or API labels; show documents a known class, type, or exact Class.member label. Show a known class to inspect its APIs.",
+      "enum": [
+        "find",
+        "show"
+      ]
+    },
+    "queries": {
+      "type": "array",
+      "description": "For find, API-name keywords or identifier fragments such as conditionalFormat. For show, known class, type, or exact Class.member labels such as FRange or FRange.setValue. Find queries are case-insensitive and independent, not AND terms.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "unit": {
+      "type": "string",
+      "description": "Optional find-only Unit filter; shared APIs remain included.",
+      "enum": [
+        "sheet",
+        "doc",
+        "slide",
+        "base",
+        "board"
+      ]
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Find-only maximum matches per query. Prefer 10 or fewer."
+    }
+  },
+  "required": [
+    "action",
+    "queries"
+  ]
+}
+```
+
+来源：[`packages/office/univer/src/host/tools/definitions/api.ts`](../packages/office/univer/src/host/tools/definitions/api.ts)
+
+### `univer_compile_svg`
+
+用真实字体度量编译一个 SVG，并把它应用到草稿 worktree 中某一个明确指定的 Slide 页面上。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string",
+      "description": "Workspace-relative or absolute SVG source path."
+    },
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute target .univer path."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Writable draft worktree id."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Explicit Slide Unit id from univer_status."
+    },
+    "page": {
+      "type": "integer",
+      "description": "1-based Slide page number."
+    },
+    "mode": {
+      "type": "string",
+      "description": "Replace the page contents by default, or add the SVG as an overlay.",
+      "enum": [
+        "replace",
+        "add"
+      ]
+    }
+  },
+  "required": [
+    "source",
+    "file",
+    "worktreeId",
+    "unitId",
+    "page"
+  ]
+}
+```
+
+来源：[`packages/office/univer/src/host/tools/definitions/compile-svg.ts`](../packages/office/univer/src/host/tools/definitions/compile-svg.ts)
+
+### `univer_execute`
+
+执行 Univer Facade JavaScript，并把变更提交到草稿 agent worktree。code 只用于短小片段；多行或可复用的程序优先用 codeFile。code 与 codeFile 二者必须且只能给一个。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "code": {
+      "type": "string",
+      "description": "Small Facade API JavaScript snippet. Mutually exclusive with codeFile."
+    },
+    "codeFile": {
+      "type": "string",
+      "description": "Workspace-relative or absolute JavaScript body file to execute. Preferred for multi-line code; mutually exclusive with code."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Writable agent worktree id."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Target unit id."
+    }
+  },
+  "required": [
+    "file",
+    "worktreeId",
+    "unitId"
+  ]
+}
+```
+
+来源：[`packages/office/univer/src/host/tools/definitions/execute.ts`](../packages/office/univer/src/host/tools/definitions/execute.ts)
+
+### `univer_export`
+
+把一个 .univer 文档或 unit 导出为面向用户的文件格式。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "output": {
+      "type": "string",
+      "description": "Workspace-relative or absolute output file path."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Explicit Unit id from univer_status."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Optional worktree scope; omit to export trunk."
+    }
+  },
+  "required": [
+    "file",
+    "output",
+    "unitId"
+  ]
+}
+```
+
+来源：[`packages/office/univer/src/host/tools/definitions/export.ts`](../packages/office/univer/src/host/tools/definitions/export.ts)
+
+### `univer_import`
+
+把 xlsx、csv、tsv、docx 或 pptx 文件作为新的 Unit 导入到一个明确指定的草稿 worktree 中。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string",
+      "description": "Workspace-relative or absolute Office source path."
+    },
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute target .univer path."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Writable draft worktree id."
+    },
+    "name": {
+      "type": "string",
+      "description": "Name for the imported Unit."
+    }
+  },
+  "required": [
+    "source",
+    "file",
+    "worktreeId",
+    "name"
+  ]
+}
+```
+
+来源：[`packages/office/univer/src/host/tools/definitions/import.ts`](../packages/office/univer/src/host/tools/definitions/import.ts)
+
+### `univer_inspect`
+
+检视 .univer 文档中的结构化内容，可选地收窄到某个 unit 或 range。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Explicit target Unit id from univer_status."
+    },
+    "range": {
+      "type": "string",
+      "description": "Optional unit range such as Sheet1!A1:D20."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Optional worktree scope; omit to inspect trunk."
+    }
+  },
+  "required": [
+    "file",
+    "unitId"
+  ]
+}
+```
+
+来源：[`packages/office/univer/src/host/tools/definitions/inspect.ts`](../packages/office/univer/src/host/tools/definitions/inspect.ts)
+
+### `univer_lint`
+
+分析 Slide 的文本版式，找出溢出页面的内容、被撑破的容器与文本重叠，不产出截图。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Explicit Slide Unit id from univer_status."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Optional worktree scope; omit to lint trunk."
+    },
+    "pages": {
+      "type": "array",
+      "description": "Optional 1-based page numbers or page IDs. Omit to lint every page.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "file",
+    "unitId"
+  ]
+}
+```
+
+来源：[`packages/office/univer/src/host/tools/definitions/lint.ts`](../packages/office/univer/src/host/tools/definitions/lint.ts)
+
+### `univer_new`
+
+在当前工作区创建一个新的空 .univer 文件。它绝不覆盖已存在的文件，也不会隐式创建 Unit。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute output path ending in .univer."
+    }
+  },
+  "required": [
+    "file"
+  ]
+}
+```
+
+来源：[`packages/office/univer/src/host/tools/definitions/new.ts`](../packages/office/univer/src/host/tools/definitions/new.ts)
+
+### `univer_resources`
+
+发现、读取、导出并缓存随包的 SVG 资源。read 或 export 之前先用 find；资源句柄在随包 manifest 内保持稳定。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "Resource-library operation.",
+      "enum": [
+        "registries",
+        "find",
+        "read",
+        "export",
+        "clear-cache"
+      ]
+    },
+    "queries": {
+      "type": "array",
+      "description": "Non-empty search terms for find.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "registries": {
+      "type": "array",
+      "description": "Optional registry IDs that constrain find.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Optional positive total result limit for find."
+    },
+    "handle": {
+      "type": "string",
+      "description": "One resource handle for read."
+    },
+    "handles": {
+      "type": "array",
+      "description": "Resource handles for export.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "output": {
+      "type": "string",
+      "description": "Workspace-relative or absolute export directory."
+    }
+  },
+  "required": [
+    "action"
+  ]
+}
+```
+
+来源：[`packages/office/univer/src/host/tools/definitions/resources.ts`](../packages/office/univer/src/host/tools/definitions/resources.ts)
+
+### `univer_screenshot`
+
+把一个明确指定的 Sheet、Doc、Slide、Base 或 Board Unit 渲染为 PNG 文件，并返回图像用于视觉校验。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Explicit Unit id from univer_status."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Optional worktree scope; omit to capture trunk."
+    },
+    "output": {
+      "type": "string",
+      "description": "Workspace-relative or absolute output directory for PNG files."
+    },
+    "sheetName": {
+      "type": "string",
+      "description": "Sheet name used with range."
+    },
+    "range": {
+      "type": "string",
+      "description": "Sheet A1 range such as B2:H40."
+    },
+    "pages": {
+      "type": "array",
+      "description": "Doc numeric pages or Slide page numbers/IDs. Omit to capture every page.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "contactSheet": {
+      "type": "boolean",
+      "description": "Also create one Slide contact sheet."
+    },
+    "tileColumns": {
+      "type": "integer",
+      "description": "Contact-sheet grid columns; requires contactSheet and tileRows."
+    },
+    "tileRows": {
+      "type": "integer",
+      "description": "Contact-sheet grid rows; requires contactSheet and tileColumns."
+    },
+    "region": {
+      "type": "object",
+      "description": "Optional Board region to capture.",
+      "additionalProperties": false,
+      "properties": {
+        "left": {
+          "type": "number"
+        },
+        "top": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "left",
+        "top",
+        "width",
+        "height"
+      ]
+    },
+    "elementIds": {
+      "type": "array",
+      "description": "Optional Board element IDs to capture.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "padding": {
+      "type": "number",
+      "description": "Board content padding; requires region or elementIds."
+    },
+    "scale": {
+      "type": "number",
+      "description": "Render scale from 0.1 to 4 for any Unit."
+    }
+  },
+  "required": [
+    "file",
+    "unitId",
+    "output"
+  ]
+}
+```
+
+来源：[`packages/office/univer/src/host/tools/definitions/screenshot.ts`](../packages/office/univer/src/host/tools/definitions/screenshot.ts)
+
+### `univer_status`
+
+列出某个 .univer 文件的主干 Unit 与 worktree，或检视某一个 worktree 作用域。在选定 unitId 或接续先前工作之前先调用它。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Optional worktree whose Units should be returned."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Optional Unit filter."
+    }
+  },
+  "required": [
+    "file"
+  ]
+}
+```
+
+来源：[`packages/office/univer/src/host/tools/definitions/status.ts`](../packages/office/univer/src/host/tools/definitions/status.ts)
+
+### `univer_unit`
+
+在一个明确指定的草稿 worktree 中创建或移除顶层的 Sheet、Doc、Slide、Base 或 Board Unit。用 univer_status 列出 Unit。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "Unit lifecycle action.",
+      "enum": [
+        "create",
+        "remove"
+      ]
+    },
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Writable draft worktree id."
+    },
+    "kind": {
+      "type": "string",
+      "description": "Required for create.",
+      "enum": [
+        "sheet",
+        "doc",
+        "slide",
+        "base",
+        "board"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "description": "Required non-empty Unit name for create."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Required for remove."
+    }
+  },
+  "required": [
+    "action",
+    "file",
+    "worktreeId"
+  ]
+}
+```
+
+来源：[`packages/office/univer/src/host/tools/definitions/unit.ts`](../packages/office/univer/src/host/tools/definitions/unit.ts)
+
+### `univer_worktree`
+
+创建一个隔离的 Univer worktree 或让它发生状态迁移。动作有：create、ready、reopen、merge、discard。merge 与 discard 需要用户批准。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "Lifecycle action.",
+      "enum": [
+        "create",
+        "ready",
+        "reopen",
+        "merge",
+        "discard"
+      ]
+    },
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Required for every action except create."
+    },
+    "name": {
+      "type": "string",
+      "description": "Optional human-readable name for create."
+    }
+  },
+  "required": [
+    "action",
+    "file"
+  ]
+}
+```
+
+来源：[`packages/office/univer/src/host/tools/definitions/worktree.ts`](../packages/office/univer/src/host/tools/definitions/worktree.ts)
+
+本目录收录的是 `@deepseek-ai/dsh-office-univer/tools` 在不撤下任何工具时注册的集合。每一个名字都可以通过该行的 `disabledTools` 撤下；宿主没有 Chromium 或没有出网的部署，应当撤下 `univer_screenshot`、`univer_lint` 与 `univer_resources`；`univer_screenshot` 还额外要求挂载附件存储。以默认的 `tools: true` 挂载包入口会注册同一个集合。
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 

@@ -148,6 +148,15 @@
     fetch: true
     searchTimeoutMs: 60000
 
+# Office documents over the host-plane `univer` service (`office-univer` row in
+# cordis.patch.yml). `univer_screenshot` and `univer_lint` render through
+# headless Chromium, which the dsh image does not ship; withholding them here
+# is what keeps the catalog from advertising a tool that cannot run.
+- id: tool-univer
+  name: '@deepseek-ai/dsh-office-univer/tools'
+  config:
+    disabledTools: [univer_screenshot, univer_lint]
+
 # `deliver_files` plus the spool drain. The three absolute paths have no
 # defaults on purpose: `spoolDir` must be the SAME directory the in-sandbox
 # `sci` command writes to, or a shell delivery is silently never read, and a

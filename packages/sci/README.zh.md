@@ -11,6 +11,7 @@
 | [`sci-skills/`](sci-skills/README.zh.md) | 内置 skill 树、按内容 hash 同步进沙箱、生命周期策展、listing provider。 | `ctx.skills` provider |
 | [`sci-workspace/`](sci-workspace/README.zh.md) | `tools/pre-execute` 上的路径策略与 shell 预检：交付区、只追加的 `versions/`、manifest 所有权。 | `tools/pre-execute` |
 | [`sci-deliver/`](sci-deliver/README.zh.md) | `deliver_files` 工具与沙箱内 `sci deliver` spool，同一条校验链。 | `ctx.tools` |
+| [`camel-runtime/`](camel-runtime/README.zh.md) | `fork_workspace` 工具：把 Dormice 工作区快照进 AgentENV microVM，每个 fork 跑一个变体，结果回流到 `.sci/forks/`。 | `ctx.tools`、`ctx.e2b` consumer |
 | [`sci-memory/`](sci-memory/README.zh.md) | 带 `originSessionId` 的记忆节点、写入时序投影、recall RPC。 | `tools/post-execute`、RPC |
 | [`sci-plan/`](sci-plan/README.zh.md) | `declare_research_plan` 工具与 `sci/plan-declared` 事件。 | `ctx.tools` |
 | [`sci-guard/`](sci-guard/README.zh.md) | 不可逆操作分类器：未签名二进制、外发、凭据、破坏性删除 → approval。 | `tools/pre-execute` |

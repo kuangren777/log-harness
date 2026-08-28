@@ -8,7 +8,7 @@
 
 import { globSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, resolve } from 'node:path'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -62,6 +62,10 @@ import type TeamService from '@deepseek-ai/dsh-experimental-agent-team'
 import * as ToolTeam from '@deepseek-ai/dsh-experimental-tool-agent-team'
 import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
 import * as SciDeliver from '@deepseek-ai/dsh-sci-deliver'
+import * as CamelRuntime from '@deepseek-ai/dsh-camel-runtime'
+import DormiceRuntime from '@deepseek-ai/dsh-dormice'
+import * as UniverTools from '@deepseek-ai/dsh-office-univer/tools'
+import type { ResolvedConfig as UniverResolvedConfig } from '@deepseek-ai/dsh-office-univer/types'
 import * as SciPlan from '@deepseek-ai/dsh-sci-plan'
 import * as SciTierSuggest from '@deepseek-ai/dsh-sci-tier/suggest'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
@@ -92,6 +96,43 @@ class CatalogAttachmentStore extends AttachmentStore {
 
   override readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
     return Promise.reject(new Error('gen-tool-catalog: attachment reads are unreachable during schema harvest'))
+  }
+}
+
+/**
+ * Univer Provider marker for schema harvest.
+ *
+ * The `univer_*` row reads `ctx.univer.config` for the deadline it puts on each
+ * tool and never calls a service method while registering, so the catalog needs
+ * the published configuration and nothing behind it — no Gateway process, no
+ * prebuilt `artifacts/`, no native bindings. The values below are the shipped
+ * defaults and are catalog placeholders: a tool's `timeoutMs` is not part of the
+ * harvested schema, and no `univer_*` description interpolates one.
+ */
+class CatalogUniverService extends Service {
+  readonly config: UniverResolvedConfig = Object.freeze({
+    gatewayPort: 9080,
+    autoStartGateway: true,
+    gatewayStartupTimeoutMs: 10_000,
+    gatewayRequestTimeoutMs: 3_000,
+    gatewayMutationTimeoutMs: 60_000,
+    unitContentOperationTimeoutMs: 120_000,
+    screenshotOperationTimeoutMs: 120_000,
+    screenshotMaxPages: 30,
+    screenshotMaxPixels: 16_777_216,
+    resourceCacheRoot: '/catalog-placeholder/resources',
+    resourceDownloadTimeoutMs: 15_000,
+    resourceOperationTimeoutMs: 120_000,
+    unitContentCommitTimeoutMs: 5_000,
+    stateCacheTtlMs: 1_000,
+    unitCacheTtlMs: 5_000,
+    tools: true,
+    skills: true,
+    disabledTools: Object.freeze([]),
+  })
+
+  constructor(ctx: Context) {
+    super(ctx, 'univer')
   }
 }
 
@@ -233,6 +274,55 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'deliver_files is the only way a file reaches the user; the in-sandbox `sci deliver` CLI writes the same request into the spool the plugin drains at turn start, through the same validation.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-camel-runtime',
+    dir: 'camel-runtime',
+    source: 'packages/sci/camel-runtime/src/index.ts',
+    requires: ['ctx.tools', 'ctx.e2b'],
+    writes: ['tool/call', 'sci/fork-completed', 'tool/result'],
+    async mount(ctx) {
+      // The tool needs `ctx.e2b`; the Dormice provider acquires lazily, so a
+      // placeholder token and key mount it without reaching any daemon. The
+      // AgentENV key and template are catalog placeholders: the description
+      // interpolates only the results directory and the variant cap.
+      await ctx.plugin(DormiceRuntime, { token: 'catalog-placeholder', userKey: 'catalog' })
+      await ctx.plugin(CamelRuntime, { apiKey: 'catalog-placeholder', template: 'catalog' })
+    },
+    note:
+      'fork_workspace is the cluster tier\'s only way to run competing variants in isolation: every variant resumes from one AgentENV snapshot of the Dormice workspace, and only stdout, stderr, the exit code, and the collected directory flow back.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-office-univer',
+    dir: 'univer',
+    source: {
+      univer_new: 'packages/office/univer/src/host/tools/definitions/new.ts',
+      univer_status: 'packages/office/univer/src/host/tools/definitions/status.ts',
+      univer_worktree: 'packages/office/univer/src/host/tools/definitions/worktree.ts',
+      univer_unit: 'packages/office/univer/src/host/tools/definitions/unit.ts',
+      univer_import: 'packages/office/univer/src/host/tools/definitions/import.ts',
+      univer_inspect: 'packages/office/univer/src/host/tools/definitions/inspect.ts',
+      univer_execute: 'packages/office/univer/src/host/tools/definitions/execute.ts',
+      univer_export: 'packages/office/univer/src/host/tools/definitions/export.ts',
+      univer_lint: 'packages/office/univer/src/host/tools/definitions/lint.ts',
+      univer_compile_svg: 'packages/office/univer/src/host/tools/definitions/compile-svg.ts',
+      univer_screenshot: 'packages/office/univer/src/host/tools/definitions/screenshot.ts',
+      univer_api: 'packages/office/univer/src/host/tools/definitions/api.ts',
+      univer_resources: 'packages/office/univer/src/host/tools/definitions/resources.ts',
+    },
+    requires: ['ctx.tools', 'ctx.univer', 'ctx.attachments'],
+    writes: ['tool/call', 'tool/result', 'a tools/pre-execute approval ask on univer_worktree merge and discard'],
+    async mount(ctx) {
+      // The row needs `ctx.univer` only for the published configuration, so a
+      // marker service stands in for the Gateway-backed Provider. `ctx.attachments`
+      // gates `univer_screenshot`, which is advertised only where image bytes can
+      // be stored durably; the catalog documents the complete registrable set.
+      await ctx.plugin(CatalogUniverService)
+      await ctx.plugin(CatalogAttachmentStore)
+      await ctx.plugin(UniverTools)
+    },
+    note:
+      'The catalogued set is what `@deepseek-ai/dsh-office-univer/tools` registers with nothing withheld. Every name is withholdable through that row\'s `disabledTools`, and a deployment whose host ships no Chromium or no outbound network is expected to withhold `univer_screenshot`, `univer_lint`, and `univer_resources`; `univer_screenshot` additionally requires an attachment store. Mounting the package entry with its default `tools: true` registers the same set.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-ask-user',
@@ -767,10 +857,23 @@ function toolSource(entry: ToolPackage, toolName: string): string {
   return source
 }
 
+/**
+ * Markdown-safe prose taken verbatim from a tool description or a manifest
+ * note. A model-facing description may contain a placeholder like
+ * `<forkId>`; VitePress compiles every page as a Vue template, which parses
+ * that as an element and fails the site build on the missing end tag. Escaping
+ * here keeps the source text unchanged and renders it literally.
+ * @param value - prose the generator did not author.
+ * @returns the same prose with angle brackets HTML-escaped.
+ */
+function mdText(value: string): string {
+  return value.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 /** Render one tool's entry: name, description, JSON-Schema parameters, source. */
 function renderTool(schema: ToolSchema, source: string): string[] {
   const out = [`### \`${schema.name}\``, '']
-  if (schema.description) out.push(schema.description, '')
+  if (schema.description) out.push(mdText(schema.description), '')
   out.push('```json', JSON.stringify(schema.parameters, null, 2), '```', '')
   out.push(`Source: [\`${source}\`](../${source})`, '')
   return out
@@ -781,7 +884,7 @@ function codeList(values: string[] | undefined): string {
 }
 
 function tableCell(value: string | undefined): string {
-  return value ? value.replace(/\|/g, '\\|').replace(/\n/g, '<br>') : '-'
+  return value ? mdText(value).replace(/\|/g, '\\|').replace(/\n/g, '<br>') : '-'
 }
 
 /** Render the full catalog (pure, deterministic given the manifest-ordered input). */
@@ -814,7 +917,7 @@ export function render(catalog: ToolCatalog): string {
       const source = entry.sources[schema.name] as string
       lines.push(...renderTool(schema, source))
     }
-    if (entry.note) lines.push(entry.note, '')
+    if (entry.note) lines.push(mdText(entry.note), '')
   }
   return lines.join('\n')
 }

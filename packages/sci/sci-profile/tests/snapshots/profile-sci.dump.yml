@@ -481,8 +481,11 @@
   name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
 - id: ui-conversation
   name: '@deepseek-ai/dsh-client-ui-conversation'
+# == @deepseek-ai/dsh-web-app, patched by @deepseek-ai/dsh-sci
 - id: ui-brand-official
   name: '@deepseek-ai/dsh-client-ui-brand-official'
+  disabled: true
+# == @deepseek-ai/dsh-web-app
 - id: ui-attachment
   name: '@deepseek-ai/dsh-client-ui-attachment'
 - id: ui-tool
@@ -548,8 +551,17 @@
   name: '@deepseek-ai/dsh-host-directory-picker-e2b'
 - id: ui-directory-picker-browse
   name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
+- id: ui-brand-sci
+  name: '@deepseek-ai/dsh-client-ui-brand-sci'
+- id: ui-sci-files
+  name: '@deepseek-ai/dsh-client-ui-sci-files'
 - id: web-fetch-http
   name: '@deepseek-ai/dsh-web-fetch-http'
+- id: office-univer
+  name: '@deepseek-ai/dsh-office-univer'
+  config:
+    skills: false
+    tools: false
 - id: sci-prompt
   name: '@deepseek-ai/dsh-sci-prompt'
 - id: sci-skills

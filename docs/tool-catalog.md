@@ -18,6 +18,8 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-sci-tier` | `suggest_tier_upgrade` | `ctx.tools` | `tool/call`, `sci/tier-upgrade-suggested`, `tool/result` | - | suggest_tier_upgrade is the balanced tier's only fan-out-adjacent tool: it records that the task outgrew a single pass and leaves the choice to the user, instead of the agent quietly starting a swarm. |
 | `@deepseek-ai/dsh-sci-plan` | `declare_research_plan` | `ctx.tools` | `tool/call`, `sci/plan-declared`, `tool/result` | - | declare_research_plan names the parallel lines of work before a fan-out; the tier gate consumes its sci/plan-declared event and refuses a fan-out tool until one is declared. |
 | `@deepseek-ai/dsh-sci-deliver` | `deliver_files` | `ctx.tools`, `ctx.fs`, `ctx.systemPrompt` | `tool/call`, `sci/delivered`, `sci/delivery-failed`, `tool/result` | - | deliver_files is the only way a file reaches the user; the in-sandbox `sci deliver` CLI writes the same request into the spool the plugin drains at turn start, through the same validation. |
+| `@deepseek-ai/dsh-camel-runtime` | `fork_workspace` | `ctx.tools`, `ctx.e2b` | `tool/call`, `sci/fork-completed`, `tool/result` | - | fork_workspace is the cluster tier's only way to run competing variants in isolation: every variant resumes from one AgentENV snapshot of the Dormice workspace, and only stdout, stderr, the exit code, and the collected directory flow back. |
+| `@deepseek-ai/dsh-office-univer` | `univer_api`, `univer_compile_svg`, `univer_execute`, `univer_export`, `univer_import`, `univer_inspect`, `univer_lint`, `univer_new`, `univer_resources`, `univer_screenshot`, `univer_status`, `univer_unit`, `univer_worktree` | `ctx.tools`, `ctx.univer`, `ctx.attachments` | `tool/call`, `tool/result`, `a tools/pre-execute approval ask on univer_worktree merge and discard` | - | The catalogued set is what `@deepseek-ai/dsh-office-univer/tools` registers with nothing withheld. Every name is withholdable through that row's `disabledTools`, and a deployment whose host ships no Chromium or no outbound network is expected to withhold `univer_screenshot`, `univer_lint`, and `univer_resources`; `univer_screenshot` additionally requires an attachment store. Mounting the package entry with its default `tools: true` registers the same set. |
 | `@deepseek-ai/dsh-tool-ask-user` | `ask_user_question` | `ctx.tools`, `ctx.userQuestions` | `tool/call`, `tool/result after a UI/provider answers the question` | - | ask_user_question pauses the tool call until the active UI provider returns a human answer. |
 | `@deepseek-ai/dsh-tools` | `run_code` | `ctx.tools`, `ctx.codeRuntime (execution time)`, `ctx.systemPrompt` | `tool/call`, `one tool/code-dispatch-start + tool/code-dispatch pair per bridged sub-call`, `tool/result` | - | Owned by the tool registry as a reserved transport outside filterable capability layers under `mode: code` / `mode: both` (see the Code Mode Agent Note). Under `code` it is the registry's only wire contribution; the other visible capabilities are declared in a generated SDK section in the loaded runtime's language, and a program calls them through bindings scheduled under the native concurrency contract (submission-ordered starts and policy; concurrency-safe bodies overlap up to `maxParallelSubCalls`) that re-enter the complete guarded tool pipeline and link each nested execution to this outer result. |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`, `ctx.systemPrompt`, `ctx.userQuestions (execution time, opportunistic)` | `tool/call`, `plan/mode inactive on an approved review`, `tool/result` | - | exit_plan_mode stays in the model-facing schema while planning is inactive so transitions add no tool-catalog churn on top of the plan-policy change. Its execute path rejects calls outside plan mode; in plan mode it presents the plan over the user-questions seam (approve / keep planning with feedback), and approval logs plan mode inactive at the step boundary. |
@@ -193,6 +195,665 @@ Source: [`packages/sci/sci-deliver/src/index.ts`](../packages/sci/sci-deliver/sr
 
 deliver_files is the only way a file reaches the user; the in-sandbox `sci deliver` CLI writes the same request into the spool the plugin drains at turn start, through the same validation.
 
+<a id="deepseek-aidsh-camel-runtime"></a>
+
+## `@deepseek-ai/dsh-camel-runtime`
+
+### `fork_workspace`
+
+Fork the current workspace into isolated copies and run one shell command in each, in parallel. Every variant starts from an identical snapshot of the workspace as it is now, so use it to try competing hypotheses, parameter sweeps, or risky transformations without touching the real files. Each variant's stdout, stderr, exit code, and (with `collect`) a chosen output directory land in .sci/forks/&lt;forkId&gt;/&lt;variant&gt;/ of the real workspace. Up to 8 variants per call. Variants cannot see each other or the real workspace; anything not collected is discarded when the variant ends.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "variants": {
+      "type": "array",
+      "description": "The variants to run, each in its own forked copy of the workspace.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Short lowercase identifier; names the result directory."
+          },
+          "command": {
+            "type": "string",
+            "description": "Shell command to run in the variant, from the workspace root."
+          }
+        },
+        "required": [
+          "name",
+          "command"
+        ]
+      }
+    },
+    "collect": {
+      "type": "string",
+      "description": "Workspace-relative directory whose contents are copied back from each variant. Omit to keep only stdout and stderr."
+    },
+    "timeoutSeconds": {
+      "type": "integer",
+      "description": "Per-variant wall-clock budget in seconds. Default 600, max 3600."
+    }
+  },
+  "required": [
+    "variants"
+  ]
+}
+```
+
+Source: [`packages/sci/camel-runtime/src/index.ts`](../packages/sci/camel-runtime/src/index.ts)
+
+fork_workspace is the cluster tier's only way to run competing variants in isolation: every variant resumes from one AgentENV snapshot of the Dormice workspace, and only stdout, stderr, the exit code, and the collected directory flow back.
+
+<a id="deepseek-aidsh-office-univer"></a>
+
+## `@deepseek-ai/dsh-office-univer`
+
+### `univer_api`
+
+Look up the bundled, version-matched Univer Facade API. Use find when no relevant class or API label is known. Use show for a known class, type, or exact Class.member API label; to inspect APIs on a known class, show the class itself. Find is case-insensitive. Each query runs independently and returns its own matches: queries are never combined as AND, and find does not interpret intent.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "find discovers unknown class or API labels; show documents a known class, type, or exact Class.member label. Show a known class to inspect its APIs.",
+      "enum": [
+        "find",
+        "show"
+      ]
+    },
+    "queries": {
+      "type": "array",
+      "description": "For find, API-name keywords or identifier fragments such as conditionalFormat. For show, known class, type, or exact Class.member labels such as FRange or FRange.setValue. Find queries are case-insensitive and independent, not AND terms.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "unit": {
+      "type": "string",
+      "description": "Optional find-only Unit filter; shared APIs remain included.",
+      "enum": [
+        "sheet",
+        "doc",
+        "slide",
+        "base",
+        "board"
+      ]
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Find-only maximum matches per query. Prefer 10 or fewer."
+    }
+  },
+  "required": [
+    "action",
+    "queries"
+  ]
+}
+```
+
+Source: [`packages/office/univer/src/host/tools/definitions/api.ts`](../packages/office/univer/src/host/tools/definitions/api.ts)
+
+### `univer_compile_svg`
+
+Compile an SVG with real font metrics and apply it to one explicit Slide page in a draft worktree.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string",
+      "description": "Workspace-relative or absolute SVG source path."
+    },
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute target .univer path."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Writable draft worktree id."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Explicit Slide Unit id from univer_status."
+    },
+    "page": {
+      "type": "integer",
+      "description": "1-based Slide page number."
+    },
+    "mode": {
+      "type": "string",
+      "description": "Replace the page contents by default, or add the SVG as an overlay.",
+      "enum": [
+        "replace",
+        "add"
+      ]
+    }
+  },
+  "required": [
+    "source",
+    "file",
+    "worktreeId",
+    "unitId",
+    "page"
+  ]
+}
+```
+
+Source: [`packages/office/univer/src/host/tools/definitions/compile-svg.ts`](../packages/office/univer/src/host/tools/definitions/compile-svg.ts)
+
+### `univer_execute`
+
+Execute Univer Facade JavaScript and commit mutations to a draft agent worktree. Use code only for small snippets; prefer codeFile for multi-line or reusable programs. Provide exactly one of code or codeFile.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "code": {
+      "type": "string",
+      "description": "Small Facade API JavaScript snippet. Mutually exclusive with codeFile."
+    },
+    "codeFile": {
+      "type": "string",
+      "description": "Workspace-relative or absolute JavaScript body file to execute. Preferred for multi-line code; mutually exclusive with code."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Writable agent worktree id."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Target unit id."
+    }
+  },
+  "required": [
+    "file",
+    "worktreeId",
+    "unitId"
+  ]
+}
+```
+
+Source: [`packages/office/univer/src/host/tools/definitions/execute.ts`](../packages/office/univer/src/host/tools/definitions/execute.ts)
+
+### `univer_export`
+
+Export a .univer document or unit to a user-facing file format.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "output": {
+      "type": "string",
+      "description": "Workspace-relative or absolute output file path."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Explicit Unit id from univer_status."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Optional worktree scope; omit to export trunk."
+    }
+  },
+  "required": [
+    "file",
+    "output",
+    "unitId"
+  ]
+}
+```
+
+Source: [`packages/office/univer/src/host/tools/definitions/export.ts`](../packages/office/univer/src/host/tools/definitions/export.ts)
+
+### `univer_import`
+
+Import an xlsx, csv, tsv, docx, or pptx file as a new Unit inside an explicit draft worktree.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string",
+      "description": "Workspace-relative or absolute Office source path."
+    },
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute target .univer path."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Writable draft worktree id."
+    },
+    "name": {
+      "type": "string",
+      "description": "Name for the imported Unit."
+    }
+  },
+  "required": [
+    "source",
+    "file",
+    "worktreeId",
+    "name"
+  ]
+}
+```
+
+Source: [`packages/office/univer/src/host/tools/definitions/import.ts`](../packages/office/univer/src/host/tools/definitions/import.ts)
+
+### `univer_inspect`
+
+Inspect structured content from a .univer document, optionally narrowed to a unit or range.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Explicit target Unit id from univer_status."
+    },
+    "range": {
+      "type": "string",
+      "description": "Optional unit range such as Sheet1!A1:D20."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Optional worktree scope; omit to inspect trunk."
+    }
+  },
+  "required": [
+    "file",
+    "unitId"
+  ]
+}
+```
+
+Source: [`packages/office/univer/src/host/tools/definitions/inspect.ts`](../packages/office/univer/src/host/tools/definitions/inspect.ts)
+
+### `univer_lint`
+
+Analyze Slide text layout for off-page content, escaped containers, and text overlap without producing screenshots.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Explicit Slide Unit id from univer_status."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Optional worktree scope; omit to lint trunk."
+    },
+    "pages": {
+      "type": "array",
+      "description": "Optional 1-based page numbers or page IDs. Omit to lint every page.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "file",
+    "unitId"
+  ]
+}
+```
+
+Source: [`packages/office/univer/src/host/tools/definitions/lint.ts`](../packages/office/univer/src/host/tools/definitions/lint.ts)
+
+### `univer_new`
+
+Create a new empty .univer file in the current workspace. This never overwrites an existing file and does not create an implicit Unit.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute output path ending in .univer."
+    }
+  },
+  "required": [
+    "file"
+  ]
+}
+```
+
+Source: [`packages/office/univer/src/host/tools/definitions/new.ts`](../packages/office/univer/src/host/tools/definitions/new.ts)
+
+### `univer_resources`
+
+Discover, read, export, and cache bundled SVG resources. Use find before read or export; resource handles are stable within the bundled manifest.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "Resource-library operation.",
+      "enum": [
+        "registries",
+        "find",
+        "read",
+        "export",
+        "clear-cache"
+      ]
+    },
+    "queries": {
+      "type": "array",
+      "description": "Non-empty search terms for find.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "registries": {
+      "type": "array",
+      "description": "Optional registry IDs that constrain find.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Optional positive total result limit for find."
+    },
+    "handle": {
+      "type": "string",
+      "description": "One resource handle for read."
+    },
+    "handles": {
+      "type": "array",
+      "description": "Resource handles for export.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "output": {
+      "type": "string",
+      "description": "Workspace-relative or absolute export directory."
+    }
+  },
+  "required": [
+    "action"
+  ]
+}
+```
+
+Source: [`packages/office/univer/src/host/tools/definitions/resources.ts`](../packages/office/univer/src/host/tools/definitions/resources.ts)
+
+### `univer_screenshot`
+
+Render one explicit Sheet, Doc, Slide, Base, or Board Unit to PNG files and return the images for visual verification.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Explicit Unit id from univer_status."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Optional worktree scope; omit to capture trunk."
+    },
+    "output": {
+      "type": "string",
+      "description": "Workspace-relative or absolute output directory for PNG files."
+    },
+    "sheetName": {
+      "type": "string",
+      "description": "Sheet name used with range."
+    },
+    "range": {
+      "type": "string",
+      "description": "Sheet A1 range such as B2:H40."
+    },
+    "pages": {
+      "type": "array",
+      "description": "Doc numeric pages or Slide page numbers/IDs. Omit to capture every page.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "contactSheet": {
+      "type": "boolean",
+      "description": "Also create one Slide contact sheet."
+    },
+    "tileColumns": {
+      "type": "integer",
+      "description": "Contact-sheet grid columns; requires contactSheet and tileRows."
+    },
+    "tileRows": {
+      "type": "integer",
+      "description": "Contact-sheet grid rows; requires contactSheet and tileColumns."
+    },
+    "region": {
+      "type": "object",
+      "description": "Optional Board region to capture.",
+      "additionalProperties": false,
+      "properties": {
+        "left": {
+          "type": "number"
+        },
+        "top": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "left",
+        "top",
+        "width",
+        "height"
+      ]
+    },
+    "elementIds": {
+      "type": "array",
+      "description": "Optional Board element IDs to capture.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "padding": {
+      "type": "number",
+      "description": "Board content padding; requires region or elementIds."
+    },
+    "scale": {
+      "type": "number",
+      "description": "Render scale from 0.1 to 4 for any Unit."
+    }
+  },
+  "required": [
+    "file",
+    "unitId",
+    "output"
+  ]
+}
+```
+
+Source: [`packages/office/univer/src/host/tools/definitions/screenshot.ts`](../packages/office/univer/src/host/tools/definitions/screenshot.ts)
+
+### `univer_status`
+
+List trunk Units and worktrees for a .univer file, or inspect one worktree scope. Call this before choosing unitId or continuing prior work.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Optional worktree whose Units should be returned."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Optional Unit filter."
+    }
+  },
+  "required": [
+    "file"
+  ]
+}
+```
+
+Source: [`packages/office/univer/src/host/tools/definitions/status.ts`](../packages/office/univer/src/host/tools/definitions/status.ts)
+
+### `univer_unit`
+
+Create or remove a top-level Sheet, Doc, Slide, Base, or Board Unit inside an explicit draft worktree. Use univer_status to list Units.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "Unit lifecycle action.",
+      "enum": [
+        "create",
+        "remove"
+      ]
+    },
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Writable draft worktree id."
+    },
+    "kind": {
+      "type": "string",
+      "description": "Required for create.",
+      "enum": [
+        "sheet",
+        "doc",
+        "slide",
+        "base",
+        "board"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "description": "Required non-empty Unit name for create."
+    },
+    "unitId": {
+      "type": "string",
+      "description": "Required for remove."
+    }
+  },
+  "required": [
+    "action",
+    "file",
+    "worktreeId"
+  ]
+}
+```
+
+Source: [`packages/office/univer/src/host/tools/definitions/unit.ts`](../packages/office/univer/src/host/tools/definitions/unit.ts)
+
+### `univer_worktree`
+
+Create or transition an isolated Univer worktree. Actions: create, ready, reopen, merge, or discard. Merge and discard require user approval.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "Lifecycle action.",
+      "enum": [
+        "create",
+        "ready",
+        "reopen",
+        "merge",
+        "discard"
+      ]
+    },
+    "file": {
+      "type": "string",
+      "description": "Workspace-relative or absolute .univer path."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Required for every action except create."
+    },
+    "name": {
+      "type": "string",
+      "description": "Optional human-readable name for create."
+    }
+  },
+  "required": [
+    "action",
+    "file"
+  ]
+}
+```
+
+Source: [`packages/office/univer/src/host/tools/definitions/worktree.ts`](../packages/office/univer/src/host/tools/definitions/worktree.ts)
+
+The catalogued set is what `@deepseek-ai/dsh-office-univer/tools` registers with nothing withheld. Every name is withholdable through that row's `disabledTools`, and a deployment whose host ships no Chromium or no outbound network is expected to withhold `univer_screenshot`, `univer_lint`, and `univer_resources`; `univer_screenshot` additionally requires an attachment store. Mounting the package entry with its default `tools: true` registers the same set.
+
 <a id="deepseek-aidsh-tool-ask-user"></a>
 
 ## `@deepseek-ai/dsh-tool-ask-user`
@@ -332,7 +993,7 @@ exit_plan_mode stays in the model-facing schema while planning is inactive so tr
 
 ### `bash`
 
-Execute a bash command (`bash -c`) and return its stdout/stderr. Each call runs in a fresh shell: no state (cwd, variables, functions) persists between calls — pass `workdir` instead of using `cd`. Non-zero exits are reported as `[exit code: N]`. Current harness environment facts are exposed through managed `$DSH_*` variables; inspect them when needed. Commands may run under a file sandbox; a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]` — a policy denial, not a bug in the command; do not retry another way. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. Set `run_in_background: true` for long-running commands: the call returns a job id immediately; read its output with `job_output` and stop it with `job_kill`.
+Execute a bash command (`bash -c`) and return its stdout/stderr. Each call runs in a fresh shell: no state (cwd, variables, functions) persists between calls — pass `workdir` instead of using `cd`. Non-zero exits are reported as `[exit code: N]`. Current harness environment facts are exposed through managed `$DSH_*` variables; inspect them when needed. Commands may run under a file sandbox; a blocked file operation is reported as `[sandbox: file access denied under &lt;mode&gt; mode]` — a policy denial, not a bug in the command; do not retry another way. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. Set `run_in_background: true` for long-running commands: the call returns a job id immediately; read its output with `job_output` and stop it with `job_kill`.
 
 ```json
 {
@@ -376,7 +1037,7 @@ The bash tool is the model-facing consumer of the bash executor seam. A `run_in_
 
 ### `pwsh`
 
-Execute a PowerShell command (`pwsh -Command`) and return its stdout/stderr. Each call runs in a fresh pwsh process: no state (cwd, variables, functions) persists between calls — pass `workdir` instead of using `cd`. Paths use native Windows form (`C:\...`); read environment variables with `$env:NAME`. Non-zero exits are reported as `[exit code: N]`. Current harness environment facts are exposed through managed `$env:DSH_*` variables; inspect them when needed. Commands may run under a file sandbox; a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]` — a policy denial, not a bug in the command; do not retry another way. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. On Windows a force-killed command settles as `[exit code: 1]` without a signal marker — treat it as an interruption, not a command failure. Set `run_in_background: true` for long-running commands: the call returns a job id immediately; read its output with `job_output` and stop it with `job_kill`.
+Execute a PowerShell command (`pwsh -Command`) and return its stdout/stderr. Each call runs in a fresh pwsh process: no state (cwd, variables, functions) persists between calls — pass `workdir` instead of using `cd`. Paths use native Windows form (`C:\...`); read environment variables with `$env:NAME`. Non-zero exits are reported as `[exit code: N]`. Current harness environment facts are exposed through managed `$env:DSH_*` variables; inspect them when needed. Commands may run under a file sandbox; a blocked file operation is reported as `[sandbox: file access denied under &lt;mode&gt; mode]` — a policy denial, not a bug in the command; do not retry another way. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. On Windows a force-killed command settles as `[exit code: 1]` without a signal marker — treat it as an interruption, not a command failure. Set `run_in_background: true` for long-running commands: the call returns a job id immediately; read its output with `job_output` and stop it with `job_kill`.
 
 ```json
 {
@@ -716,7 +1377,7 @@ Custom editing tool for viewing, creating and editing files
 * State is persistent across command calls and discussions with the user
 * If `path` is a file, `view` displays the result of applying `cat -n`. If `path` is a directory, `view` lists non-hidden files and directories up to 2 levels deep
 * The `create` command cannot be used if the specified `path` already exists as a file
-* If a `command` generates a long output, it will be truncated and marked with `<response clipped>`
+* If a `command` generates a long output, it will be truncated and marked with `&lt;response clipped&gt;`
 
 Notes for using the `str_replace` command:
 * The `old_str` parameter should match EXACTLY one or more consecutive lines from the original file. Be mindful of whitespaces!
@@ -2233,12 +2894,12 @@ todo_write is session-owned state; UIs render the latest todo/write event as a c
 
 Run a JavaScript workflow script that orchestrates subagents at scale. Use this for work that fans out across many independent pieces — an audit over many files, a migration, multi-angle research, adversarial verification of findings — where you write the orchestration as a script instead of delegating turn by turn.
 
-The workflow's identity rides the `meta` parameter as JSON: required `name` (short kebab-case) and `description` strings, optional `whenToUse` string and `phases` array (`{title, detail?, provider?, model?}`). The `script` parameter is the plain JavaScript body ONLY (NOT TypeScript, and NO `export const meta` statement — meta is a parameter, not code), running with top-level await; end with `return <value>` — the value must be JSON-serializable and is this tool's result.
+The workflow's identity rides the `meta` parameter as JSON: required `name` (short kebab-case) and `description` strings, optional `whenToUse` string and `phases` array (`{title, detail?, provider?, model?}`). The `script` parameter is the plain JavaScript body ONLY (NOT TypeScript, and NO `export const meta` statement — meta is a parameter, not code), running with top-level await; end with `return &lt;value&gt;` — the value must be JSON-serializable and is this tool's result.
 
 Script-body hooks:
-- `agent(prompt, opts?): Promise<any>` — run one subagent to completion. Without `opts.schema` it resolves to the child's final text; with `opts.schema` (an object-rooted JSON Schema using ONLY type/properties/required/additionalProperties/items/enum/const/oneOf — no pattern/format/numeric bounds) it resolves to the validated object. Resolves `null` when the child fails (filter with `.filter(Boolean)`). Other opts: `label` (display), `phase` (progress group), and independent `provider`/`model` LLM target overrides (either may be provided alone). Anything else (`effort`/`isolation`/`agentType`) is rejected loudly.
-- `pipeline(items, ...stages): Promise<any[]>` — run each item through the stages independently with NO barrier between stages (prefer this for multi-stage work). Each stage receives `(prev, item, index)`. An ordinary stage throw drops that ITEM to `null` and skips its remaining stages.
-- `parallel(thunks): Promise<any[]>` — run zero-argument functions concurrently and await ALL of them (a barrier; use only when a stage genuinely needs every prior result together). A throwing thunk resolves to `null`.
+- `agent(prompt, opts?): Promise&lt;any&gt;` — run one subagent to completion. Without `opts.schema` it resolves to the child's final text; with `opts.schema` (an object-rooted JSON Schema using ONLY type/properties/required/additionalProperties/items/enum/const/oneOf — no pattern/format/numeric bounds) it resolves to the validated object. Resolves `null` when the child fails (filter with `.filter(Boolean)`). Other opts: `label` (display), `phase` (progress group), and independent `provider`/`model` LLM target overrides (either may be provided alone). Anything else (`effort`/`isolation`/`agentType`) is rejected loudly.
+- `pipeline(items, ...stages): Promise&lt;any[]&gt;` — run each item through the stages independently with NO barrier between stages (prefer this for multi-stage work). Each stage receives `(prev, item, index)`. An ordinary stage throw drops that ITEM to `null` and skips its remaining stages.
+- `parallel(thunks): Promise&lt;any[]&gt;` — run zero-argument functions concurrently and await ALL of them (a barrier; use only when a stage genuinely needs every prior result together). A throwing thunk resolves to `null`.
 - `phase(title)` — start a progress phase; `log(message)` — narrate progress; `args` — the tool call's `args` input, verbatim.
 
 Misused hooks (bad arguments, unknown options, unsupported schemas, tripped caps) throw errors that ALWAYS kill the script — they never dissolve into a per-item `null`.

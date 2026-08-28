@@ -395,6 +395,42 @@ Depends on: [`LocalConfig`](#deepseek-aidsh-bash-local)
 
 Source: [`packages/shell/bash-sandbox/src/index.ts:35`](../packages/shell/bash-sandbox/src/index.ts)
 
+<a id="deepseek-aidsh-camel-runtime"></a>
+
+## `@deepseek-ai/dsh-camel-runtime`
+
+Requires: `tools` · `e2b`
+
+```ts config-catalog
+/** Deployment-varying choices for the CaMeL runtime. */
+export interface Config {
+  /** Base URL of the AgentENV server. */
+  endpoint?: string
+  /** AgentENV API key; omission reads `AENV_API_KEY`. It is never forwarded into any sandbox. */
+  apiKey?: string
+  /** AgentENV template the seed microVM starts from; it must carry the same toolchain as the workspace image. */
+  template: string
+  /** Workspace-relative directory receiving `<forkId>/<variant>/`. */
+  forksDir?: string
+  /** Variants one call may request. */
+  maxVariants?: number
+  /** Byte cap on the exported workspace archive. */
+  maxWorkspaceBytes?: number
+  /** Per-variant command budget when the call names none. */
+  commandTimeoutSeconds?: number
+  /** Largest per-variant command budget a call may ask for. */
+  maxCommandTimeoutSeconds?: number
+  /** TTL of every microVM the engine starts; a safety net, since the engine deletes them itself. */
+  sandboxTimeoutSeconds?: number
+  /** Variants running at once. */
+  concurrency?: number
+  /** tar exclude patterns applied to the workspace export. */
+  exclude?: string[]
+}
+```
+
+Source: [`packages/sci/camel-runtime/src/index.ts:68`](../packages/sci/camel-runtime/src/index.ts)
+
 <a id="deepseek-aidsh-client-connection"></a>
 
 ## `@deepseek-ai/dsh-client-connection`
@@ -874,6 +910,22 @@ export interface Config {
    */
   coldBlankProbeMaxBytes?: number
   /**
+   * Inclusive byte cap on one `workspace.readFile` response. A larger file is
+   * refused with `file-too-large` rather than truncated. Base64 inflates a
+   * binary body by about a third on the wire, so the cap bounds the file, not
+   * the response.
+   * @default 8388608
+   */
+  readFileMaxBytes?: number
+  /**
+   * Inclusive entry cap on one `workspace.listDirectory` response. A directory
+   * with more direct children is refused with `too-many-entries` rather than
+   * listed partially, so a client never mistakes a truncated level for a
+   * complete one.
+   * @default 5000
+   */
+  listDirectoryMaxEntries?: number
+  /**
    * Skill providers whose catalog descriptions are withheld from every client
    * copy of the `<available_skills>` message (live frames and history pages).
    * The session log keeps the full text the model saw. A deployment that
@@ -884,7 +936,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/host/apiproxy/src/index.ts:41`](../packages/host/apiproxy/src/index.ts)
+Source: [`packages/host/apiproxy/src/index.ts:46`](../packages/host/apiproxy/src/index.ts)
 
 <a id="deepseek-aidsh-host-directory-picker-browse"></a>
 
@@ -946,7 +998,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/host/webserver/src/index.ts:59`](../packages/host/webserver/src/index.ts)
+Source: [`packages/host/webserver/src/index.ts:89`](../packages/host/webserver/src/index.ts)
 
 <a id="deepseek-aidsh-invariants"></a>
 
@@ -2091,7 +2143,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/sci/sci-prompt/src/index.ts:225`](../packages/sci/sci-prompt/src/index.ts)
+Source: [`packages/sci/sci-prompt/src/index.ts:238`](../packages/sci/sci-prompt/src/index.ts)
 
 <a id="deepseek-aidsh-sci-remote-hosts"></a>
 
@@ -3903,6 +3955,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-agent-preset` ([`packages/client/ui-agent-preset/src/index.ts`](../packages/client/ui-agent-preset/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-attachment` ([`packages/client/ui-attachment/src/index.ts`](../packages/client/ui-attachment/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-brand-official` ([`packages/client/ui-brand-official/src/index.ts`](../packages/client/ui-brand-official/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-brand-sci` ([`packages/client/ui-brand-sci/src/index.ts`](../packages/client/ui-brand-sci/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-commands` ([`packages/client/ui-commands/src/index.ts`](../packages/client/ui-commands/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-conversation` ([`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-cordis` ([`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts))
@@ -3919,6 +3972,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-plan` ([`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-reference` ([`packages/client/ui-reference/src/index.ts`](../packages/client/ui-reference/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-renderer` ([`packages/client/ui-renderer/src/index.ts`](../packages/client/ui-renderer/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-sci-files` ([`packages/client/ui-sci-files/src/index.ts`](../packages/client/ui-sci-files/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-settings` ([`packages/client/ui-settings/src/index.ts`](../packages/client/ui-settings/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-settings-general` ([`packages/client/ui-settings-general/src/index.ts`](../packages/client/ui-settings-general/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-settings-models` ([`packages/client/ui-settings-models/src/index.ts`](../packages/client/ui-settings-models/src/index.ts))
@@ -4010,6 +4064,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-llm-mock-server` ([`packages/test-support/llm-mock-server/src/index.ts`](../packages/test-support/llm-mock-server/src/index.ts))
 - `@deepseek-ai/dsh-loader-smoke` ([`packages/test-support/loader-smoke/src/index.ts`](../packages/test-support/loader-smoke/src/index.ts))
 - `@deepseek-ai/dsh-native-command` ([`packages/util/native-command/src/index.ts`](../packages/util/native-command/src/index.ts))
+- `@deepseek-ai/dsh-office-univer` ([`packages/office/univer/src/index.ts`](../packages/office/univer/src/index.ts))
 - `@deepseek-ai/dsh-output-retention` ([`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts))
 - `@deepseek-ai/dsh-sandbox-windows-acl` ([`packages/sandbox/sandbox-windows-acl/src/index.ts`](../packages/sandbox/sandbox-windows-acl/src/index.ts))
 - `@deepseek-ai/dsh-sci-manifest` ([`packages/sci/sci-manifest/src/index.ts`](../packages/sci/sci-manifest/src/index.ts))

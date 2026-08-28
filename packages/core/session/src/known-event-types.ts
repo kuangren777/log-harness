@@ -46,6 +46,7 @@ export const KNOWN_SESSION_EVENT_TYPES: ReadonlySet<string> = new Set([
   'sci/credit-charged',
   'sci/delivered',
   'sci/delivery-failed',
+  'sci/fork-completed',
   'sci/fs-denied',
   'sci/memory-written',
   'sci/plan-declared',

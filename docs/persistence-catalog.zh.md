@@ -690,6 +690,25 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 来源：[`packages/sci/sci-deliver/src/types.ts:98`](../packages/sci/sci-deliver/src/types.ts)
 
+<a id="scifork-completed--log-only"></a>
+
+#### `sci/fork-completed` — log-only
+
+```ts persistence-catalog
+/**
+ * One fork finished: every variant ran and its results are in the
+ * workspace. Log-only and non-surface; the tool result already told the
+ * model, and nothing later in the log depends on this record.
+ * @param forkId - identity of the fork, naming `<forksDir>/<forkId>/`.
+ * @param snapshotID - the AgentENV snapshot the variants resumed from.
+ * @param variants - name and exit code per variant, in request order.
+ * @param durationMs - wall-clock time of the whole fork.
+ */
+'sci/fork-completed': SciForkCompletedData
+```
+
+来源：[`packages/sci/camel-runtime/src/types.ts:84`](../packages/sci/camel-runtime/src/types.ts)
+
 <a id="scifs-denied--log-only"></a>
 
 #### `sci/fs-denied` — log-only

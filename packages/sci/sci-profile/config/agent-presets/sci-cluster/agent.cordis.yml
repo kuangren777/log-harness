@@ -162,6 +162,13 @@
     fetch: true
     searchTimeoutMs: 60000
 
+# Same office tools as `sci-balanced`; the reason for the two withheld names
+# is stated there.
+- id: tool-univer
+  name: '@deepseek-ai/dsh-office-univer/tools'
+  config:
+    disabledTools: [univer_screenshot, univer_lint]
+
 # Delivery stays with the orchestrating thread as well as the `deliverer`
 # persona: a child that finishes with something to hand over reports the path,
 # and this thread delivers it.
@@ -171,3 +178,14 @@
     projectRoot: /home/user/sci/projects
     spoolDir: /home/user/sci/.sci/spool
     snapshotDir: /home/user/sci/.sci/snapshots
+
+# Cluster-only: the workspace stays in the Dormice sandbox behind `ctx.e2b`;
+# `fork_workspace` snapshots it into AgentENV microVMs and runs one variant per
+# fork, writing results back under `.sci/forks/`. The AgentENV key comes from
+# `AENV_API_KEY` in this process's environment and is never forwarded into any
+# sandbox. The balanced preset has no fan-out and therefore no fork row.
+- id: camel-runtime
+  name: '@deepseek-ai/dsh-camel-runtime'
+  config:
+    endpoint: !!js process.env.AENV_ENDPOINT ?? 'http://127.0.0.1:8000'
+    template: !!js process.env.AENV_TEMPLATE ?? 'sci'

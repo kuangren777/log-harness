@@ -51,6 +51,9 @@
 # from the process environment.
 - id: llm-pi-ai
   disabled: true
+# The sci profile ships its own brand + theme row (ui-brand-sci, inserted below).
+- id: ui-brand-official
+  disabled: true
 
 # Research needs page reads, so the fetch half of the web seam is on here (the
 # base leaves it unset). The provider refuses local and private-network hosts:
@@ -95,6 +98,16 @@
 
     - id: ui-directory-picker-browse
       name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
+    # CaMeL Science brand occupants + Apple-style theme token layer; the
+    # official brand row is disabled above so the two never share the slots.
+    - id: ui-brand-sci
+      name: '@deepseek-ai/dsh-client-ui-brand-sci'
+    # The right-hand 文件 panel: a `conversation.details.mode` entry that lists
+    # the session workspace and previews files (office documents through the
+    # `office-univer` Viewer). Browser-only, so it is a roster row rather than
+    # a host row.
+    - id: ui-sci-files
+      name: '@deepseek-ai/dsh-client-ui-sci-files'
 
 # ── persistence the science layer reads back ───────────────────────────────
 
@@ -139,6 +152,21 @@
     # it); local and private-network hosts are refused by the provider.
     - id: web-fetch-http
       name: '@deepseek-ai/dsh-web-fetch-http'
+
+    # Office documents: the Univer Gateway subprocess, the `univer_*` tools, and
+    # the same-origin Viewer proxy. Host-plane because the Gateway is one
+    # process per deployment, not one per preset.
+    - id: office-univer
+      name: '@deepseek-ai/dsh-office-univer'
+      config:
+        # The package's bundled skill copies are the protected built-in tier;
+        # the skill vault serves them (see sci-skills), so the on-disk copies
+        # must not be published or they would sit in the image for the taking.
+        skills: false
+        # Model-facing tools are what one agent contributes: each preset mounts
+        # `@deepseek-ai/dsh-office-univer/tools` over this row's `univer`
+        # service, so the host row registers none.
+        tools: false
 
     # Deployment-wide chapters and standing reminders. Host-plane rather than
     # per-preset: the chapters are identical at both tiers, and one registration
