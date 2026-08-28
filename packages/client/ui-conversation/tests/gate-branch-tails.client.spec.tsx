@@ -9,13 +9,13 @@ import {
 import type { UseSession } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ConversationSnapshot, SessionId, SessionListState, WorkspaceListState } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SessionProviderComponent } from '@deepseek-ai/dsh-client-ui-slots'
-import type { DetailsSlotProps, DetailsToolOwnerProps, SelectionTarget } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { DetailsToolModeProps, DetailsToolOwnerProps, SelectionTarget } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { createChatStore } from '../src/client/stores.ts'
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { StatsLine } from '../src/client/chat/StatsLine.tsx'
-import { DetailsPanel } from '../src/client/skeleton/DetailsPanel.tsx'
+import { DetailsToolMode } from '../src/client/skeleton/DetailsPanel.tsx'
 import { zh } from '../src/client/locales.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
@@ -38,11 +38,11 @@ afterEach(() => {
 
 const SID = 's1' as SessionId
 
-/** Minimal framework seat for direct DetailsPanel host tests. */
+/** Minimal framework seat for direct details-mode host tests. */
 const SessionProviderStub: SessionProviderComponent = ({ children }) => children(SID)
 
 /** Observe the owner currency without importing the Tool details renderer. */
-function renderToolDetailsProbe(owners?: DetailsToolOwnerProps[]): DetailsSlotProps['renderSlot'] {
+function renderToolDetailsProbe(owners?: DetailsToolOwnerProps[]): DetailsToolModeProps['renderSlot'] {
   return (_key, owner) => {
     owners?.push(owner as unknown as DetailsToolOwnerProps)
     return <div data-testid="tool-details-seat" />
@@ -112,7 +112,7 @@ describe('render branch tails', () => {
     expect(view.container.querySelector('[data-state="running"]')).not.toBeNull()
   })
 
-  it('DetailsPanel title falls to 详情 when the selection has no toolName and no material', () => {
+  it('DetailsToolMode reports the out-of-window state when the selected call has no material', () => {
     localStorage.clear()
     const snap = snapshotBase()
     const chat = createChatStore().create()
@@ -124,10 +124,11 @@ describe('render branch tails', () => {
       baselinesReady: true, recentWorkspaceId: undefined,
     })
     const view = render(
-      <DetailsPanel
+      <DetailsToolMode
         SessionProvider={SessionProviderStub}
         renderSlot={renderToolDetailsProbe()}
         sessionId={SID}
+        active
         useSession={bindSnapshotSelector({ getSnapshot: () => snap, subscribe: () => () => {} })}
         useSessions={bindSnapshotSelector(emptyList)}
         useWorkspaces={bindSnapshotSelector(emptyWorkspaces)}
@@ -142,15 +143,13 @@ describe('render branch tails', () => {
         }}
         useStore={bindSnapshotSelector(chat)}
         actions={chat.actions}
-        closeDetails={vi.fn()}
         t={t}
       />,
     )
-    expect(view.getByText('详情')).toBeTruthy()
     expect(view.getByText('该调用不在当前窗口内')).toBeTruthy()
   })
 
-  it('DetailsPanel resolves a nested run_code leaf to its full logged args and output', () => {
+  it('DetailsToolMode resolves a nested run_code leaf to its full logged args and output', () => {
     localStorage.clear()
     const snap = snapshotBase()
     const longText = 'x'.repeat(1_000)
@@ -181,10 +180,11 @@ describe('render branch tails', () => {
     })
     const owners: DetailsToolOwnerProps[] = []
     const view = render(
-      <DetailsPanel
+      <DetailsToolMode
         SessionProvider={SessionProviderStub}
         renderSlot={renderToolDetailsProbe(owners)}
         sessionId={SID}
+        active
         useSession={bindSnapshotSelector({ getSnapshot: () => snap, subscribe: () => () => {} })}
         useSessions={bindSnapshotSelector(emptyList)}
         useWorkspaces={bindSnapshotSelector(emptyWorkspaces)}
@@ -199,13 +199,11 @@ describe('render branch tails', () => {
         }}
         useStore={bindSnapshotSelector(chat)}
         actions={chat.actions}
-        closeDetails={vi.fn()}
         t={t}
       />,
     )
     // Conversation resolves the selected sub-call and hands its complete
     // frozen block to the Tool-owned details seat.
-    expect(view.getByText('read')).toBeTruthy()
     expect(view.getByTestId('tool-details-seat')).toBeTruthy()
     expect(owners).toHaveLength(1)
     expect(owners[0]?.block).toMatchObject({

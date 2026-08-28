@@ -1,6 +1,10 @@
 /** Registers the conversation components, shared store, and service callbacks. */
 import type { Context } from '@deepseek-ai/cordis'
 import { resolveSlotLabel, type BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
+import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
+// Type-only: the connection handle has no Context merge, so the declared
+// injection is read through ctx.get with this face (the ui-deliverables idiom).
+import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import {
   resolveWorkspacePath, type ISessions, type SessionId,
 } from '@deepseek-ai/dsh-client-runtime/client'
@@ -17,7 +21,7 @@ import type {
   DetailsInjected,
 } from './contract/slots.ts'
 import type { InputNotice } from './input/contract.ts'
-import { createChatStore } from './stores.ts'
+import { createChatStore, DEFAULT_DETAILS_MODE } from './stores.ts'
 import { ConversationController, UnsupportedImageMediaTypeError } from './service.ts'
 import type { IConversation } from './service.ts'
 import { ComposerBlockRegistry } from './input/blocks.ts'
@@ -34,7 +38,7 @@ import { todoDockEntry } from './skeleton/TodoPanel.tsx'
 import { queueDockEntry } from './queue/QueueDock.tsx'
 import { ConversationRoot } from './skeleton/ConversationRoot.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
-import { DetailsPanel } from './skeleton/DetailsPanel.tsx'
+import { DetailsPanel, DetailsToolMode } from './skeleton/DetailsPanel.tsx'
 import { en, NS, zh, type ConversationKey } from './locales.ts'
 import { registerConversationNodes } from './conversation-nodes/register.ts'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
@@ -128,6 +132,16 @@ export function apply(ctx: Context): void {
   // re-registration; components read the standard `t` seat instead.
   const t = ctx.locale.bind(NS)
 
+  // A path click reaches the Host's native opener only where one exists: the
+  // Host published `canOpenPath` AND the page is loopback (the pair
+  // ui-deliverables gates its show-in-folder control with — over a remote page
+  // an "open" would act on the operator's desktop, not the reader's). A
+  // deployment with no desktop can only fail the RPC (`spawn xdg-open ENOENT`),
+  // so the click must not reach it; openFile copies the path instead.
+  const connection = ctx.get('connection') as ConnectionHandle
+  const canOpenHostPath = (): boolean =>
+    connection.isLoopback && connection.hostDescription.getSnapshot()?.canOpenPath === true
+
   // Apply-time construction keeps store identity bound to this fiber.
   const chatStore = createChatStore()
   const submissionPolicy = new ComposerSubmissionPolicy(
@@ -150,20 +164,23 @@ export function apply(ctx: Context): void {
   // persisted: a fresh page load keeps the open-jump-to-bottom default.
   const chatScrollPositions = new Map<SessionId, ChatScrollPosition>()
 
-  const viewTabs = (): ViewTab[] => {
-    const tabs: ViewTab[] = []
-    for (const entry of slots.entries('conversation.view')) {
-      /* v8 ignore next -- unreachable: list registration validates id at load. */
-      if (entry.options.id === undefined) continue
-      tabs.push({ id: entry.options.id, label: resolveSlotLabel(entry.options.label) ?? entry.options.id })
-    }
-    return tabs
-  }
-  const views = {
-    list: viewTabs,
-    subscribe: (fn: () => void) => slots.subscribe('conversation.view', fn),
-    version: () => slots.getVersion('conversation.view'),
-  }
+  // The read face both tab strips project from: a list slot's ledger as
+  // ordered id/label rows, the label falling back to the entry id.
+  const tabLedger = (key: 'conversation.view' | 'conversation.details.mode') => ({
+    list: (): ViewTab[] => {
+      const tabs: ViewTab[] = []
+      for (const entry of slots.entries(key)) {
+        /* v8 ignore next -- unreachable: list registration validates id at load. */
+        if (entry.options.id === undefined) continue
+        tabs.push({ id: entry.options.id, label: resolveSlotLabel(entry.options.label) ?? entry.options.id })
+      }
+      return tabs
+    },
+    subscribe: (fn: () => void) => slots.subscribe(key, fn),
+    version: () => slots.getVersion(key),
+  })
+  const views = tabLedger('conversation.view')
+  const detailsModes = tabLedger('conversation.details.mode')
 
   // The per-session input machine registry (SessionInputResolver face; published as
   // ctx.conversation.input by the service below sharing this one instance).
@@ -394,12 +411,26 @@ export function apply(ctx: Context): void {
       return {
         openDetails: (target) => {
           actions.select(target)
+          actions.setDetailsMode(DEFAULT_DETAILS_MODE)
+          layout.openDetails()
+        },
+        showDetailsMode: (id) => {
+          actions.setDetailsMode(id)
           layout.openDetails()
         },
         fileMentions: owner => ctx.get('chatFileMentions')?.forClosing(owner),
-        openFile: (path) => {
+        openFile: async (path) => {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
-          return workspaces.openPath(resolveWorkspacePath(cwd, path))
+          const resolved = resolveWorkspacePath(cwd, path)
+          if (canOpenHostPath()) return workspaces.openPath(resolved)
+          // Fulfills either way: a deployment without a desktop opener has no
+          // failure for the chat view to offer a retry on, so the outcome is
+          // one composer notice on this session (never the error dialog).
+          const copied = await writeClipboard(resolved)
+          inputHub.shell(sessionId).notify(
+            copied ? 'info' : 'error',
+            t(copied ? 'fileOpen.copied' : 'fileOpen.copyFailed', { path: resolved }),
+          )
         },
         loadOlder: () => { void scoped.loadOlder() },
         loadImage: attachment => conversation.resolveImage(sessionId, attachment),
@@ -443,16 +474,35 @@ export function apply(ctx: Context): void {
   // registration path into the input dock declared above.
   ctx.plugin(queueDockEntry)
 
+  // The details column: chrome plus the mode ring it declares. Every body in
+  // the column is one entry of that ring, the built-in inspector included, so
+  // a contributed mode reaches the column without touching this package.
   slots.register({
     name: 'details',
+    locale: NS,
+    children: {
+      'conversation.details.mode': { kind: 'list', scope: 'session' },
+    },
+    store: chatStore,
+    inject: (): DetailsInjected => ({
+      closeDetails: () => { layout.closeDetails() },
+      modes: detailsModes,
+    }),
+  }, DetailsPanel)
+
+  // The built-in call inspector: first entry of the mode ring, and the one
+  // the panel falls back to. It declares the Tool output seat because it is
+  // the only body that dispatches into it.
+  slots.register({
+    name: 'conversation.details.mode',
+    id: DEFAULT_DETAILS_MODE,
+    order: 0,
+    label: () => t('details.modes.tool'),
     locale: NS,
     children: {
       'conversation.details.tool': { kind: 'single', scope: 'session' },
     },
     store: chatStore,
-    inject: (): DetailsInjected => ({
-      closeDetails: () => { layout.closeDetails() },
-    }),
-  }, DetailsPanel)
+  }, DetailsToolMode)
 
 }

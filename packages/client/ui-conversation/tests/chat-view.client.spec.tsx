@@ -281,6 +281,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     renderSlot,
     SessionProvider: SessionProviderStub,
     openDetails,
+    showDetailsMode: () => {},
     openFile,
     loadOlder,
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),

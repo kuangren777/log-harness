@@ -49,6 +49,49 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* Mode tab strip, shown only from the second registered mode on. Mirrors the
+   session header's view ring (ConversationRoot.module.css .tabs) at the
+   column's tighter gap. */
+.tabs {
+  display: flex;
+  gap: 20px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.tab {
+  position: relative;
+  padding: 0 0 9px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.tab::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: transparent;
+}
+
+/* Selected tab rides the business blue, matching the view ring's reasoning:
+   brand-primary resolves to neutral black in this token sheet. */
+.tabActive {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.tabActive::after {
+  background: var(--dsw-alias-state-business-primary);
+}
+
 .body {
   flex: 1;
   min-height: 0;

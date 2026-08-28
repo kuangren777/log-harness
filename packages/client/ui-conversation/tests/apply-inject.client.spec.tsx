@@ -14,7 +14,7 @@
 // guards would mask. Rendering-path acceptance lives in
 // chat-toolview-slot.spec.tsx.
 
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SlotTestRuntime, usePinnedBrowserLanguages, stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionBehaviorOverrides } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
@@ -32,6 +32,30 @@ usePinnedBrowserLanguages('zh-CN')
 
 const ROOT = 'root-1' as SessionId
 
+/**
+ * Install a recording `navigator.clipboard` for the openFile copy path (jsdom
+ * ships none, and `writeClipboard` would otherwise take its execCommand
+ * fallback). `accept: false` scripts a host that refuses the write.
+ */
+function stubClipboard(written: string[], accept: boolean): void {
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      writeText: (text: string) => {
+        if (!accept) return Promise.reject(new Error('clipboard write denied'))
+        written.push(text)
+        return Promise.resolve()
+      },
+    },
+  })
+}
+
+afterEach(() => {
+  // jsdom's own navigator has no clipboard; leaving a stub would leak into the
+  // specs that assert the plain paste/copy paths.
+  Reflect.deleteProperty(navigator, 'clipboard')
+})
+
 type ChatInstance = ReturnType<ReturnType<typeof createChatStore>['create']>
 type ChatActions = ChatInstance['actions']
 
@@ -45,9 +69,25 @@ function sessionFakeFor() {
   } satisfies SessionBehaviorOverrides
 }
 
-async function bench() {
+interface BenchOptions {
+  /** Page authority: the openFile gate needs loopback AND a Host that opens paths. */
+  isLoopback?: boolean
+  /** The Host description's native path-open capability (undefined = no description yet). */
+  canOpenPath?: boolean
+}
+
+async function bench(options: BenchOptions = {}) {
   const runtime = await SlotTestRuntime.create()
-  runtime.provide('connection', { api: { settings: {} }, isLoopback: false })
+  const hostDescription = {
+    getSnapshot: () => options.canOpenPath === undefined ? undefined : { canOpenPath: options.canOpenPath },
+    subscribe: () => () => {},
+  }
+  runtime.provide('connection', {
+    api: { settings: {} },
+    isLoopback: options.isLoopback ?? false,
+    configurationPlane: 'memory',
+    hostDescription,
+  })
   // The plugin injects both; these specs exercise no settings path.
   runtime.provide('remote', { $on: () => () => {} })
   runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
@@ -223,9 +263,15 @@ describe('conversation slot inject API', () => {
   it('openDetails (chat view face) writes the selection through the store actions and opens the panel', async () => {
     const b = await bench()
     const { instance, injected } = b.chatViewApi(ROOT)
+    // A mode another gesture left behind must not swallow the call the user
+    // just clicked: openDetails returns the column to the inspector.
+    injected.showDetailsMode('files')
+    expect(instance.store.getSnapshot().detailsMode).toBe('files')
+    expect(b.layoutFake.openDetails).toHaveBeenCalledTimes(1)
     injected.openDetails({ turnSeq: 2, callId: 'c1' })
     expect(instance.store.getSnapshot().selection).toEqual({ turnSeq: 2, callId: 'c1' })
-    expect(b.layoutFake.openDetails).toHaveBeenCalledTimes(1)
+    expect(instance.store.getSnapshot().detailsMode).toBe('tool')
+    expect(b.layoutFake.openDetails).toHaveBeenCalledTimes(2)
     // The chat view shares the conversation entry's store instance: selection
     // writes land where the skeleton and details read.
     const conv = b.conversationApi(ROOT)
@@ -234,7 +280,7 @@ describe('conversation slot inject API', () => {
   })
 
   it('openFile (chat view face) resolves against session cwd and calls workspaces.openPath', async () => {
-    const b = await bench()
+    const b = await bench({ isLoopback: true, canOpenPath: true })
     const { injected } = b.chatViewApi(ROOT)
     await injected.openFile('src/a.ts')
     await vi.waitFor(() => {
@@ -244,10 +290,43 @@ describe('conversation slot inject API', () => {
   })
 
   it('openFile rejects when the Host cannot open the path', async () => {
-    const b = await bench()
+    const b = await bench({ isLoopback: true, canOpenPath: true })
     b.runtime.workspaces.stub('openPath', () => Promise.reject(new Error('xdg-open is not available')))
     const { injected } = b.chatViewApi(ROOT)
     await expect(injected.openFile('src/a.ts')).rejects.toThrow('xdg-open is not available')
+    await b.runtime.dispose()
+  })
+
+  it.each([
+    ['the Host publishes no native opener', { isLoopback: true, canOpenPath: false }],
+    ['the Host description has not arrived', { isLoopback: true }],
+    ['the page is not loopback', { isLoopback: false, canOpenPath: true }],
+  ] as const)('openFile copies the resolved path and notices instead of opening when %s', async (_case, options) => {
+    // The sci regression: a container with no desktop answered every path
+    // click with `spawn xdg-open ENOENT`. No RPC may leave the page.
+    const b = await bench(options)
+    const written: string[] = []
+    stubClipboard(written, true)
+    const { injected } = b.chatViewApi(ROOT)
+    await injected.openFile('src/a.ts')
+    expect(b.runtime.workspaces.calls.some(c => c.method === 'openPath')).toBe(false)
+    expect(written).toEqual(['/proj/src/a.ts'])
+    const notice = b.composerApi(ROOT).hooks.notices.getSnapshot()
+    expect(notice).toMatchObject({ level: 'info' })
+    expect(notice?.text).toContain('/proj/src/a.ts')
+    await b.runtime.dispose()
+  })
+
+  it('openFile reports an error notice when the clipboard write is refused', async () => {
+    const b = await bench({ isLoopback: true, canOpenPath: false })
+    const written: string[] = []
+    stubClipboard(written, false)
+    const { injected } = b.chatViewApi(ROOT)
+    await injected.openFile('src/a.ts')
+    expect(b.runtime.workspaces.calls.some(c => c.method === 'openPath')).toBe(false)
+    const notice = b.composerApi(ROOT).hooks.notices.getSnapshot()
+    expect(notice).toMatchObject({ level: 'error' })
+    expect(notice?.text).toContain('/proj/src/a.ts')
     await b.runtime.dispose()
   })
 
@@ -347,13 +426,27 @@ describe('conversation slot inject API', () => {
 })
 
 describe('details inject API', () => {
-  it('details injects the one layout callback; selection rides the shared store instead', async () => {
+  it('details injects the layout callback and the mode ledger; selection rides the shared store instead', async () => {
     const b = await bench()
     const entry = b.entryOf('details')
     const injected = (entry.inject as unknown as () => DetailsInjected)()
-    expect(Object.keys(injected)).toEqual(['closeDetails'])
+    expect(Object.keys(injected)).toEqual(['closeDetails', 'modes'])
     injected.closeDetails()
     expect(b.layoutFake.closeDetails).toHaveBeenCalledTimes(1)
+    // The built-in inspector is the ring's first entry, labelled through the
+    // package dictionary; a contributed mode lands after it by `order`.
+    expect(injected.modes.list()).toEqual([{ id: 'tool', label: '工具' }])
+    const listener = vi.fn()
+    const unsub = injected.modes.subscribe(listener)
+    const before = injected.modes.version()
+    const off = b.slots.register(
+      { name: 'conversation.details.mode', id: 'files', order: 5, label: '文件' } as never, (() => null) as never)
+    await Promise.resolve() // ledger notifications batch per microtask
+    expect(listener).toHaveBeenCalled()
+    expect(injected.modes.version()).toBeGreaterThan(before)
+    expect(injected.modes.list().map(mode => mode.id)).toEqual(['tool', 'files'])
+    off()
+    unsub()
     // The shared handle: details resolves the SAME instance conversation writes.
     const conv = b.runtime.storeOf('conversation.session', ROOT)
     const details = b.runtime.storeOf('details', ROOT)

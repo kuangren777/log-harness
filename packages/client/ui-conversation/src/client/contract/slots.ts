@@ -20,7 +20,7 @@ import type {
 import type { createChatStore } from '../stores.ts'
 import type { ComposerSubmitGesture, InputSubmitMode } from './composer-submission.ts'
 import type { ChatNode, ChatNodeKind } from './chat-nodes.ts'
-import type { CallId, SelectionTarget, ViewTab } from './views.ts'
+import type { CallId, DetailsModeTab, SelectionTarget, ViewTab } from './views.ts'
 
 /** Browser-owned image that has not crossed the durable host boundary. */
 export interface ComposerAttachment {
@@ -158,9 +158,24 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * `ToolResultNode` has it, a still-running call does not), and treat
      * `cwd` as display-only, for shortening workspace-rooted paths.
      * A per-tool renderer belongs in the keyed `tool.call.toolview` seat
-     * instead; this one is the whole panel.
+     * instead; this one is the whole panel body of the built-in `tool` mode,
+     * which declares it (a details column showing another mode renders no
+     * entry here at all).
      */
     'conversation.details.tool': { kind: 'single'; scope: 'session'; owner: DetailsToolOwnerProps }
+    /**
+     * One mode of the details column: the tab strip's rows are this slot's
+     * entries and the panel body is the active one. The registration's list
+     * `id` is the mode id the store holds, `label` its tab text (a thunk over
+     * the registrant's `t` follows the active locale), and `order` its
+     * position; `id: 'tool'` is taken by the built-in call inspector, which
+     * is also the fallback whenever the stored id names no live entry. The
+     * strip appears only from the second mode on, so a lone contributor
+     * changes nothing visually. The panel mounts the active entry alone, so a
+     * mode holds no state across a tab trip and pays nothing while another
+     * mode shows.
+     */
+    'conversation.details.mode': { kind: 'list'; scope: 'session'; owner: DetailsModeOwnerProps }
     /**
      * The composer takeover chain: entries are selector-routed replacements
      * of the default InputBar. Declared by this package's 'conversation'
@@ -436,6 +451,21 @@ export interface DetailsToolOwnerProps {
   block: ToolCallBlock
   /** Session workspace root for card cwd and relative-path display. */
   cwd?: string | undefined
+}
+
+/** Owner currency of one details-column mode. */
+export interface DetailsModeOwnerProps {
+  /** Session the details column belongs to. */
+  sessionId: SessionId
+  /** Session workspace root, for resolving and shortening displayed paths. */
+  cwd?: string | undefined
+  /**
+   * Whether the panel is showing this mode. The mounting policy belongs to
+   * the panel, which today mounts the active entry alone — so a mounted mode
+   * reads `true`. Branch on it rather than assuming: a panel that later keeps
+   * deselected modes mounted announces it here, not by remounting.
+   */
+  active: boolean
 }
 
 /**
@@ -748,13 +778,27 @@ export interface ChatScrollPosition {
  * outside the view (layout orchestration; the session object layer).
  */
 export interface ChatViewInjected {
-  /** Selection write + details panel opening in one gesture (store action + layout orchestration). */
+  /**
+   * Selection write + details panel opening in one gesture (store action +
+   * layout orchestration). The panel returns to its `tool` mode: the gesture
+   * asks for one call's output, so another mode must not swallow it.
+   */
   openDetails: (target: SelectionTarget) => void
+  /**
+   * Show one `conversation.details.mode` entry and open the details column
+   * for it. An id naming no live entry leaves the panel on `tool`.
+   */
+  showDetailsMode: (id: string) => void
   /**
    * Open a tool-arg filesystem path with the host OS default application
    * (relative paths resolve against the session cwd). Always returns a
    * promise: fulfills when the Host opens the path, rejects when it cannot
    * hand the path off (the chat view shows that reason and a retry).
+   *
+   * Where no native opener exists — the Host does not publish `canOpenPath`,
+   * or the page is not loopback — no open is attempted: the resolved path goes
+   * to the clipboard, one composer notice reports that, and the promise
+   * fulfills (there is no failure to retry).
    */
   openFile: (path: string) => Promise<void>
   loadOlder: () => void
@@ -799,16 +843,27 @@ export type MessageImagesProps = PropsRuntime<'conversation.message.images'> & P
 
 /**
  * Injected share of the details slot: the panel is otherwise a pure reader of
- * the shared chat store, but its close button is a layout orchestration call.
+ * the shared chat store, but its close button is a layout orchestration call
+ * and its tab strip reads a slot ledger.
  */
 export interface DetailsInjected {
   /** Close the details panel (layout geometry stays with ctx.layout). */
   closeDetails: () => void
+  /** Modes projected from the `conversation.details.mode` slot ledger. */
+  modes: {
+    list: () => readonly DetailsModeTab[]
+    subscribe: (fn: () => void) => () => void
+    version: () => number
+  }
 }
 
-/** Full details-slot props: selection store, Tool output seat, injected close callback, and locale. */
-export type DetailsSlotProps = PropsRuntime<'details'> & PropsRenderSlots<'conversation.details.tool'>
+/** Full details-slot props: selection store, mode seat, injected close callback and mode ledger, and locale. */
+export type DetailsSlotProps = PropsRuntime<'details'> & PropsRenderSlots<'conversation.details.mode'>
   & PropsStore<ChatStore> & DetailsInjected & PropsLocale<'conversation'>
+
+/** Full props of the built-in `tool` mode: the call inspector body and its Tool output seat. */
+export type DetailsToolModeProps = PropsRuntime<'conversation.details.mode'>
+  & PropsRenderSlots<'conversation.details.tool'> & PropsStore<ChatStore> & PropsLocale<'conversation'>
 
 /** Owner share common to the hero / New-Session Workspace pickers. */
 export interface EmptyWorkspaceOwnerProps {

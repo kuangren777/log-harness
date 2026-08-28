@@ -13,6 +13,12 @@ export interface SelectionTarget { turnSeq: number; stepSeq?: number; callId?: C
 export interface ViewTab { id: string; label: string }
 
 /**
+ * One details-column mode tab, projected from a 'conversation.details.mode'
+ * slot entry's registration options (label falls back to the entry id).
+ */
+export interface DetailsModeTab { id: string; label: string }
+
+/**
  * Per-session state shared by conversation, chat-view, and details slots.
  * Unknown persisted view ids fall back to the stable Chat view.
  */
@@ -23,6 +29,13 @@ export interface ChatStoreState {
   draft: string
   /** Active conversation view id ('conversation.view' entry id); null falls back to Chat. */
   view: string | null
+  /**
+   * Active details-column mode ('conversation.details.mode' entry id). Fresh
+   * state always names one; `undefined` is the durable-boundary case —
+   * snapshots persisted before this field rehydrate without it — and resolves
+   * to the built-in inspector, exactly like an id whose mode left the ledger.
+   */
+  detailsMode: string | undefined
   /**
    * One-shot inspect handoff: chat writes the call to reveal, the trajectory
    * view consumes it and acknowledges by clearing. Read with `?? null` —
