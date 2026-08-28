@@ -158,8 +158,10 @@ Durable workspace registry. Startup waits for `sessionPersistence`, builds one c
 ```ts cordis-catalog
 /**
  * Create or reuse a workspace for an existing directory. The path is
- * canonicalized through `fs.realpath`; a nonexistent path rejects with the
- * original error and a non-directory rejects. Repeated calls for the same
+ * canonicalized in the filesystem the tools execute in (the composed
+ * filesystem seam when one is mounted, else the Host filesystem); a path
+ * absent there rejects with that world's error and a non-directory rejects.
+ * Repeated calls for the same
  * canonical path return the existing entity without changing its title.
  * A newly created workspace is prepended to the durable registry order.
  * Different canonical paths may share a display title.
@@ -214,8 +216,8 @@ archiveSession(sessionId: SessionId): Promise<void>
 
 /**
  * Resolve by canonical directory path without creating or mutating a
- * workspace. A missing path rejects during `realpath`; an existing unowned
- * directory returns `undefined`.
+ * workspace. A path absent from the execution world's filesystem rejects
+ * during canonicalization; an existing unowned directory returns `undefined`.
  * @param path - Existing directory path in any spelling.
  * @returns the workspace owning the canonical path, when one exists.
  */

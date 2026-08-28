@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -9,6 +10,7 @@ import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import type { DomainChanged } from '@deepseek-ai/dsh-storage-domain'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
+import type { FsInfo } from '@deepseek-ai/dsh-fs'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import WorkspaceRegistry, {
   WorkspaceId,
@@ -26,12 +28,37 @@ const header = (id: string, cwd?: string, createdAt = 0): SessionHeader => ({
   ...(cwd === undefined ? {} : { cwd }),
 })
 
+/**
+ * Filesystem fake standing for a backend whose execution world is not this
+ * process. Structural because the registry calls exactly three seam methods:
+ * `entries` are keyed by canonical path, `aliases` map a spelling to the
+ * canonical target the way a symlink or `..` segment does, and an unmapped key
+ * is an absent target.
+ */
+function fakeFs(entries: Iterable<[string, FsInfo['type']]>, aliases: Record<string, string> = {}) {
+  const world = new Map(entries)
+  const resolved: string[] = []
+  const service = {
+    resolve: (path: string) => {
+      resolved.push(path)
+      return Promise.resolve({ targetKey: aliases[path] ?? path, displayPath: path })
+    },
+    stat: (target: { targetKey: string }) => {
+      const type = world.get(target.targetKey)
+      return Promise.resolve(type === undefined ? undefined : { version: 'v1', type })
+    },
+    processPath: (target: { targetKey: string }) => target.targetKey,
+  }
+  return { service, world, resolved }
+}
+
 interface HarnessOptions {
   pool?: MemoryMediaPool
   sessions?: SessionHeader[]
   liveSessions?: SessionHeader[]
   sessionStore?: boolean
   backend?: StorageBackend
+  fs?: ReturnType<typeof fakeFs>['service']
 }
 
 /** Boot the real storage/domain/registry composition over controllable header-only peers. */
@@ -59,6 +86,8 @@ async function harness(options: HarnessOptions = {}) {
       list: () => [...live.values()],
     } as never)
   }
+
+  if (options.fs !== undefined) ctx.provide('fs', options.fs as never)
 
   const changes: DomainChanged[] = []
   ctx.on('domain/changed', (change) => { changes.push(change) })
@@ -940,5 +969,99 @@ describe('registry-global session archive', () => {
     )
     const upgraded = await harness({ pool: legacy })
     expect(upgraded.registry.archivedSessionIds).toEqual([])
+  })
+})
+
+describe('workspace paths in a composed filesystem world', () => {
+  const SANDBOX = '/home/user/sci/projects'
+
+  it('creates a workspace at a directory only the filesystem backend has', async () => {
+    const picked = `${SANDBOX}/qa-ws`
+    const fs = fakeFs([[picked, 'directory']], { [`${SANDBOX}/qa-ws-link`]: picked })
+    const { registry, pool } = await harness({ fs: fs.service })
+
+    const workspace = await registry.create(picked)
+    expect(workspace.path).toBe(picked)
+    expect(workspace.title).toBe('qa-ws')
+    expect(storedRecord(pool, workspace.id).path).toBe(picked)
+    // The canon is the backend's, not this process's: nothing was created here.
+    expect(existsSync(picked)).toBe(false)
+    expect(fs.resolved).toEqual([picked])
+    // An alias resolving to the same target is the same workspace, exactly as a
+    // Host symlink is under `realpath`.
+    expect(await registry.resolveByPath(`${SANDBOX}/qa-ws-link`)).toBe(workspace)
+    expect(await registry.create(`${SANDBOX}/qa-ws-link`)).toBe(workspace)
+  })
+
+  it('refuses a path the filesystem backend does not have, including an existing Host directory', async () => {
+    const hostOnly = await makeDir('host-only')
+    const fs = fakeFs([])
+    const { registry } = await harness({ fs: fs.service })
+
+    await expect(registry.create(`${SANDBOX}/absent`)).rejects.toThrow(
+      `the filesystem backend has no such path '${SANDBOX}/absent'`,
+    )
+    await expect(registry.create(hostOnly)).rejects.toThrow(/has no such path/)
+    await expect(registry.resolveByPath(`${SANDBOX}/absent`)).rejects.toThrow(/has no such path/)
+    expect(registry.list()).toEqual([])
+  })
+
+  it('refuses a backend path that is not a directory', async () => {
+    const notes = `${SANDBOX}/notes.md`
+    const fs = fakeFs([[notes, 'file'], [`${SANDBOX}/socket`, 'other']])
+    const { registry } = await harness({ fs: fs.service })
+
+    await expect(registry.create(notes)).rejects.toThrow(`cannot create a workspace at '${notes}': path is not a directory`)
+    await expect(registry.create(`${SANDBOX}/socket`)).rejects.toThrow(/not a directory/)
+    expect(registry.list()).toEqual([])
+  })
+
+  it('validates session cwd membership in the backend world', async () => {
+    const owned = `${SANDBOX}/owned`
+    const fs = fakeFs([[owned, 'directory'], [`${SANDBOX}/elsewhere`, 'directory']])
+    const { registry } = await harness({
+      fs: fs.service,
+      sessions: [
+        header('inside', owned),
+        header('outside', `${SANDBOX}/elsewhere`),
+        header('gone', `${SANDBOX}/deleted`),
+      ],
+    })
+    const workspace = await registry.create(owned)
+
+    await workspace.attachSession(SessionId('inside'))
+    expect(workspace.sessionIds).toEqual(['inside'])
+    await expect(workspace.attachSession(SessionId('outside'))).rejects.toThrow(/its cwd resolves to/)
+    await expect(workspace.attachSession(SessionId('gone'))).rejects.toThrow(/does not resolve/)
+    // A cwd the backend reports as a file cannot be a workspace directory.
+    fs.world.set(`${SANDBOX}/deleted`, 'file')
+    await expect(workspace.attachSession(SessionId('gone'))).rejects.toThrow(/is not a directory/)
+    expect(workspace.sessionIds).toEqual(['inside'])
+  })
+
+  it('reports backend directory disappearance through status', async () => {
+    const dir = `${SANDBOX}/vanishing`
+    const fs = fakeFs([[dir, 'directory']])
+    const { registry } = await harness({ fs: fs.service })
+    const workspace = await registry.create(dir)
+
+    expect(await workspace.status()).toBe('ok')
+    fs.world.set(dir, 'file')
+    expect(await workspace.status()).toBe('missing-dir')
+    fs.world.delete(dir)
+    expect(await workspace.status()).toBe('missing-dir')
+  })
+
+  it('bootstraps history from backend-canonical session cwds', async () => {
+    const owned = `${SANDBOX}/history`
+    const fs = fakeFs([[owned, 'directory']], { [`${SANDBOX}/history/`]: owned })
+    const { registry } = await harness({
+      fs: fs.service,
+      sessions: [header('older', `${SANDBOX}/history/`, 1), header('newer', owned, 2)],
+    })
+
+    const [workspace] = registry.list()
+    expect(workspace?.path).toBe(owned)
+    expect(workspace?.sessionIds).toEqual(['newer', 'older'])
   })
 })
