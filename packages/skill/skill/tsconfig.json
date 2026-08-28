@@ -22,6 +22,9 @@
       "path": "../../llm/llm"
     },
     {
+      "path": "../../attachment/referenced-text"
+    },
+    {
       "path": "../../runtime-diagnostics/invariants"
     }
   ]

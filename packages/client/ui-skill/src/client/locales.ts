@@ -8,6 +8,7 @@ export const zh = {
   'row.running': '正在加载 skill',
   'row.failed': 'skill 加载失败',
   'row.stopped': 'skill 加载已中止',
+  'row.loaded': '已加载',
   'row.instructions': '说明',
   'menu.userOnly': '仅用户',
 } satisfies Record<string, string>
@@ -20,6 +21,7 @@ export const en = {
   'row.running': 'Loading skill',
   'row.failed': 'Skill load failed',
   'row.stopped': 'Skill load stopped',
+  'row.loaded': 'Loaded',
   'row.instructions': 'Instructions',
   'menu.userOnly': 'user-only',
 } satisfies Record<SkillKey, string>

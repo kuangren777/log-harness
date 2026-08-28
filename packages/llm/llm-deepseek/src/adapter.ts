@@ -8,7 +8,7 @@
  * @module dsh-llm-deepseek/adapter
  */
 
-import { attributionHeaders, contentHasImage, CONTEXT_WINDOW_EXCEEDED_CODE, isContextWindowExceededError, isQuotaExceededError, LlmAdapter, LlmError, offloadRequestImagesWithPolicy, ProviderRequestId, QUOTA_EXCEEDED_CODE, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { attributionHeaders, contentHasImage, CONTEXT_WINDOW_EXCEEDED_CODE, errorChain, isContextWindowExceededError, isQuotaExceededError, LlmAdapter, LlmError, offloadRequestImagesWithPolicy, ProviderRequestId, QUOTA_EXCEEDED_CODE, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {
   ContentBlock,
   GenerateOptions,
@@ -16,10 +16,12 @@ import type {
   LlmProviderInfo,
   PreparedAdapterCall,
   LlmResolvedModelInfo,
+  Message,
   ModelModality,
   ResolvedRetryPolicy,
   StreamChunk,
 } from '@deepseek-ai/dsh-llm'
+import type { ReferencedTextRegistry } from '@deepseek-ai/dsh-referenced-text'
 import type {
   AttachmentId,
   AttachmentStore,
@@ -122,6 +124,12 @@ export interface DeepSeekAdapterOptions {
   resolveUserId: () => AnonymousUserId
   /** Resolve the current durable attachment service; absence rejects image input. */
   resolveAttachments?: () => AttachmentStore | undefined
+  /**
+   * Resolve the current referenced-text service; absence rejects a request
+   * that carries a `referenced-text` block, because no other participant can
+   * turn the reference back into the text the log named.
+   */
+  resolveReferencedText?: () => ReferencedTextRegistry | undefined
   /** Resolve the process-wide upload reuse store. */
   resolveFiles?: () => DeepSeekFileStore
 }
@@ -180,6 +188,12 @@ class FileResolutionFailure extends Error {
     super('DeepSeek Files API could not resolve a request image.', { cause })
     this.name = 'FileResolutionFailure'
   }
+}
+
+/** Whether any block, including blocks nested in tool-result content, still names text instead of carrying it. */
+function contentHasReferencedText(content: readonly ContentBlock[]): boolean {
+  return content.some(block => block.type === 'referenced-text'
+    || (block.type === 'tool-result' && contentHasReferencedText(block.content)))
 }
 
 function collectImageRefs(
@@ -430,10 +444,53 @@ export class DeepSeekAdapter extends LlmAdapter {
     return this.streamWithConnection(options, this.config.options())
   }
 
+  /**
+   * Replace every `referenced-text` block with the verified text it names, so
+   * image projection, request building, and serialization see one uniform
+   * text history. The caller's `options` is never mutated: the agent loop
+   * compares the object it published at `llm/stream` against what the adapter
+   * received.
+   * @param options - the request as the loop assembled it.
+   * @returns `options` itself when nothing is referenced, otherwise a copy carrying the resolved messages.
+   * @throws {LlmError} `UNSUPPORTED_CONTENT` when no referenced-text service is
+   *   mounted or a reference cannot be read and verified, and `ABORTED` when
+   *   the caller cancelled during resolution. Neither code is retryable: a
+   *   missing store, a missing id, and a digest mismatch all fail identically
+   *   on every attempt.
+   */
+  private async resolveReferences(options: GenerateOptions): Promise<GenerateOptions> {
+    if (!options.messages.some(message => contentHasReferencedText(message.content))) return options
+    const registry = this.config.resolveReferencedText?.()
+    if (registry === undefined) {
+      throw new LlmError(
+        'DeepSeek request carries referenced text but no referenced-text service is mounted.',
+        'UNSUPPORTED_CONTENT',
+      )
+    }
+    let messages: readonly Message[]
+    try {
+      messages = await registry.resolveMessages(options.messages, options.signal)
+    } catch (error: unknown) {
+      if (options.signal?.aborted === true) {
+        throw new LlmError('DeepSeek request aborted by caller', 'ABORTED', { cause: error })
+      }
+      throw new LlmError(
+        `DeepSeek could not resolve referenced text for this request: ${errorChain(error)}`,
+        'UNSUPPORTED_CONTENT',
+        { cause: error },
+      )
+    }
+    return { ...options, messages: [...messages] }
+  }
+
   private async * streamWithConnection(
-    options: GenerateOptions,
+    callerOptions: GenerateOptions,
     connection: DeepSeekConnectionOptions,
   ): AsyncIterable<StreamChunk> {
+    // Referenced text becomes ordinary text before anything else reads the
+    // request, which is what lets replay, resume, and the compaction summary
+    // call share one resolution instead of each reimplementing it.
+    const options = await this.resolveReferences(callerOptions)
     // One resolution per stream call: connection facts and the credential
     // freeze here and hold for this whole request, so an in-flight stream
     // never observes a configuration change and the next call re-resolves.

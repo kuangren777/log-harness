@@ -16,7 +16,7 @@ import {
   isModelInvocable,
   isSkillName,
   isUserInvocable,
-  renderSkillContent,
+  renderSkillBlocks,
   type SkillInvocationSource,
   type SkillSummary,
 } from '@deepseek-ai/dsh-skill'
@@ -120,9 +120,18 @@ export function apply(ctx: Context, config: Config = {}): void {
             ],
           },
           content: { type: 'string', required: true },
+          reference: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              store: { type: 'string', required: true },
+              id: { type: 'string', required: true },
+              sha256: { type: 'string', required: true },
+            },
+          },
         },
       },
-      render: (_args, value) => [{ type: 'text', text: renderSkillContent(value) }],
+      render: (_args, value) => renderSkillBlocks(value),
     },
     async execute(args, exec) {
       if (!isSkillName(args.name)) {
@@ -152,6 +161,9 @@ export function apply(ctx: Context, config: Config = {}): void {
           resourceBase: { ...skill.resourceBase },
         } : {},
         content: skill.content,
+        ...skill.reference !== undefined ? {
+          reference: { ...skill.reference },
+        } : {},
       }
     },
     presentCall(args) {
@@ -195,7 +207,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       if (skill === undefined || !isUserInvocable(skill)) continue
       const source: SkillInvocationSource = { kind: 'skill-invocation', name, form: 'instructions' }
       injections.push(createUserMessage({
-        content: [{ type: 'text', text: renderSkillContent(skill) }],
+        content: renderSkillBlocks(skill),
         source,
       }))
     }

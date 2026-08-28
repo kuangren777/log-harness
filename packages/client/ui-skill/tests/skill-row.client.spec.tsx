@@ -132,6 +132,28 @@ describe('SkillRow', () => {
     expect(screen.getAllByText('SkillError: missing')).toHaveLength(2)
   })
 
+  it('renders a referenced-text result as a digest-only, non-expandable row', () => {
+    const view = render(<SkillRow {...props(settled({
+      content: [
+        { type: 'text', text: '<skill_content name="sci-paper">\n<skill_resources></skill_resources>\n\n<skill_instructions>\n' },
+        { type: 'referenced-text', store: 'sci', id: 'sci-paper', sha256: 'a'.repeat(64) },
+        { type: 'text', text: '\n</skill_instructions>\n</skill_content>\n' },
+      ] as unknown as ToolResultNode['content'],
+    }))} />)
+    expect(view.container.textContent).toContain('dsh-manage-issues')
+    expect(view.container.textContent).toContain('aaaaaaaa')
+    expect(view.container.textContent).not.toContain('a'.repeat(64))
+    expect(view.container.textContent).not.toContain('referenced-text')
+    expect(view.container.textContent).not.toContain('skill_instructions')
+    expect(view.container.textContent).not.toContain('skill_content')
+    expect(view.container.textContent).not.toContain('skill_resources')
+    expect(view.container.querySelector('[data-expandable]')).toBeNull()
+    expect(view.container.querySelector('[role="button"]')).toBeNull()
+    const row = view.container.querySelector('[data-tool="skill"] > div')!
+    fireEvent.click(row)
+    expect(view.container.querySelector('pre')).toBeNull()
+  })
+
   it('falls back to durable args or call id when the skill name is unavailable', () => {
     const invalid = render(<SkillRow {...props(running('{"name":\n'))} />)
     expect(invalid.container.textContent).toContain('{"name":')

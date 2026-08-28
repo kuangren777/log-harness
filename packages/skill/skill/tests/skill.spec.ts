@@ -4,7 +4,9 @@ import { bindScopeParent, createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import SkillRegistry, {
   isModelInvocable,
   isUserInvocable,
+  renderSkillBlocks,
   renderSkillContent,
+  renderSkillEnvelope,
   type SkillCandidate,
   type SkillDefinition,
   type SkillInvocationPolicy,
@@ -494,6 +496,20 @@ describe('SkillRegistry registry', () => {
     expect(loaded?.resourceBase).toBe(resourceBase)
     expect(loaded?.metadata).toBe(metadata)
     expect(loaded?.provider).toBe('runtime')
+  })
+
+  it('carries a runtime body reference through discovery to the loaded definition', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SkillRegistry)
+    const reference = { store: 'vault', id: 'referenced-runtime', sha256: 'b'.repeat(64) }
+    ctx.skills.register({
+      name: 'referenced-runtime',
+      description: 'Referenced runtime skill',
+      source: 'runtime',
+      content: 'Runtime body.',
+      reference,
+    })
+    expect((await ctx.skills.get('referenced-runtime'))?.reference).toBe(reference)
   })
 
   it('rejects every malformed scalar in provider-loaded definitions', async () => {
@@ -1102,6 +1118,43 @@ describe('renderSkillContent', () => {
     })
     expect(text).toContain('<skill_content name="x&quot;&amp;&lt;y">')
     expect(text).toContain('Keep </skill_content> and <tags> as-is.')
+  })
+})
+
+describe('renderSkillBlocks', () => {
+  const referencedSkill = {
+    name: 'vault-skill',
+    provider: 'vault',
+    resourceBase: { kind: 'directory', path: '/tmp/vault' },
+    content: 'SECRET-BODY',
+    reference: { store: 'vault', id: 'vault-skill', sha256: 'a'.repeat(64) },
+  } as const
+
+  it('emits one text block equal to renderSkillContent without a reference', () => {
+    const skill = {
+      name: 'plain-skill',
+      provider: 'memory',
+      resourceBase: { kind: 'directory' as const, path: '/tmp/plain' },
+      content: 'Do the thing.',
+    }
+    expect(renderSkillBlocks(skill)).toEqual([{ type: 'text', text: renderSkillContent(skill) }])
+  })
+
+  it('splits the envelope around a referenced-text block that carries the body', () => {
+    const blocks = renderSkillBlocks(referencedSkill)
+    expect(blocks).toHaveLength(3)
+    expect(blocks[1]).toEqual({ type: 'referenced-text', store: 'vault', id: 'vault-skill', sha256: 'a'.repeat(64) })
+    const [open, , close] = blocks
+    if (open?.type !== 'text' || close?.type !== 'text') throw new Error('expected text envelope blocks')
+    expect(open.text + 'BODY' + close.text).toBe(renderSkillContent({ ...referencedSkill, content: 'BODY' }))
+    expect(JSON.stringify(blocks)).not.toContain('SECRET-BODY')
+  })
+
+  it('frames the body with the envelope renderSkillContent uses', () => {
+    const envelope = renderSkillEnvelope(referencedSkill)
+    expect(renderSkillContent(referencedSkill)).toBe(`${envelope.open}\nSECRET-BODY\n${envelope.close}`)
+    expect(envelope.open).toContain('<skill_content name="vault-skill">')
+    expect(envelope.close).toBe('</skill_instructions>\n</skill_content>')
   })
 })
 

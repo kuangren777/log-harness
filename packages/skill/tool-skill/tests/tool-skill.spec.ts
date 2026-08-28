@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createHash } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -145,6 +146,32 @@ async function composePrefixForAgent(ctx: Context, agent: Agent, signal = new Ab
     }
   }
   return agent.session.deriveMessages()
+}
+
+const REFERENCED_BODY = 'SECRET-BODY'
+const REFERENCED_SHA256 = createHash('sha256').update(REFERENCED_BODY).digest('hex')
+
+/** Register one runtime skill whose body is a content-addressed reference. */
+function registerReferencedSkill(ctx: Context, name: string): void {
+  ctx.skills.register({
+    name,
+    description: 'Referenced skill',
+    source: 'runtime',
+    content: REFERENCED_BODY,
+    reference: { store: 'vault', id: name, sha256: REFERENCED_SHA256 },
+  })
+}
+
+/** The three-block referenced rendering: envelope text, the reference, envelope text. */
+function expectReferencedBlocks(content: Message['content'], name: string): void {
+  expect(content).toHaveLength(3)
+  const [open, body, close] = content
+  if (open?.type !== 'text' || close?.type !== 'text') throw new Error('expected text envelope blocks')
+  expect(body).toEqual({ type: 'referenced-text', store: 'vault', id: name, sha256: REFERENCED_SHA256 })
+  expect(open.text).toContain(`<skill_content name="${name}">`)
+  expect(open.text.endsWith('<skill_instructions>\n')).toBe(true)
+  expect(close.text).toBe('\n</skill_instructions>\n</skill_content>')
+  expect(JSON.stringify(content)).not.toContain(REFERENCED_BODY)
 }
 
 async function mintAgentScope(ctx: Context, subject: string | Agent): Promise<{ agent: Agent; scope: Scope }> {
@@ -798,6 +825,31 @@ describe('dsh-tool-skill', () => {
     expect(block.text).not.toContain('# Skill:')
   })
 
+  it('keeps a referenced body out of the tool result content and returns its reference', async () => {
+    const home = await tempDir('tool-referenced-body')
+    const ctx = await setup(home)
+    registerReferencedSkill(ctx, 'referenced-skill')
+
+    const result = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: CallId('referenced'),
+      name: 'skill',
+      arguments: { name: 'referenced-skill' },
+    })
+
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('expected skill success')
+    // `content` is the durable, model-facing projection; `value` is
+    // execution-local and deliberately omitted from durable events.
+    expectReferencedBlocks(result.content, 'referenced-skill')
+    expect(result.value).toEqual({
+      name: 'referenced-skill',
+      provider: 'runtime',
+      content: REFERENCED_BODY,
+      reference: { store: 'vault', id: 'referenced-skill', sha256: REFERENCED_SHA256 },
+    })
+  })
+
   it('renders provider-managed resource hints for non-local skills', async () => {
     const home = await tempDir('tool-resource-hints')
     const ctx = await setup(home)
@@ -1064,6 +1116,19 @@ describe('user-explicit invocation injection', () => {
       () => Promise.resolve({ kind: 'reject' as const }),
     )
     expect(decision).toEqual({ kind: 'reject' })
+  })
+
+  it('injects a referenced body as the same three-block rendering the tool returns', async () => {
+    const home = await tempDir('invoke-referenced')
+    const ctx = await setup(home)
+    registerReferencedSkill(ctx, 'referenced-skill')
+    const decision = await proposeStep(ctx, agentForCwd(home), [gesture('/referenced-skill go')])
+    if (decision.kind !== 'enter') throw new Error('expected enter')
+    const injection = decision.messages.find(message =>
+      (message.source as { kind?: string }).kind === 'skill-invocation')
+    if (injection === undefined) throw new Error('expected a skill-invocation injection')
+    expect(injection.source).toMatchObject({ kind: 'skill-invocation', name: 'referenced-skill', form: 'instructions' })
+    expectReferencedBlocks(injection.content, 'referenced-skill')
   })
 
   it('scans only text blocks of a user message', async () => {

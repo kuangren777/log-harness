@@ -22,6 +22,8 @@ interface SkillRowModel {
   readonly output: string | null
   readonly errorSummary: string | null
   readonly state: SkillRowState
+  /** sha256 of the first `referenced-text` result block, else null (inline result). */
+  readonly digest: string | null
 }
 
 /** First physical line for the collapsed error summary and malformed-args fallback. */
@@ -45,18 +47,49 @@ function skillName(argsRaw: string, callId: string): string {
   return argsRaw === '' ? callId : firstLine(argsRaw)
 }
 
+/**
+ * Structural test for the `referenced-text` content block. `dsh-referenced-text`
+ * merges this member into `ContentBlockMap` (`@deepseek-ai/dsh-llm`), but this
+ * package's compiler face (`tsconfig.json` -> `client/runtime` -> `llm/llm`)
+ * never references `attachment/referenced-text`, so the local `ContentBlock`
+ * union has no `'referenced-text'` member: a `item is {type: 'referenced-text'}`
+ * type predicate would narrow the true branch to `never` (no discriminant
+ * overlap), so this returns a plain `boolean` and callers cast explicitly.
+ */
+function isReferencedTextBlock(item: unknown): boolean {
+  return typeof item === 'object' && item !== null && (item as { type?: unknown }).type === 'referenced-text'
+}
+
+/** Read `sha256` off a content item already known to satisfy {@link isReferencedTextBlock}. */
+function referencedTextSha256(item: unknown): string {
+  const sha256 = (item as { sha256?: unknown }).sha256
+  return typeof sha256 === 'string' ? sha256 : ''
+}
+
 /** Flatten durable result blocks under the generic Tool-row text contract.
- *  Keep aligned with ui-tool's models/tool-call-model.ts `resultText`. */
+ *  Keep aligned with ui-tool's models/tool-call-model.ts `resultText`; a
+ *  `referenced-text` block is omitted here on purpose — the row never shows
+ *  a referenced skill body, only its digest (see `referenceDigest`). */
 function resultText(block: ToolCallViewProps['block']): string | null {
   if (!('kind' in block)) return null
   const parts: string[] = []
   for (const item of block.content) {
+    if (isReferencedTextBlock(item)) continue
     parts.push(item.type === 'text' ? item.text : JSON.stringify(item, null, 2))
   }
   if (parts.length === 0 && block.error !== undefined) {
     parts.push(`${block.error.name}: ${block.error.code}`)
   }
   return parts.join('\n') || null
+}
+
+/** The sha256 of the first `referenced-text` block in the settled result, else null. */
+function referenceDigest(block: ToolCallViewProps['block']): string | null {
+  if (!('kind' in block)) return null
+  for (const item of block.content) {
+    if (isReferencedTextBlock(item)) return referencedTextSha256(item)
+  }
+  return null
 }
 
 /** Derive display state without consulting the live skill catalog. */
@@ -68,12 +101,15 @@ function skillRowModel(block: ToolCallViewProps['block']): SkillRowModel {
     : block.error?.code === 'interrupted'
       ? 'stopped'
       : block.isError ? 'error' : 'ok'
-  const output = resultText(block)
+  const digest = referenceDigest(block)
+  const flattened = resultText(block)
+  const output = digest === null ? flattened : null
   return {
     name: skillName(argsRaw, block.callId),
     output,
     errorSummary: state === 'error' && output !== null ? firstLine(output) : null,
     state,
+    digest,
   }
 }
 
@@ -120,7 +156,9 @@ export function SkillRow({ block, inspect, t }: SkillRowProps) {
   const expandable = model.output !== null
   const open = expanded && expandable
   const status = stateStatus(model.state, t)
-  const summary = model.errorSummary ?? model.name
+  const summary = model.errorSummary ?? (model.digest === null
+    ? model.name
+    : `${t('row.loaded')} ${model.name} · ${model.digest.slice(0, 8)}`)
   const toggleExpand = (): void => {
     setExpanded(value => !value)
   }

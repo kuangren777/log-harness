@@ -12,6 +12,8 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import { assertNever } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { ReferencedTextRef } from '@deepseek-ai/dsh-referenced-text'
 import { NamedEntries, ScopedLayers, scopeChainOf, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { ScopeKey, ScopeLayer } from '@deepseek-ai/dsh-scope'
 import z from '@deepseek-ai/schemastery'
@@ -90,6 +92,11 @@ export interface SkillDefinition extends SkillSummary {
   readonly path?: string
   /** Parsed optional metadata object from frontmatter. */
   readonly metadata?: Readonly<Record<string, unknown>>
+  /**
+   * Content-addressed reference to `content`; when present, model-facing
+   * consumers log the reference and let the model request path resolve the body.
+   */
+  readonly reference?: ReferencedTextRef
 }
 
 /** Runtime skill contribution accepted by `ctx.skills.register()`. */
@@ -160,27 +167,62 @@ declare module '@deepseek-ai/dsh-llm' {
 }
 
 /**
- * Render one loaded skill for the model. The output is shared verbatim by the
- * `skill` tool result and the user-explicit invocation injection, so the model
- * sees one canonical `<skill_content>` shape on both paths. The name rides an
+ * Render the body-independent framing of one loaded skill: everything before
+ * the instruction body and everything after it. Splitting the envelope from the
+ * body lets a referenced body ride its own content block while the framing
+ * stays inline text.
+ * @param skill - name, provider, and optional resource base to frame.
+ * @returns the text preceding the body (`open`) and the text following it (`close`); `${open}\n${content}\n${close}` is the complete block.
+ */
+export function renderSkillEnvelope(skill: Pick<SkillDefinition, 'name' | 'provider' | 'resourceBase'>): { open: string; close: string } {
+  return {
+    open: [
+      `<skill_content name="${escapeAttr(skill.name)}">`,
+      '<skill_resources>',
+      ...renderResourceHint(skill),
+      '</skill_resources>',
+      '',
+      '<skill_instructions>',
+    ].join('\n'),
+    close: [
+      '</skill_instructions>',
+      '</skill_content>',
+    ].join('\n'),
+  }
+}
+
+/**
+ * Render one loaded skill for the model as a single string. The name rides an
  * escaped attribute; the body is embedded verbatim (skills are trusted local
  * content, and user-supplied invocation text stays outside this wrapper).
  * @param skill - name, provider, optional resource base, and body to render.
  * @returns the complete model-facing `<skill_content>` block.
  */
 export function renderSkillContent(skill: Pick<SkillDefinition, 'name' | 'provider' | 'resourceBase' | 'content'>): string {
-  const resourceHint = renderResourceHint(skill)
+  const envelope = renderSkillEnvelope(skill)
+  return `${envelope.open}\n${skill.content}\n${envelope.close}`
+}
+
+/**
+ * Render one loaded skill as the model-facing content blocks. The output is
+ * shared verbatim by the `skill` tool result and the user-explicit invocation
+ * injection, so the model sees one canonical `<skill_content>` shape on both
+ * paths. A skill carrying a `reference` emits its body as a `referenced-text`
+ * block between the two envelope text blocks, so the session log holds the
+ * reference while request assembly resolves the body; concatenating the
+ * resolved blocks reproduces {@link renderSkillContent} exactly. A skill
+ * without a reference emits that one string as a single text block.
+ * @param skill - name, provider, optional resource base, body, and optional body reference.
+ * @returns the content blocks carrying the complete `<skill_content>` block.
+ */
+export function renderSkillBlocks(skill: Pick<SkillDefinition, 'name' | 'provider' | 'resourceBase' | 'content' | 'reference'>): ContentBlock[] {
+  if (skill.reference === undefined) return [{ type: 'text', text: renderSkillContent(skill) }]
+  const envelope = renderSkillEnvelope(skill)
   return [
-    `<skill_content name="${escapeAttr(skill.name)}">`,
-    '<skill_resources>',
-    ...resourceHint,
-    '</skill_resources>',
-    '',
-    '<skill_instructions>',
-    skill.content,
-    '</skill_instructions>',
-    '</skill_content>',
-  ].join('\n')
+    { type: 'text', text: `${envelope.open}\n` },
+    { type: 'referenced-text', ...skill.reference },
+    { type: 'text', text: `\n${envelope.close}` },
+  ]
 }
 
 function renderResourceHint(skill: Pick<SkillDefinition, 'provider' | 'resourceBase'>): string[] {
