@@ -1,0 +1,117 @@
+/* One result card: source tag over a linked title, the bibliographic line,
+ * the abstract, the identifier badges, and the three actions. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 19px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-sci-radius-card);
+  background: var(--dsw-sci-card-bg);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.source {
+  flex: none;
+  padding: 2px 9px;
+  border-radius: var(--dsw-sci-radius-pill);
+  background: var(--dsw-sci-chip-bg);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.title:hover {
+  color: var(--dsw-alias-brand-text);
+  text-decoration: underline;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.abstract {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.badge {
+  padding: 2px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--dsw-font-family-mono, ui-monospace, monospace);
+  font-size: 11px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.action {
+  padding: 5px 13px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-sci-radius-pill);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.action:hover {
+  background: var(--dsw-sci-hover-bg);
+  color: var(--dsw-alias-label-primary);
+}
+
+.notice {
+  color: var(--dsw-alias-state-success-primary);
+  font-size: 11.5px;
+}
+
+.noticeFailed {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.toggle {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-brand-text);
+  font-size: 11.5px;
+  cursor: pointer;
+}

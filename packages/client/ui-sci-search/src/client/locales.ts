@@ -1,0 +1,81 @@
+/** `sci-search` namespace dictionaries. */
+
+/** Dictionary namespace owned by this plugin. */
+export const NS = 'sci-search'
+
+/** Simplified Chinese dictionary (the key-set source of truth). */
+export const zh = {
+  'rail.search': '检索',
+  'hero.title': '检索一切科学知识',
+  'hero.subtitle': 'OpenAlex · Semantic Scholar · arXiv · Crossref',
+  'search.placeholder': '试试：n-type SnSe thermoelectric zT',
+  'search.label': '文献检索词',
+  'search.submit': '检索',
+  'search.running': '检索中…',
+  'recent.title': '最近检索',
+  'recent.entry': '{query} · {hits} 条',
+  'recent.forget': '不再保留「{query}」',
+  'results.header': '检索结果 · {count} 条 · 耗时 {seconds} s',
+  'results.sourceErrors': '来源错误 {count}',
+  'results.sourceError': '{source}：{code}',
+  'results.empty': '没有检索到文献。换个说法，或放宽年份范围再试。',
+  'error.allFailed': '四个文献源都没有返回结果，稍后再试。',
+  'error.generic': '检索失败（{code}）。',
+  'card.etAl': '等',
+  'card.venueYear': '{venue} · {year}',
+  'card.citedBy': '被引 {count}',
+  'card.expand': '展开摘要',
+  'card.collapse': '收起摘要',
+  'card.copy': '复制引用',
+  'card.copied': '已复制 BibTeX',
+  'card.copyFailed': '复制失败，请手动选取。',
+  'card.pdf': '打开 PDF',
+  'card.deepDive': '在研究流中深入',
+  'card.open': '{title}（在新窗口打开）',
+  'deepDive.prompt': '请用 literature_search 检索「{query}」，读取前 5 篇的摘要，给出带 DOI 引用的综述提纲。',
+  'hits.title': '文献命中 {count} 篇',
+  'source.openalex': 'OpenAlex',
+  'source.semanticscholar': 'Semantic Scholar',
+  'source.arxiv': 'arXiv',
+  'source.crossref': 'Crossref',
+}
+
+/** English dictionary (same key set). */
+export const en: Record<SciSearchKey, string> = {
+  'rail.search': 'Search',
+  'hero.title': 'Search all of science',
+  'hero.subtitle': 'OpenAlex · Semantic Scholar · arXiv · Crossref',
+  'search.placeholder': 'Try: n-type SnSe thermoelectric zT',
+  'search.label': 'Literature query',
+  'search.submit': 'Search',
+  'search.running': 'Searching…',
+  'recent.title': 'Recent searches',
+  'recent.entry': '{query} · {hits} hits',
+  'recent.forget': 'Forget “{query}”',
+  'results.header': 'Results · {count} · {seconds} s',
+  'results.sourceErrors': 'Source failures {count}',
+  'results.sourceError': '{source}: {code}',
+  'results.empty': 'No literature found. Rephrase the query, or widen the year range.',
+  'error.allFailed': 'None of the four sources answered. Try again shortly.',
+  'error.generic': 'Search failed ({code}).',
+  'card.etAl': 'et al.',
+  'card.venueYear': '{venue} · {year}',
+  'card.citedBy': 'Cited by {count}',
+  'card.expand': 'Show abstract',
+  'card.collapse': 'Hide abstract',
+  'card.copy': 'Copy citation',
+  'card.copied': 'BibTeX copied',
+  'card.copyFailed': 'Copy failed; select the text manually.',
+  'card.pdf': 'Open PDF',
+  'card.deepDive': 'Dig in from the research flow',
+  'card.open': '{title} (opens in a new window)',
+  'deepDive.prompt': 'Use literature_search for “{query}”, read the abstracts of the first five records, and draft a review outline citing their DOIs.',
+  'hits.title': '{count} literature hits',
+  'source.openalex': 'OpenAlex',
+  'source.semanticscholar': 'Semantic Scholar',
+  'source.arxiv': 'arXiv',
+  'source.crossref': 'Crossref',
+}
+
+/** Key union of this plugin's dictionaries. */
+export type SciSearchKey = keyof typeof zh

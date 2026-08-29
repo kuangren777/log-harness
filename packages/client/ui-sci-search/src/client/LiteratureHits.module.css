@@ -1,0 +1,59 @@
+/* The in-conversation hit list: one compact row per record the call returned. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.count {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--dsw-sci-chip-bg);
+}
+
+.source {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12.5px;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title:hover {
+  color: var(--dsw-alias-brand-text);
+  text-decoration: underline;
+}
+
+.fact {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.doi {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--dsw-font-family-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+}

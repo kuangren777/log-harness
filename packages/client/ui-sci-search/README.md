@@ -1,0 +1,29 @@
+# @deepseek-ai/dsh-client-ui-sci-search
+
+English | [中文](README.zh.md)
+
+The CaMeL Science literature surface: the full-bleed 「检索」 view, the rail button that routes to it, and the row a `literature_search` call draws inside the research flow. Three registrations into three seats this package does not own — ui-layout's keyed `view`, the [sci shell](../ui-sci-shell/README.md)'s `rail.item`, and [ui-tool](../ui-tool/README.md)'s keyed `tool.call.toolview` — so composing it out of cordis.yml removes the view, the button, and the row together and leaves every other surface exactly as it was. Contract: the [slot system standard](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.md).
+
+The wire seam is `src/client/index.ts` alone. The host answers over the Typert Remote namespace `sci.literature` (`search`, `recent`, `forget`); the injected face turns those envelopes into the plain records and total outcomes `src/client/contract.ts` declares, so no component ever sees an RPC error. A search that no source answered arrives as a code, an unreadable history arrives as an empty strip, and both render as stated facts rather than as a throw inside an event handler.
+
+Every number on screen is read off the result the host returned: the hit count, the elapsed seconds, the citation counts, and the source failures. The hero names the four real sources it searches and claims no corpus size. A record that carries no year, venue, citation count, abstract, or open-access PDF loses those lines instead of showing a placeholder — the same rule the tool row follows, which additionally validates the host-computed `result.meta` field by field and leaves its seat empty (falling back to the generic tool card) for a meta of another shape.
+
+The store carries the four facts the whole view agrees on — the query, the search's status, the settled result, and the host's remembered queries — so a trip through the research flow and back finds the same results rather than an empty hero. What one card knows alone (whether its abstract is expanded, whether its last copy landed) stays that card's own state. 「复制引用」 writes the BibTeX entry `src/client/bibtex.ts` renders, keyed `<firstAuthorFamily><year>` with TeX's grouping braces escaped, and says whether the clipboard took it. 「在研究流中深入」 connects the current session's Workspace (or the most recent one), prefills that session's composer with a prompt naming the record, and switches the frame to the conversation view; the prompt is prefilled, never sent.
+
+Styling is tokens only, in CSS Modules; the one decorative animation carries `data-sci-motion`, so ui-brand-sci's reduced-motion rule disarms it without reaching any other animation on the page. `SciLogo` is the one symbol imported from [ui-brand-sci](../ui-brand-sci/README.md) and `CONVERSATION_VIEW` the one from ui-layout; both rows are declared as `dsh.client.external` module-graph requests. The `/client` exports are the plugin body (`apply`/`inject`) alone.
+
+## Model Experience
+
+None, as this is a browser-side search surface whose Node half is an inert loader seat: it registers no tool, prompt section, or session event, and every fact it draws was computed by the `sci-literature` host package, which owns the `literature_search` tool and its own Model Experience.
+
+#### KV Cache effect
+
+None; this package neither assembles nor sends a provider request.
+
+## Known Limitations and Deferred Work
+
+- **The record types and the Remote namespace face are mirrored, not imported.** `src/client/contract.ts` restates the `LiteratureRecord`/`LiteratureSearchResult` vocabulary of spec §2.1 and `src/client/index.ts` restates the three endpoints, because the generated `sci.literature` declaration does not exist until `@deepseek-ai/dsh-sci-literature` is in the tree. The assembly step replaces both with that package's types and the generated namespace; a drift between the two shows up as a type error there, not as a silent runtime mismatch here.
+- **The box sends only a query.** The host takes `yearFrom`, `yearTo`, and `limit`, and this view sends none of them, so a search is always the host's default window. A year filter is a second control with its own empty-state and validation questions, and this release ships the one input the design reference draws.
+- **A total failure reports one code, not four reasons.** Per-source failures reach the view only on a settled search, where they are listed under the result header; when every source fails the host raises a single error, so the error box states that and the code, and the four individual reasons stay in the host's log.
+- **The remembered queries are the host's, not a session projection.** A browser search has no session, so the history is machine-local state on the host rather than a log projection: it does not replay, and a different host means a different strip.
+- **The clipboard is the browser's.** An insecure origin exposes no `navigator.clipboard`, and the card then says the copy failed rather than silently doing nothing; selecting the entry by hand stays the fallback, since this package renders no citation dialog.
