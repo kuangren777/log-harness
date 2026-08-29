@@ -106,7 +106,7 @@ describe('SearchView hero and query box', () => {
   })
 
   it('states an empty search rather than drawing an empty list', async () => {
-    await mount({ search: vi.fn(async () => ({ ok: true, result: resultOf([]) })) })
+    await mount({ search: vi.fn(async (): Promise<SearchOutcome> => ({ ok: true, result: resultOf([]) })) })
     type('zT')
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '检索' })) })
 
@@ -116,7 +116,7 @@ describe('SearchView hero and query box', () => {
 
   it('reports the sources that failed beside the results that survived', async () => {
     const result = resultOf([FULL], [{ source: 'semanticscholar', code: 'LITERATURE_SOURCE_HTTP', message: '429' }])
-    await mount({ search: vi.fn(async () => ({ ok: true, result })) })
+    await mount({ search: vi.fn(async (): Promise<SearchOutcome> => ({ ok: true, result })) })
     type('zT')
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '检索' })) })
 
@@ -127,7 +127,7 @@ describe('SearchView hero and query box', () => {
 
 describe('SearchView failure states', () => {
   it('says so plainly when no source answered', async () => {
-    await mount({ search: vi.fn(async () => ({ ok: false, code: 'LITERATURE_ALL_SOURCES_FAILED' })) })
+    await mount({ search: vi.fn(async (): Promise<SearchOutcome> => ({ ok: false, code: 'LITERATURE_ALL_SOURCES_FAILED' })) })
     type('zT')
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '检索' })) })
 
@@ -135,7 +135,7 @@ describe('SearchView failure states', () => {
   })
 
   it('shows the host code for every other failure', async () => {
-    await mount({ search: vi.fn(async () => ({ ok: false, code: 'LITERATURE_QUERY_TOO_LONG' })) })
+    await mount({ search: vi.fn(async (): Promise<SearchOutcome> => ({ ok: false, code: 'LITERATURE_QUERY_TOO_LONG' })) })
     type('zT')
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '检索' })) })
 
@@ -156,7 +156,7 @@ describe('SearchView recent queries', () => {
     })
 
     expect(b.face.search).toHaveBeenCalledWith({ query: 'n-type SnSe thermoelectric zT' })
-    expect(screen.getByLabelText('文献检索词').value).toBe('n-type SnSe thermoelectric zT')
+    expect(screen.getByLabelText<HTMLInputElement>('文献检索词').value).toBe('n-type SnSe thermoelectric zT')
     // The history is re-read after the search settles, so a new row appears
     // without a manual refresh.
     expect(b.face.recent).toHaveBeenCalledTimes(2)
@@ -265,7 +265,7 @@ describe('ResultCard citation copy', () => {
   }
 
   it('writes the BibTeX entry and retires the notice on its own', async () => {
-    const writeText = vi.fn(async () => {})
+    const writeText = vi.fn(async (_text: string) => {})
     withClipboard(writeText)
     render(<ResultCard {...cardProps(FULL)} />)
 
