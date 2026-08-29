@@ -559,6 +559,8 @@
   name: '@deepseek-ai/dsh-client-ui-sci-shell'
 - id: ui-sci-conversation
   name: '@deepseek-ai/dsh-client-ui-sci-conversation'
+- id: ui-sci-search
+  name: '@deepseek-ai/dsh-client-ui-sci-search'
 - id: web-fetch-http
   name: '@deepseek-ai/dsh-web-fetch-http'
 - id: office-univer
@@ -595,6 +597,10 @@
   name: '@deepseek-ai/dsh-sci-memory'
   config:
     memoryDir: /home/user/sci/memory
+- id: sci-literature
+  name: '@deepseek-ai/dsh-sci-literature'
+  config:
+    mailto: !!js process.env.SCI_LITERATURE_MAILTO ?? ''
 - id: sci-audit
   name: '@deepseek-ai/dsh-sci-audit'
 - id: sci-remote-hosts
