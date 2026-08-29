@@ -48,6 +48,7 @@
     "@deepseek-ai/dsh-agent-presets": "workspace:^",
     "@deepseek-ai/dsh-client-ui-brand-sci": "workspace:^",
     "@deepseek-ai/dsh-client-ui-directory-picker-browse": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-sci-conversation": "workspace:^",
     "@deepseek-ai/dsh-client-ui-sci-files": "workspace:^",
     "@deepseek-ai/dsh-client-ui-sci-shell": "workspace:^",
     "@deepseek-ai/dsh-dormice": "workspace:^",

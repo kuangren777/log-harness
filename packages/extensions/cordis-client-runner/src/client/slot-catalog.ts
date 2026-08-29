@@ -293,6 +293,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'conversation.chat.node\' (client-ui-conversation), so it exists while that entry is mounted',
     occupants: [
       'client-ui-deliverables ProducedFiles',
+      'client-ui-sci-conversation ArtifactChips',
       'office-univer PreviewCard',
     ],
     replaceRisk: 'none',
@@ -1062,6 +1063,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [
       'client-ui-agent-preset AgentPresetLabel id \'agent-preset\'',
       'client-ui-jobs JobListAction id \'job-list\'',
+      'client-ui-sci-conversation OpenArtifactsAction id \'sci-open-artifacts\'',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.header.actions\', () => ctx.slots.register(\n      { name: \'conversation.session.header.actions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
@@ -1970,6 +1972,39 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     source: 'packages/client/ui-workspace/src/client/contract/slots.ts:59',
   },
   {
+    key: 'tool.call.frame',
+    kind: 'single',
+    scope: 'session',
+    summary: 'The chrome around one Tool call — head, disclosure, and whatever else a profile wants every call to wear.',
+    doc: 'The chrome around one Tool call — head, disclosure, and whatever else a\nprofile wants every call to wear. One occupant, and taking it replaces\nthe shipped row wholesale.\n\nIt exists because the alternative does not work: shadowing the\n`tool-call` Chat Node entry would also shadow that entry\'s `children`\ndeclaration, and a child slot admits exactly one declarer, so the\ntakeover could never re-declare SlotMap[\'tool.call.toolview\']\nand every registered per-tool view would stop rendering. Framing here\ninstead keeps that dispatch where it is: the owner hands the occupant\nthe already-dispatched per-tool view as `body`, so a profile restyles\nevery call without knowing a single tool.\n\nThe occupant owns no identity. The anchor and selection attributes the\nchat view scrolls by and the details column highlights by stay on the\nowner\'s wrapper, outside whatever the occupant renders.',
+    registerOptions: [],
+    ownerProps: [
+      '/**\n * Owner currency of the Tool call frame: one call\'s identity and lifecycle,\n * the two gestures its chrome can offer, and the two already-rendered regions\n * the frame is responsible for placing.\n *\n * `body` and `children` are ReactNode owner props, which the client props\n * discipline otherwise routes through slots. They are deliberate here and\n * bounded: both are produced by this package\'s own render site from slots it\n * declares, and moving either to a slot of its own would hand the frame\'s\n * occupant a declaration it cannot have (see the slot\'s own note).\n */\nexport interface ToolCallFrameOwnerProps {\n  /** Tool call identity, stable across running and settled forms. */\n  callId: string\n  /** Wire Tool name; the frame titles and groups by it. */\n  toolName: string\n  /** Frozen running call or settled result node — the frame\'s own state source. */\n  block: ToolCallBlock\n  /** Whether the details column currently names this call. */\n  selected: boolean\n  /**\n   * Engine-owned turn this call belongs to; null when the Node\'s placement is\n   * unresolved. Supplied because a settled result node carries no turn of its\n   * own, so a frame that shows turn-wide context (sibling /* …truncated — full shape in source */',
+    ],
+    ownerPropsReferences: [
+      'Wire',
+    ],
+    standardProps: [
+      'useSessions: SnapshotSelectorHook<SessionListState>',
+      'useWorkspaces: SnapshotSelectorHook<import(\'./workspaces/service.ts\').WorkspaceListState>',
+      'useSession: SnapshotSelectorHook<ConversationSnapshot>',
+      'sessionId: SessionId',
+      'useProjection: UseProjection',
+      'useInput: SnapshotSelectorHook<InputState>',
+      'inputActions: InputActions',
+    ],
+    keyDomain: '',
+    hookContext: '',
+    slotInject: '',
+    declaredBy: 'an entry in \'conversation.chat.node\' (client-ui-tool), so it exists while that entry is mounted',
+    occupants: [
+      'client-ui-sci-conversation SciToolCard',
+    ],
+    replaceRisk: 'shadows-shipped-ui',
+    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'tool.call.frame\', () => ctx.slots.register(\n      { name: \'tool.call.frame\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+    source: 'packages/client/ui-tool/src/client/contract/slots.ts:44',
+  },
+  {
     key: 'tool.call.toolview',
     kind: 'keyed',
     scope: 'session',
@@ -2021,7 +2056,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'tool.call.toolview\', () => ctx.slots.register(\n      { name: \'tool.call.toolview\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-tool/src/client/contract/slots.ts:24',
+    source: 'packages/client/ui-tool/src/client/contract/slots.ts:25',
   },
   {
     key: 'tool.view.cordis',
