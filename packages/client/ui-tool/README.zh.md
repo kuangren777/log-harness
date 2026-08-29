@@ -34,6 +34,21 @@ owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、冻结的 `block`
 
 各类卡片的上限与 fallback 规则仍由对应的 [terminal](../../../.agents/notes/implemented/feature/2026-07-28-web-terminal-card.zh.md)、[diff](../../../.agents/notes/implemented/feature/2026-07-30-web-diff-card.zh.md)、[read](../../../.agents/notes/implemented/feature/2026-07-30-web-read-card-frontend.zh.md)、[search](../../../.agents/notes/implemented/feature/2026-07-30-web-search-card.zh.md) 和 [web](../../../.agents/notes/implemented/feature/2026-07-30-web-result-card-frontend.zh.md) Agent Note 负责。
 
+## 调用外框
+
+`tool.call.frame` 是包住整次调用的单占位、session 作用域座位。它的存在是为了让某个 profile 能在不认识任何具体工具的前提下重做每一行工具卡：渲染点先分发各工具专属视图，再把得到的元素作为 `body` 交给外框占用者，同时把已经渲染好的子调用分支作为 `children` 一并交出。没有占用者时，外框渲染的正是这个座位出现之前本包原本的那一行，因此在有人占用之前它不产生任何代价。
+
+```ts ignore-check
+ctx.slots.inject('tool.call.frame', () =>
+  ctx.slots.register({ name: 'tool.call.frame' }, ProfileToolCard))
+```
+
+owner 载荷是 `ToolCallFrameOwnerProps`：`ToolCallOwnerProps` 的各字段，外加 `selected`、引擎归属的 `turn`（节点位置未解析时为 null）、把该调用指给详情栏的 `openDetails` 手势，以及 `body`、`hasSubcalls`、`children`。
+
+占用外框而不是遮蔽 `tool-call` Chat Node 条目，正是这个座位的意义。遮蔽那个条目会连它的 `children` 声明一起遮蔽，而一个子槽位只允许一个声明者，于是遮蔽方永远无法重新声明 `tool.call.toolview`——所有已注册的专属视图都会停止渲染。外框把那次分发留在本包内。
+
+占用者不拥有任何身份标识：`data-chat-anchor-key`、`data-chat-call-id`、`data-selected` 以及 `data-subcalls` 嵌套都留在本包的外层容器上，位于占用者渲染内容之外，因此无论谁占用这个座位，滚动锚定与详情栏高亮都照常工作。
+
 ## 模型体验
 
 无，因为本包只渲染已经记录的工具调用和结果，不改变模型请求、工具执行或会话事件。
@@ -47,3 +62,4 @@ owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、冻结的 `block`
 - Host 不把 `run_code` 暴露为 Code Mode 程序 binding，因此生产事件只产生一层分发；递归的运行时/UI 约定支持嵌套。
 - 第一方工具视图集中在本包，可以通过 keyed slot 独立迁移到各自所属的业务包。
 - 工具文案复用 `ui-conversation` locale namespace。
+- 外框占用者用自己的 locale 命名空间提供文案，不会从本包拿到 `t`；本包自带的降级行仍使用 conversation 命名空间。

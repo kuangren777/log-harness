@@ -34,6 +34,21 @@ This package currently owns the generic fallback and the built-in shell/pwsh, re
 
 Card-specific limits and fallback rules remain in the owning [terminal](../../../.agents/notes/implemented/feature/2026-07-28-web-terminal-card.md), [diff](../../../.agents/notes/implemented/feature/2026-07-30-web-diff-card.md), [read](../../../.agents/notes/implemented/feature/2026-07-30-web-read-card-frontend.md), [search](../../../.agents/notes/implemented/feature/2026-07-30-web-search-card.md), and [web](../../../.agents/notes/implemented/feature/2026-07-30-web-result-card-frontend.md) notes.
 
+## The call frame
+
+`tool.call.frame` is the single, session-scoped seat around one whole call. It exists so a profile can restyle every tool row without knowing a single tool: the render site dispatches the per-tool view first and hands the resulting element to the frame's occupant as `body`, alongside the already-rendered subcall branch as `children`. An unoccupied frame renders exactly the row this package shipped before the seat existed, so the seat costs nothing until somebody takes it.
+
+```ts ignore-check
+ctx.slots.inject('tool.call.frame', () =>
+  ctx.slots.register({ name: 'tool.call.frame' }, ProfileToolCard))
+```
+
+The owner payload is `ToolCallFrameOwnerProps`: the `ToolCallOwnerProps` fields plus `selected`, the engine-owned `turn` (null when the Node's placement is unresolved), an `openDetails` gesture that names this call to the details column, `body`, `hasSubcalls`, and `children`.
+
+Occupying the frame rather than shadowing the `tool-call` Chat Node entry is the point of the seat. Shadowing that entry also shadows its `children` declaration, and a child slot admits exactly one declarer, so the shadowing entry could never re-declare `tool.call.toolview` — every registered per-tool view would stop rendering. The frame keeps that dispatch here.
+
+The occupant owns no identity: `data-chat-anchor-key`, `data-chat-call-id`, `data-selected`, and the `data-subcalls` nesting stay on this package's wrapper, outside whatever the occupant renders, so scroll anchoring and details-column highlighting keep working whoever fills the seat.
+
 ## Model Experience
 
 None, as this package renders already logged Tool calls and results without altering model requests, Tool execution, or session events.
@@ -47,3 +62,4 @@ None. The package is client-only presentation.
 - The Host excludes `run_code` from Code Mode program bindings, so production events produce one dispatch level; the recursive Runtime/UI contract supports nesting.
 - First-party Tool views are colocated here and can move to their owning business packages independently through the keyed slot.
 - Tool copy reuses the `ui-conversation` locale namespace.
+- A frame occupant supplies its own copy through its own locale namespace, and receives no `t` from this package; the shipped fallback row keeps using the conversation namespace.

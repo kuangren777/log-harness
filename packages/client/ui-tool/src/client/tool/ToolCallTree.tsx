@@ -1,7 +1,8 @@
 /** Root/subcall Tool composition with one keyed atomic dispatch path. */
 import { memo, useMemo, type ReactNode } from 'react'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
-import type { ToolCallOwnerProps, ToolTreeProps } from '../contract/slots.ts'
+import type { SelectionTarget } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ToolCallFrameOwnerProps, ToolCallOwnerProps, ToolTreeProps } from '../contract/slots.ts'
 import { GenericToolCard } from './toolviews/GenericToolCard.tsx'
 import css from './ToolCallTree.module.css'
 
@@ -10,10 +11,45 @@ function callName(node: ToolCallBlock): string {
   return 'kind' in node ? node.call?.name ?? '' : node.name
 }
 
+/**
+ * The engine-owned turn a Tool Chat Node sits in.
+ * @param location - the Node's placement.
+ * @returns the turn number, or null when the placement is unresolved.
+ */
+export function frameTurn(location: ToolTreeProps['node']['location']): number | null {
+  return location.kind === 'turn' || location.kind === 'step' ? location.turn.turn : null
+}
+
+/**
+ * The details-column selection one call's frame gesture names.
+ *
+ * The seqs are the Node's engine-owned boundary events, not its anchor: the
+ * details column addresses a call inside a turn and a step, and those two
+ * events are what identify them. A window cut that left a boundary outside
+ * falls back to the anchor, which is always in-window.
+ * @param node - the Tool Chat Node the call belongs to.
+ * @param callId - the call the gesture addresses.
+ * @param toolName - that call's wire name, for the panel's title.
+ * @returns the selection target.
+ */
+export function frameSelection(
+  node: ToolTreeProps['node'],
+  callId: string,
+  toolName: string,
+): SelectionTarget {
+  const location = node.location
+  const inTurn = location.kind === 'turn' || location.kind === 'step'
+  const turnSeq = inTurn ? location.turn.start?.seq ?? node.anchorSeq : node.anchorSeq
+  const stepSeq = location.kind === 'step' ? location.step.start?.seq : undefined
+  return stepSeq === undefined
+    ? { turnSeq, callId, toolName }
+    : { turnSeq, stepSeq, callId, toolName }
+}
+
 /** One atomic call dispatched through the Tool-owned keyed slot. */
 const ToolCall = memo(function ToolCall({
-  renderSlot, callId, toolName, block, openFile, selected, cwd, home, inspectCall, t, children,
-}: Pick<ToolTreeProps, 'renderSlot' | 'openFile' | 'cwd' | 'inspectCall' | 't'> & {
+  renderSlot, callId, toolName, block, openFile, selected, cwd, home, inspectCall, openDetails, node, t, children,
+}: Pick<ToolTreeProps, 'renderSlot' | 'openFile' | 'cwd' | 'inspectCall' | 'openDetails' | 'node' | 't'> & {
   callId: string
   toolName: string
   block: ToolCallBlock
@@ -30,6 +66,22 @@ const ToolCall = memo(function ToolCall({
     home,
     inspect: () => { inspectCall(callId) },
   }), [callId, toolName, block, openFile, cwd, home, inspectCall])
+  // The per-tool dispatch happens here whether or not a frame is occupied:
+  // the frame receives the resulting element, so occupying the frame restyles
+  // every call without displacing a single tool's own view.
+  const body = renderSlot('tool.call.toolview', owner, {
+    entryKey: toolName,
+    fallback: <GenericToolCard {...owner} t={t} />,
+  })
+  const frameOwner: ToolCallFrameOwnerProps = {
+    ...owner,
+    selected,
+    turn: frameTurn(node.location),
+    openDetails: () => { openDetails(frameSelection(node, callId, toolName)) },
+    body,
+    hasSubcalls: block.subCalls.length > 0,
+    children,
+  }
   return (
     <div
       className={css.callRow}
@@ -37,18 +89,19 @@ const ToolCall = memo(function ToolCall({
       data-chat-call-id={callId}
       data-selected={selected || undefined}
     >
-      {renderSlot('tool.call.toolview', owner, {
-        entryKey: toolName,
-        fallback: <GenericToolCard {...owner} t={t} />,
+      {renderSlot('tool.call.frame', frameOwner, {
+        fallback: <>{body}{children}</>,
       })}
-      {children}
     </div>
   )
 })
 
 const ToolCallBranch = memo(function ToolCallBranch({
-  renderSlot, block, selectedCallId, cwd, home, openFile, inspectCall, t,
-}: Pick<ToolTreeProps, 'renderSlot' | 'selectedCallId' | 'cwd' | 'openFile' | 'inspectCall' | 't'> & {
+  renderSlot, block, selectedCallId, cwd, home, openFile, inspectCall, openDetails, node, t,
+}: Pick<
+  ToolTreeProps,
+  'renderSlot' | 'selectedCallId' | 'cwd' | 'openFile' | 'inspectCall' | 'openDetails' | 'node' | 't'
+> & {
   block: ToolCallBlock
   home?: string | undefined
 }) {
@@ -63,6 +116,8 @@ const ToolCallBranch = memo(function ToolCallBranch({
       cwd={cwd}
       home={home}
       inspectCall={inspectCall}
+      openDetails={openDetails}
+      node={node}
       t={t}
     >
       {block.subCalls.length > 0 ? (
@@ -77,11 +132,13 @@ const ToolCallBranch = memo(function ToolCallBranch({
               home={home}
               openFile={openFile}
               inspectCall={inspectCall}
+              openDetails={openDetails}
+              node={node}
               t={t}
             />
           ))}
         </div>
-      ) : null}
+      ) : undefined}
     </ToolCall>
   )
 })
@@ -93,7 +150,7 @@ const ToolCallBranch = memo(function ToolCallBranch({
  * @returns the Tool call tree.
  */
 export function ToolCallTree({
-  renderSlot, node, selectedCallId, cwd, openFile, inspectCall, useHostDescription, t,
+  renderSlot, node, selectedCallId, cwd, openFile, inspectCall, openDetails, useHostDescription, t,
 }: ToolTreeProps) {
   const home = useHostDescription(description => description?.home)
   const block = node.data.root
@@ -106,6 +163,8 @@ export function ToolCallTree({
       home={home}
       openFile={openFile}
       inspectCall={inspectCall}
+      openDetails={openDetails}
+      node={node}
       t={t}
     />
   )
