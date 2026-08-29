@@ -16,6 +16,21 @@ const HOLES = [
   'conversation.hero.brand.mark',
 ] as const
 
+/** Workbench surface tokens the sci shell packages read by name. */
+const WORKBENCH_TOKENS = [
+  '--dsw-sci-accent-a',
+  '--dsw-sci-accent-b',
+  '--dsw-sci-glass-bg',
+  '--dsw-sci-glass-border',
+  '--dsw-sci-card-bg',
+  '--dsw-sci-chip-bg',
+  '--dsw-sci-hover-bg',
+  '--dsw-sci-user-bubble-bg',
+  '--dsw-sci-aurora-opacity',
+  '--dsw-sci-radius-card',
+  '--dsw-sci-radius-pill',
+] as const
+
 /** Minimal stand-in for the theme runtime: records layers and their disposers. */
 function fakeTheme() {
   const layers = new Map<string, Record<string, { light: string; dark: string }>>()
@@ -79,6 +94,20 @@ describe('CaMeL Science browser-brand plugin', () => {
     expect(subject.theme.layers.has(TOKEN_SOURCE)).toBe(true)
     await fiber.dispose()
     expect(subject.theme.layers.has(TOKEN_SOURCE)).toBe(false)
+  })
+
+  it('ships the workbench surface tokens in the stacked layer', async () => {
+    const subject = await bench()
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const layer = subject.theme.layers.get(TOKEN_SOURCE)!
+    expect(layer['--dsw-sci-accent-a']).toEqual({ light: '#0a68ff', dark: '#0a68ff' })
+    for (const name of WORKBENCH_TOKENS) {
+      const value = layer[name]
+      expect(value?.light.length).toBeGreaterThan(0)
+      expect(value?.dark.length).toBeGreaterThan(0)
+    }
+    await fiber.dispose()
   })
 
   it('supplies both palette modes for every overridden token', () => {

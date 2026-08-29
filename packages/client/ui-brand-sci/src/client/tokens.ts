@@ -106,4 +106,17 @@ export const SCI_TOKENS: ThemeTokenOverrides = Object.freeze({
   '--dsw-specific-login-input': pair('#f5f5f7', '#1c1c1e'),
   '--dsw-specific-selector': pair('#f5f5f7', '#1c1c1e'),
   '--dsw-specific-tip': pair('#f5f5f7', '#2c2c2e'),
+  // Workbench surfaces: the sci shell's glass, cards, chips, and accents.
+  // Scheme-invariant values repeat so the layer stays legible either way.
+  '--dsw-sci-accent-a': pair('#0a68ff', '#0a68ff'),
+  '--dsw-sci-accent-b': pair('#7a3cff', '#7a3cff'),
+  '--dsw-sci-glass-bg': pair('rgba(251, 251, 253, 0.85)', 'rgba(16, 16, 24, 0.75)'),
+  '--dsw-sci-glass-border': pair('rgba(0, 0, 0, 0.12)', 'rgba(255, 255, 255, 0.14)'),
+  '--dsw-sci-card-bg': pair('#ffffff', 'rgba(255, 255, 255, 0.03)'),
+  '--dsw-sci-chip-bg': pair('rgba(0, 0, 0, 0.04)', 'rgba(255, 255, 255, 0.04)'),
+  '--dsw-sci-hover-bg': pair('rgba(0, 0, 0, 0.06)', 'rgba(255, 255, 255, 0.08)'),
+  '--dsw-sci-user-bubble-bg': pair('#ffffff', 'rgba(255, 255, 255, 0.06)'),
+  '--dsw-sci-aurora-opacity': pair('0.12', '0.3'),
+  '--dsw-sci-radius-card': pair('16px', '16px'),
+  '--dsw-sci-radius-pill': pair('980px', '980px'),
 })

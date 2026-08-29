@@ -14,6 +14,7 @@ import { SciBrandMark, SciBrandName } from './Brand.tsx'
 import { SCI_TOKENS, TOKEN_SOURCE } from './tokens.ts'
 
 export { BRAND_NAME, SciBrandMark, SciBrandName } from './Brand.tsx'
+export { SciLogo } from './SciLogo.tsx'
 export { SCI_TOKENS, TOKEN_SOURCE } from './tokens.ts'
 
 /** Required services: the UI slot registry and the theme runtime. */

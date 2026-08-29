@@ -26,4 +26,12 @@ body {
     --ds-transition-duration-fast: 0.01ms;
     --ds-transition-duration-slow: 0.01ms;
   }
+
+  /* Decorative sci motion opts in with [data-sci-motion]; the rule stays
+   * scoped to those subtrees so no unrelated animation is disarmed. */
+  [data-sci-motion],
+  [data-sci-motion] * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
