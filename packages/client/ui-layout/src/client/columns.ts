@@ -37,6 +37,13 @@ export const DETAILS_MIN = 300
 export const DETAILS_MAX = 520
 /** Details width before any user drag. */
 export const DETAILS_DEFAULT = 360
+/**
+ * Share of the frame's inner width the details column takes in the wide mode
+ * (AppFrame, with DETAILS_MAX as the floor so a small frame still gets a
+ * usable column). Outside the concession chain on purpose: the wide mode is a
+ * deliberate full-bleed reading state, not a solved width.
+ */
+export const DETAILS_WIDE_RATIO = 0.72
 
 /**
  * Clamp a panel width into its contract range.

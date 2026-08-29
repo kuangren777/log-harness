@@ -1,7 +1,7 @@
 /**
  * Layout plugin, browser half: one register() call contributes AppFrame into
  * the runtime's built-in 'root' slot and, in the same breath, declares the
- * four child slots (declaration = exclusive render authority), seats the
+ * six child slots (declaration = exclusive render authority), seats the
  * layout store (panel geometry), and wires the panel-action service face.
  * ctx.layout is the cross-plugin panel-action contract; navigation state lives
  * with the runtime sessions service. A second effect seats the theme
@@ -22,6 +22,9 @@ import { ThemePresenter } from './theme-presenter.ts'
 // against; the frame components and the store factory are package-internal.
 export { LayoutController } from './service.ts'
 export type { DetailsModeSelector, ILayout } from './service.ts'
+// The view-id vocabulary: registrants compare the frame's current view and
+// route their rail buttons against this constant rather than a bare literal.
+export { CONVERSATION_VIEW } from './stores.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -81,6 +84,28 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * `id` is added beside the shipped entries instead of replacing them.
      */
     'shell.overlay': { kind: 'list'; scope: 'root' }
+    /**
+     * The leftmost icon rail, a full-height column OUTSIDE the sidebar and
+     * left of it. Unoccupied it costs nothing: the track is `auto`, so an
+     * empty rail measures zero and the three columns keep the whole frame.
+     *
+     * The occupant owns the whole column, including whatever inner seats it
+     * chooses to declare; registering here replaces it outright. It receives
+     * the frame's view state so it can render the active view's button as
+     * pressed and switch views without reaching for `ctx.layout`.
+     */
+    'rail': { kind: 'single'; scope: 'root'; owner: RailOwnerProps }
+    /**
+     * Full-bleed top-level views, keyed by view id. The entry whose key
+     * matches the frame's current view takes the center track while the
+     * sidebar and details tracks collapse to zero; the reserved id
+     * `CONVERSATION_VIEW` belongs to the three-column layout and has no entry
+     * here. Registering a fresh key ADDS a view beside the shipped ones.
+     *
+     * No owner props: a view owns its whole surface and reads session facts
+     * through the framework hooks of the `root` scope like any other entry.
+     */
+    'view': { kind: 'keyed'; scope: 'root'; owner: ViewOwnerProps }
   }
 }
 
@@ -104,6 +129,21 @@ export interface ConvOwnerProps {}
 /** Details owner share: empty — sessionId arrives as a framework-standard prop. */
 export interface DetailsOwnerProps {}
 
+/**
+ * Rail owner share: the frame's top-level view state, handed to the rail (and
+ * onward to whatever seats it declares) so the column renders its active
+ * button and switches views without a service round trip.
+ */
+export interface RailOwnerProps {
+  /** The frame's current view id (`CONVERSATION_VIEW` for the three columns). */
+  view: string
+  /** Switch the frame to view `id` (same write as `ctx.layout.showView`). */
+  showView: (id: string) => void
+}
+
+/** View owner share: empty — a keyed view owns its whole surface. */
+export interface ViewOwnerProps {}
+
 /** Required services (cordis fiber inject — the loader passes all module exports as an object plugin). */
 export const inject = ['slots', 'theme']
 
@@ -124,6 +164,8 @@ export function apply(ctx: ClientContext): void {
         'conversation': { kind: 'single', scope: 'session-maybe' },
         'details': { kind: 'single', scope: 'session' },
         'shell.overlay': { kind: 'list', scope: 'root' },
+        'rail': { kind: 'single', scope: 'root' },
+        'view': { kind: 'keyed', scope: 'root' },
       },
       // Exclusive store: the factory itself — the framework instantiates per
       // entry and delivers useStore/actions to AppFrame as standard props.

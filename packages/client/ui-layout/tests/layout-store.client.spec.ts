@@ -6,7 +6,7 @@
  * real engine instance (same create path as production).
  */
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
+import { CONVERSATION_VIEW, createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
 import {
   DETAILS_DEFAULT, DETAILS_MAX, DETAILS_MIN,
   SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN,
@@ -19,7 +19,10 @@ beforeEach(() => { localStorage.clear() })
 describe('createLayoutStore', () => {
   it('initializes the sidebar at its default width, details closed, wide viewport assumed', () => {
     const { store } = createLayoutStore().create()
-    expect(store.getSnapshot()).toEqual({ sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false })
+    expect(store.getSnapshot()).toEqual({
+      sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false,
+      view: CONVERSATION_VIEW, detailsWide: false,
+    })
   })
 
   it('each create() is an independent instance (factory is not a singleton)', () => {
@@ -55,7 +58,10 @@ describe('createLayoutStore', () => {
     actions.setSidebar(400)
     actions.setNarrow(true)
     actions.toggleSidebar()
-    expect(store.getSnapshot()).toEqual({ sidebar: 400, details: 0, narrow: true, narrowExpanded: true })
+    expect(store.getSnapshot()).toEqual({
+      sidebar: 400, details: 0, narrow: true, narrowExpanded: true,
+      view: CONVERSATION_VIEW, detailsWide: false,
+    })
     actions.toggleSidebar()
     expect(store.getSnapshot().narrowExpanded).toBe(false)
     expect(store.getSnapshot().sidebar).toBe(400)
@@ -85,6 +91,33 @@ describe('createLayoutStore', () => {
     expect(store.getSnapshot().details).toBe(0)
   })
 
+  it('starts on the conversation view and switches views', () => {
+    const { store, actions } = createLayoutStore().create()
+    expect(store.getSnapshot().view).toBe(CONVERSATION_VIEW)
+    actions.showView('library')
+    expect(store.getSnapshot().view).toBe('library')
+    actions.showView(CONVERSATION_VIEW)
+    expect(store.getSnapshot().view).toBe(CONVERSATION_VIEW)
+  })
+
+  it('toggles the wide details mode and closeDetails resets it', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.openDetails()
+    actions.toggleDetailsWide()
+    expect(store.getSnapshot()).toMatchObject({ details: DETAILS_DEFAULT, detailsWide: true })
+    actions.toggleDetailsWide()
+    expect(store.getSnapshot().detailsWide).toBe(false)
+    actions.toggleDetailsWide()
+    actions.closeDetails()
+    expect(store.getSnapshot()).toMatchObject({ details: 0, detailsWide: false })
+  })
+
+  it('toggleDetailsWide opens a closed details column', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.toggleDetailsWide()
+    expect(store.getSnapshot()).toMatchObject({ details: DETAILS_DEFAULT, detailsWide: true })
+  })
+
   it('does not persist panel geometry', () => {
     const first = createLayoutStore().create()
     first.actions.setSidebar(400)
@@ -98,6 +131,8 @@ describe('createLayoutStore', () => {
       details: 0,
       narrow: false,
       narrowExpanded: false,
+      view: CONVERSATION_VIEW,
+      detailsWide: false,
     })
   })
 })

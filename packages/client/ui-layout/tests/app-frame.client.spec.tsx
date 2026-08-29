@@ -8,15 +8,17 @@
  * concession response to viewport change, and details staying mounted at
  * zero width are the preserved behavior assertions. jsdom has no layout
  * engine, so the frame width comes from a mocked getBoundingClientRect and
- * resizes are driven through the ResizeObserver stub.
+ * resizes are driven through the ResizeObserver stub; the same mock answers
+ * the rail column (matched by its CSS-module class) with `railWidth`, which
+ * is how a rail occupant's measured width enters the column math.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { AppFrame } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
 import type { AppFrameProps } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
-import { SIDEBAR_COLLAPSED } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
-import { createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
+import { DETAILS_MAX, DETAILS_WIDE_RATIO, SIDEBAR_COLLAPSED } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
+import { CONVERSATION_VIEW, createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
 import type {
   SessionId, SessionListState, WorkspaceListState,
 } from '@deepseek-ai/dsh-client-runtime/client'
@@ -46,6 +48,9 @@ class ResizeObserverStub {
 }
 
 let frameWidth = 1920
+// Rendered width of the rail column; 0 models the unoccupied rail (the `auto`
+// track measures nothing) and any other value models a rail occupant.
+let railWidth = 0
 
 /** Test-local selector hook over a framework-neutral store instance. */
 function hookOf<T>(inst: { subscribe: (fn: () => void) => () => void; getSnapshot: () => T }) {
@@ -55,13 +60,15 @@ function hookOf<T>(inst: { subscribe: (fn: () => void) => () => void; getSnapsho
 function mountFrame() {
   window.innerWidth = frameWidth // first-render viewport source before the observer fires
   const instance = createLayoutStore().create()
-  const slotCalls: { key: string; props: unknown }[] = []
-  const renderSlot = ((key: string, owner: object) => {
-    slotCalls.push({ key, props: owner })
+  const slotCalls: { key: string; props: unknown; opts?: unknown }[] = []
+  const renderSlot = ((key: string, owner: object, opts?: unknown) => {
+    slotCalls.push({ key, props: owner, opts })
     if (key === 'sidebar') return <div data-testid="sidebar-content" />
     if (key === 'conversation') return <div data-testid="center-content" />
     if (key === 'details') return <div data-testid="details-content" />
     if (key === 'conversation.empty') return <div data-testid="empty-content" />
+    if (key === 'rail') return <div data-testid="rail-content" />
+    if (key === 'view') return <div data-testid="view-content" />
     return <div data-testid="other-content" />
   }) as AppFrameProps['renderSlot']
   const useSessions = ((sel: (s: SessionListState) => unknown) => {
@@ -95,8 +102,9 @@ function mountFrame() {
   return { instance, frame, slotCalls, rerenderFrame: () => { utils.rerender(element()) }, ...utils }
 }
 
+/** Sidebar and details track widths of the four-track template (rail | sidebar | center | details). */
 function tracks(frame: HTMLElement): number[] {
-  const m = /^(\d+)px minmax\(0, 1fr\) (\d+)px$/.exec(frame.style.gridTemplateColumns)
+  const m = /^auto (\d+)px minmax\(0, 1fr\) (\d+)px$/.exec(frame.style.gridTemplateColumns)
   if (m === null) throw new Error(`unexpected template: ${frame.style.gridTemplateColumns}`)
   return [Number(m[1]), Number(m[2])]
 }
@@ -112,6 +120,7 @@ function drag(handle: Element, fromX: number, toX: number): void {
 
 beforeEach(() => {
   frameWidth = 1920
+  railWidth = 0
   selectedSession.current = 's-test' as SessionId
   selectedSessionBlank.current = false
   baselinesReady.current = true
@@ -121,7 +130,9 @@ beforeEach(() => {
   vi.stubGlobal('cancelAnimationFrame', (h: number) => { clearTimeout(h) })
   window.innerWidth = frameWidth
   Element.prototype.getBoundingClientRect = function () {
-    return { width: frameWidth, height: 1080, top: 0, left: 0, right: frameWidth, bottom: 1080, x: 0, y: 0, toJSON: () => ({}) }
+    // The rail column answers its own width; everything else is the frame box.
+    const width = this.className.includes('railCol') ? railWidth : frameWidth
+    return { width, height: 1080, top: 0, left: 0, right: width, bottom: 1080, x: 0, y: 0, toJSON: () => ({}) }
   }
   // jsdom lacks pointer capture: emulate per-element so hasPointerCapture gates pass.
   const captured = new WeakSet<Element>()
@@ -281,6 +292,156 @@ describe('AppFrame', () => {
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(1)
     act(() => { instance.actions.toggleSidebar() })
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
+  })
+})
+
+describe('AppFrame — rail track', () => {
+  it('renders the rail slot in the first grid track with the frame view state', () => {
+    const { frame, slotCalls, getByTestId } = mountFrame()
+    expect(frame.style.gridTemplateColumns.startsWith('auto ')).toBe(true)
+    expect(getByTestId('rail-content')).toBeTruthy()
+    const railCall = slotCalls.find(c => c.key === 'rail')!.props as { view: string; showView: unknown }
+    expect(railCall.view).toBe(CONVERSATION_VIEW)
+    expect(typeof railCall.showView).toBe('function')
+    expect(frame.dataset['view']).toBe(CONVERSATION_VIEW)
+  })
+
+  it('rail owner props switch the frame view', () => {
+    const { frame, slotCalls } = mountFrame()
+    const { showView } = slotCalls.find(c => c.key === 'rail')!.props as { showView: (id: string) => void }
+    act(() => { showView('library') })
+    expect(frame.dataset['view']).toBe('library')
+  })
+
+  it('offsets the drag handles by the measured rail width', () => {
+    railWidth = 66
+    const { frame, instance } = mountFrame()
+    act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    act(() => { instance.actions.openDetails() })
+    const handles = frame.querySelectorAll<HTMLElement>('[class*="handle"]')
+    expect(handles[0]!.style.left).toBe('346px') // rail 66 + sidebar 280
+    expect(handles[1]!.style.left).toBe('1560px') // rail 66 + inner 1854 - details 360
+  })
+
+  it('subtracts the rail width from the viewport before the concession solve', () => {
+    frameWidth = 1250
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.openDetails() })
+    expect(tracks(frame)).toEqual([280, 330]) // no rail: details shrinks to fit
+    railWidth = 66
+    act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    // 1184px of inner width no longer holds a 300px details column beside the
+    // center floor, so the chain auto-closes it.
+    expect(tracks(frame)).toEqual([280, 0])
+  })
+})
+
+describe('AppFrame — keyed views', () => {
+  it('shows a keyed view over the three columns, which keep rendering', () => {
+    const { frame, instance, slotCalls, getByTestId } = mountFrame()
+    const before = slotCalls.length
+    act(() => { instance.actions.showView('library') })
+    const after = slotCalls.slice(before)
+    expect(after).toContainEqual({ key: 'view', props: {}, opts: { entryKey: 'library' } })
+    // The three occupants are parked, not unmounted: they keep receiving
+    // render calls so nothing they hold in the DOM is torn down.
+    expect(after.map(c => c.key)).toContain('conversation')
+    expect(after.map(c => c.key)).toContain('details')
+    expect(after.map(c => c.key)).toContain('sidebar')
+    expect(getByTestId('view-content')).toBeTruthy()
+    expect(getByTestId('center-content')).toBeTruthy()
+    expect(getByTestId('rail-content')).toBeTruthy() // the rail spans every view
+    expect(frame.dataset['view']).toBe('library')
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
+  })
+
+  it('parks the three columns out of sight, out of the a11y tree, and out of focus', () => {
+    const { frame, instance } = mountFrame()
+    const columns = () => ['sidebarCol', 'centerCol', 'detailsCol']
+      .map(name => frame.querySelector<HTMLElement>(`[class*="${name}"]`)!)
+    expect(columns().every(el => el.hasAttribute('data-view-hidden'))).toBe(false)
+
+    act(() => { instance.actions.showView('library') })
+    for (const el of columns()) {
+      expect(el.hasAttribute('data-view-hidden')).toBe(true)
+      expect(el.getAttribute('aria-hidden')).toBe('true')
+      expect(el.hasAttribute('inert')).toBe(true)
+    }
+    // The keyed view itself is a live cell, never parked.
+    const viewCell = frame.querySelector<HTMLElement>('[class*="viewCol"]')!
+    expect(viewCell.hasAttribute('data-view-hidden')).toBe(false)
+
+    act(() => { instance.actions.showView(CONVERSATION_VIEW) })
+    for (const el of columns()) {
+      expect(el.hasAttribute('data-view-hidden')).toBe(false)
+      expect(el.hasAttribute('aria-hidden')).toBe(false)
+      expect(el.hasAttribute('inert')).toBe(false)
+    }
+    expect(frame.querySelector('[class*="viewCol"]')).toBeNull()
+  })
+
+  it('a view round trip preserves the conversation DOM (drafts survive)', () => {
+    const { instance, getByTestId } = mountFrame()
+    const composer = getByTestId('center-content')
+    // Stand-in for any DOM-held state the occupant owns (an input value, a
+    // scroll offset): a remount would produce a fresh node without it.
+    composer.dataset['draft'] = '未发送的草稿'
+
+    act(() => { instance.actions.showView('library') })
+    expect(getByTestId('center-content')).toBe(composer)
+    act(() => { instance.actions.showView(CONVERSATION_VIEW) })
+
+    const afterTrip = getByTestId('center-content')
+    expect(afterTrip).toBe(composer)
+    expect(afterTrip.dataset['draft']).toBe('未发送的草稿')
+  })
+
+  it('returning to the conversation view restores the three columns', () => {
+    const { frame, instance, getByTestId } = mountFrame()
+    act(() => { instance.actions.showView('library') })
+    act(() => { instance.actions.showView(CONVERSATION_VIEW) })
+    expect(getByTestId('center-content')).toBeTruthy()
+    expect(tracks(frame)).toEqual([280, 0])
+    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(1)
+  })
+})
+
+describe('AppFrame — wide details mode', () => {
+  it('takes the full-bleed width, hides the sidebar, and drops the handles', () => {
+    const { frame, instance, getByTestId } = mountFrame()
+    act(() => { instance.actions.toggleDetailsWide() })
+    expect(tracks(frame)).toEqual([0, Math.round(1920 * DETAILS_WIDE_RATIO)])
+    expect(frame.hasAttribute('data-details-wide')).toBe(true)
+    expect(frame.hasAttribute('data-details-collapsed')).toBe(false)
+    expect(getByTestId('details-content')).toBeTruthy()
+    // Both rendered widths are mode-decided, so neither is draggable.
+    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
+  })
+
+  it('never goes below the ordinary details ceiling on a small frame', () => {
+    frameWidth = 700
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.toggleDetailsWide() })
+    expect(Math.round(700 * DETAILS_WIDE_RATIO)).toBeLessThan(DETAILS_MAX)
+    expect(tracks(frame)).toEqual([0, DETAILS_MAX])
+  })
+
+  it('closeDetails leaves the wide mode with the column', () => {
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.toggleDetailsWide() })
+    act(() => { instance.actions.closeDetails() })
+    expect(frame.hasAttribute('data-details-wide')).toBe(false)
+    expect(tracks(frame)).toEqual([280, 0])
+    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(1)
+  })
+
+  it('stays ordinary while no Session can own the column', () => {
+    selectedSession.current = undefined
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.toggleDetailsWide() })
+    expect(tracks(frame)).toEqual([280, 0])
+    expect(frame.hasAttribute('data-details-wide')).toBe(false)
   })
 })
 

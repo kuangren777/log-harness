@@ -17,6 +17,8 @@ function fakePanels(): PanelActions {
     setNarrow: vi.fn(),
     openDetails: vi.fn(),
     closeDetails: vi.fn(),
+    showView: vi.fn(),
+    toggleDetailsWide: vi.fn(),
   }
 }
 
@@ -43,6 +45,8 @@ describe('LayoutController', () => {
     expect(() => { service.openDetails() }).toThrow(/panel actions not wired/)
     expect(() => { service.closeDetails() }).toThrow(/panel actions not wired/)
     expect(() => { service.showDetailsMode('files') }).toThrow(/panel actions not wired/)
+    expect(() => { service.showView('library') }).toThrow(/panel actions not wired/)
+    expect(() => { service.toggleDetailsWide() }).toThrow(/panel actions not wired/)
   })
 
   it('showDetailsMode opens the column alone while no plugin registered a selector', () => {
@@ -93,6 +97,18 @@ describe('LayoutController', () => {
     service.showDetailsMode('files')
     expect(stale).not.toHaveBeenCalled()
     expect(fresh).toHaveBeenCalledTimes(2)
+  })
+
+  it('forwards the view switch and the wide-details toggle to the attached set', () => {
+    const service = new LayoutController()
+    const panels = fakePanels()
+    service.attachPanels(panels)
+
+    service.showView('library')
+    service.toggleDetailsWide()
+
+    expect(panels.showView).toHaveBeenCalledWith('library')
+    expect(panels.toggleDetailsWide).toHaveBeenCalledTimes(1)
   })
 
   it('re-attach overwrites the stale action set (entry re-register)', () => {

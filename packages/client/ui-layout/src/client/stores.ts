@@ -19,8 +19,26 @@ import {
  * (viewport < SIDEBAR_AUTO_COLLAPSE) so toggleSidebar can pick semantics, and
  * `narrowExpanded` is the manual override that re-expands the auto-collapsed
  * sidebar over the squeezed center without rewriting the width preference.
+ * `view` names the frame's top-level view (CONVERSATION_VIEW = the three
+ * columns; any other id routes the center track to a `view` slot entry), and
+ * `detailsWide` is the full-bleed details mode, which overrides the solved
+ * details width and hides the sidebar track.
  */
-type LayoutState = { sidebar: number; details: number; narrow: boolean; narrowExpanded: boolean }
+type LayoutState = {
+  sidebar: number
+  details: number
+  narrow: boolean
+  narrowExpanded: boolean
+  view: string
+  detailsWide: boolean
+}
+
+/**
+ * The frame's default top-level view id: the three-column conversation
+ * layout. Every other id routes the center track to a `view` slot entry, so
+ * consumers compare against this constant instead of a bare string literal.
+ */
+export const CONVERSATION_VIEW = 'conversation'
 
 /**
  * Annotation twin of the actions literal below (the export needs a declared
@@ -33,6 +51,8 @@ type LayoutActions = {
   setNarrow: (draft: LayoutState, narrow: boolean) => void
   openDetails: (draft: LayoutState) => void
   closeDetails: (draft: LayoutState) => void
+  showView: (draft: LayoutState, id: string) => void
+  toggleDetailsWide: (draft: LayoutState) => void
 }
 
 /**
@@ -47,7 +67,10 @@ type LayoutActions = {
  */
 export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutActions>  {
   const handle = defineStore({
-    init: (): LayoutState => ({ sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false }),
+    init: (): LayoutState => ({
+      sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false,
+      view: CONVERSATION_VIEW, detailsWide: false,
+    }),
     actions: {
       setSidebar: (d, px: number) => { d.sidebar = clampWidth(px, SIDEBAR_MIN, SIDEBAR_MAX) },
       setDetails: (d, px: number) => { d.details = clampWidth(px, DETAILS_MIN, DETAILS_MAX) },
@@ -65,7 +88,16 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
         d.narrowExpanded = false
       },
       openDetails: (d) => { if (d.details === 0) d.details = DETAILS_DEFAULT },
-      closeDetails: (d) => { d.details = 0 },
+      // Closing drops the wide mode with the column: reopening starts from the
+      // ordinary width, never from a stale full-bleed state.
+      closeDetails: (d) => { d.details = 0; d.detailsWide = false },
+      showView: (d, id: string) => { d.view = id },
+      // The wide mode is a way of showing the details column, so asking for it
+      // while closed implies opening it at the contract default first.
+      toggleDetailsWide: (d) => {
+        d.detailsWide = !d.detailsWide
+        if (d.details === 0) d.details = DETAILS_DEFAULT
+      },
     },
   })
   return handle

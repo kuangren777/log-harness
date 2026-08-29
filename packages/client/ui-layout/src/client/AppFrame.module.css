@@ -22,6 +22,13 @@
   }
 }
 
+/* Leading `auto` track: an unoccupied rail measures zero and costs no space. */
+.railCol {
+  grid-row: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .sidebarCol {
   min-width: 0;
   overflow: hidden;
@@ -40,6 +47,25 @@
   min-width: 0;
   overflow: hidden;
   border-left: 1px solid var(--dsw-alias-border-l2);
+}
+
+/* A keyed view spans every track right of the rail and stacks over the parked
+   conversation columns (same grid row, later in DOM order). */
+.viewCol {
+  grid-row: 1;
+  grid-column: 2 / span 3;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Parked behind a keyed view: still mounted and still rendering (that is what
+   preserves its occupant's state), but invisible. visibility — not display —
+   because a display:none subtree loses scroll positions and measured boxes,
+   which is exactly what parking exists to keep. */
+.frame [data-view-hidden] {
+  visibility: hidden;
 }
 
 /* The details subtree stays mounted at zero width, so its border must not paint

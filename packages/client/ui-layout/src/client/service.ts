@@ -40,6 +40,21 @@ export interface ILayout {
   /** Close the details panel. */
   closeDetails(): void
   /**
+   * Switch the frame's top-level view. `'conversation'` (the frame's
+   * CONVERSATION_VIEW default) restores the three-column layout; any other id
+   * routes the center track to the `view` slot entry registered under it, and
+   * an id naming no entry renders the empty center track.
+   * @param id - the `view` slot entry key to show.
+   */
+  showView(id: string): void
+  /**
+   * Toggle the wide details mode: the details column takes the full-bleed
+   * width and the sidebar track collapses to zero. Opens the column at the
+   * contract default when it is closed; {@link ILayout.closeDetails} resets
+   * the mode with the column.
+   */
+  toggleDetailsWide(): void
+  /**
    * Open the details column and select mode `id`; an id naming no live
    * `conversation.details.mode` entry leaves the panel on `tool`. The column
    * opens either way — with no registered selector this is exactly
@@ -89,6 +104,19 @@ export class LayoutController implements ILayout {
   /** Close the details panel. */
   closeDetails(): void {
     this.#require().closeDetails()
+  }
+
+  /**
+   * Switch the frame's top-level view (see the {@link ILayout} contract).
+   * @param id - the `view` slot entry key to show.
+   */
+  showView(id: string): void {
+    this.#require().showView(id)
+  }
+
+  /** Toggle the wide details mode (see the {@link ILayout} contract). */
+  toggleDetailsWide(): void {
+    this.#require().toggleDetailsWide()
   }
 
   /**
