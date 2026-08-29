@@ -145,7 +145,7 @@ describe('ui-sci-shell plugin body', () => {
     const popover = b.slots.entries(OVERLAY as never).find(entry => entry.options.id === 'sci-profile')
     const face = (popover?.inject as unknown as () => ProfilePopoverInjected)()
 
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ email: 'a@b', vms: [] }) }))
+    const fetchMock = vi.fn(async (_input: string, _init?: RequestInit) => ({ ok: true, json: async () => ({ email: 'a@b', vms: [] }) }))
     vi.stubGlobal('fetch', fetchMock)
     await expect(face.fetchMe()).resolves.toMatchObject({ email: 'a@b' })
     await expect(face.fetchBalance()).resolves.toMatchObject({ totalUsd: '' })
