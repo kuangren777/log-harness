@@ -173,6 +173,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     selectedCallId: string | undefined
     openFile: ChatNodeOwnerProps['openFile']
     inspectCall: ChatNodeOwnerProps['inspectCall']
+    openDetails: ChatNodeOwnerProps['openDetails']
   }> = []
   const renderCommandSlot = ((_key: string, _owner: object, opts?: { fallback?: React.ReactNode }) =>
     opts?.fallback ?? null) as unknown as React.ComponentProps<typeof CommandNodeView>['renderSlot']
@@ -243,6 +244,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
           selectedCallId: nodeOwner.selectedCallId,
           openFile: nodeOwner.openFile,
           inspectCall: nodeOwner.inspectCall,
+          openDetails: nodeOwner.openDetails,
         }
         toolOwners.push(tool)
         return (
@@ -607,6 +609,16 @@ describe('ChatView', () => {
     })
     render(<h.ChatView {...h.props} />)
     expect(h.toolOwners[0]?.inspectCall).toBe(h.inspectCall)
+  })
+
+  it('hands the details-opening callback to the Tool seat', () => {
+    const h = makeHarness({
+      nodes: [toolResult(3, 'a')],
+    })
+    render(<h.ChatView {...h.props} />)
+    expect(h.toolOwners[0]?.openDetails).toBe(h.openDetails)
+    h.toolOwners[0]!.openDetails({ turnSeq: 2, callId: 'a' })
+    expect(h.openDetails).toHaveBeenCalledWith({ turnSeq: 2, callId: 'a' })
   })
 
   it('shows assistant IconActions only on the last content message of each turn', () => {

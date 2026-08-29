@@ -435,6 +435,8 @@ export interface ChatNodeOwnerProps {
   cwd?: string | undefined
   openFile: (path: string) => void
   inspectCall: (callId: CallId) => void
+  /** Select one Tool call and open the details column on its `tool` mode. */
+  openDetails: (target: SelectionTarget) => void
   forkAt: (seq: number) => void
   /** Render a historical image group through the attachment slot. */
   renderMessageImages: RenderMessageImages
