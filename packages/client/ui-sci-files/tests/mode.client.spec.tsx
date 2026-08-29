@@ -193,7 +193,7 @@ describe('FilesMode panel header and chips', () => {
     await act(async () => {})
     // An office document is framed by the runtime, never read here.
     expect(b.readFile).not.toHaveBeenCalled()
-    expect((screen.getByText(zh['panel.source']) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText(zh['panel.source']).hasAttribute('disabled')).toBe(true)
   })
 
   it('falls back to the preview when the selection loses its source reading', async () => {
@@ -211,7 +211,7 @@ describe('FilesMode panel header and chips', () => {
     act(() => { b.store.actions.pin('/p/d/plot.png', '/p/deliverables/report.md') })
     await act(async () => {})
     expect(view.container.querySelector('[hidden]')).toBeNull()
-    expect((screen.getByText(zh['panel.source']) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText(zh['panel.source']).hasAttribute('disabled')).toBe(true)
   })
 
   it('saves the shown file, and drives the two panel gestures', async () => {
