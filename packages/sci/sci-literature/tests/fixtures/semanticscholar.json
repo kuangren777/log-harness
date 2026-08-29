@@ -1,0 +1,350 @@
+{
+  "total": 10437,
+  "offset": 0,
+  "next": 5,
+  "data": [
+    {
+      "paperId": "49886cac17cde4bd3ff4e2d137c13b968e7e9688",
+      "externalIds": {
+        "DOI": "10.1002/adma.202506999",
+        "CorpusId": 278884460,
+        "PubMed": "40411850"
+      },
+      "url": "https://www.semanticscholar.org/paper/49886cac17cde4bd3ff4e2d137c13b968e7e9688",
+      "title": "Resonant Levels Induced Seebeck Coefficient Matching Contributes to High Thermoelectric Cooling Efficiency in p‐type SnSe Crystals",
+      "venue": "Advances in Materials",
+      "year": 2025,
+      "citationCount": 24,
+      "openAccessPdf": {
+        "url": "",
+        "status": null,
+        "license": null,
+        "disclaimer": "Notice: Paper or abstract available at https://api.unpaywall.org/v2/10.1002/adma.202506999?email=<INSERT_YOUR_EMAIL> or https://doi.org/10.1002/adma.202506999, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+      },
+      "authors": [
+        {
+          "authorId": "2265244238",
+          "name": "Dongrui Liu"
+        },
+        {
+          "authorId": "2255063002",
+          "name": "Shulin Bai"
+        },
+        {
+          "authorId": "2358195392",
+          "name": "Yu Tian"
+        },
+        {
+          "authorId": "2319166882",
+          "name": "Jiayi Peng"
+        },
+        {
+          "authorId": "2282346878",
+          "name": "Shibo Liu"
+        },
+        {
+          "authorId": "2305567988",
+          "name": "Haonan Shi"
+        },
+        {
+          "authorId": "2336247944",
+          "name": "Huiqiang Liang"
+        },
+        {
+          "authorId": "50625543",
+          "name": "Yongxin Qin"
+        },
+        {
+          "authorId": "51138706",
+          "name": "Lizhong Su"
+        },
+        {
+          "authorId": "2067734026",
+          "name": "Xin Qian"
+        },
+        {
+          "authorId": "51306586",
+          "name": "Bingchao Qin"
+        },
+        {
+          "authorId": "2238910613",
+          "name": "Lidong Zhao"
+        }
+      ],
+      "abstract": "Tin selenide (SnSe) has emerged as a promising thermoelectric cooling candidate, exhibiting room‐temperature performance comparable to that of commercial bismuth telluride (Bi2Te3). However, the Seebeck coefficient of p‐type SnSe crystals remains significantly lower than that of n‐type Bi₂(Te, Se)₃ (BTS), and the resulting mismatches hinder effective utilization of its excellent cooling potential. To address this limitation, resonant levels are introduced in the valence bands of hole‐doped SnSe through indium‐doping, which increased the density of states and thereby boosted the Seebeck coefficient. This strategy enable the power factor to reach ≈55 µWcm−1K−2 and ZT value of ≈1.0 at 300 K, with a more matching Seebeck coefficient of ≈211 µVK−1. Furthermore, a full‐scale thermoelectric cooler incorporating the p‐type SnSe paired with n‐type BTS demonstrated a maximum cooling temperature difference (ΔTmax) of ≈81.1 K at 343 K. A SnSe‐based single‐leg device achieve a conversion efficiency of ≈7.0% under a ΔT of 250 K. These findings highlight that matching thermoelectric parameter of p‐type and n‐type materials is crucial for enhancing the cooling efficiency of devices, and engineering resonant energy levels constitutes a robust strategy for solving the inherent performance limitations of p‐type SnSe in practical thermoelectric applications."
+    },
+    {
+      "paperId": "f7be6c37004e6009ae9b9292c95726a151125466",
+      "externalIds": {
+        "PubMedCentral": "11831502",
+        "DOI": "10.1002/advs.202411594",
+        "CorpusId": 275046018,
+        "PubMed": "39721020"
+      },
+      "url": "https://www.semanticscholar.org/paper/f7be6c37004e6009ae9b9292c95726a151125466",
+      "title": "Optimization of Thermoelectric Performance in p‐Type SnSe Crystals Through Localized Lattice Distortions and Band Convergence",
+      "venue": "Advancement of science",
+      "year": 2024,
+      "citationCount": 31,
+      "openAccessPdf": {
+        "url": "https://onlinelibrary.wiley.com/doi/pdfdirect/10.1002/advs.202411594",
+        "status": "GOLD",
+        "license": "CCBY",
+        "disclaimer": "Notice: Paper or abstract available at https://pmc.ncbi.nlm.nih.gov/articles/PMC11831502, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+      },
+      "authors": [
+        {
+          "authorId": "2149439563",
+          "name": "Suniya Siddique"
+        },
+        {
+          "authorId": "2248291345",
+          "name": "Ghulam Abbas"
+        },
+        {
+          "authorId": "2149431384",
+          "name": "Manzar Mushaf Yaqoob"
+        },
+        {
+          "authorId": "2266031644",
+          "name": "Jian Zhao"
+        },
+        {
+          "authorId": "2315030910",
+          "name": "Ruihua Chen"
+        },
+        {
+          "authorId": "2237419505",
+          "name": "J. Larsson"
+        },
+        {
+          "authorId": "116282599",
+          "name": "Yuede Cao"
+        },
+        {
+          "authorId": "2247769845",
+          "name": "Yue-xing Chen"
+        },
+        {
+          "authorId": "2266032402",
+          "name": "Zhuang-hao Zheng"
+        },
+        {
+          "authorId": "47845046",
+          "name": "Dong-ping Zhang"
+        },
+        {
+          "authorId": "2307963744",
+          "name": "Fu Li"
+        }
+      ],
+      "abstract": "Crystalline thermoelectric materials, especially SnSe crystals, have emerged as promising candidates for power generation and electronic cooling. In this study, significant enhancement in ZT is achieved through the combined effects of lattice distortions and band convergence in multiple electronic valence bands. Density functional theory (DFT) calculations demonstrate that cation vacancies together with Pb substitutional doping promote the band convergence and increase the density of states (DOS) near the Fermi surface of SnSe, leading to a notable increase in the Seebeck coefficient (S). The complex defects formed by Sn vacancies and Pb doping not only boost the Seebeck coefficient but also optimize carrier concentration (nH) and enhance electrical conductivity (σ), resulting in a higher power factor (PF). Furthermore, the localized lattice distortions induced by these defects increase phonon scattering, significantly reducing lattice thermal conductivity (κlat) to as low as 0.29 W m−1 K−1at 773 K in Sn0.92Pb0.03Se. Consequently, these synergistic effects on phonon and electron transport contribute to a high ZT of 1.8. This study provides a framework for rational design of high‐performance thermoelectric materials based on first‐principles insights and experimental validation."
+    },
+    {
+      "paperId": "059a5a1074118ba95426f67fc1a83014495e04e8",
+      "externalIds": {
+        "PubMedCentral": "12430063",
+        "DOI": "10.3390/ma18174219",
+        "CorpusId": 281248159,
+        "PubMed": "40942645"
+      },
+      "url": "https://www.semanticscholar.org/paper/059a5a1074118ba95426f67fc1a83014495e04e8",
+      "title": "First-Principles Study of Strain Engineering Regulation of SnSe Thermoelectric Properties",
+      "venue": "Materials",
+      "year": 2025,
+      "citationCount": 5,
+      "openAccessPdf": {
+        "url": "https://www.mdpi.com/1996-1944/18/17/4219/pdf?version=1757344343",
+        "status": "GOLD",
+        "license": "CCBY",
+        "disclaimer": "Notice: Paper or abstract available at https://pmc.ncbi.nlm.nih.gov/articles/PMC12430063, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+      },
+      "authors": [
+        {
+          "authorId": "2379969422",
+          "name": "Haoru Zhang"
+        },
+        {
+          "authorId": "49113108",
+          "name": "Songqing Zhao"
+        },
+        {
+          "authorId": "2196397011",
+          "name": "Yuhong Xia"
+        },
+        {
+          "authorId": "2297641766",
+          "name": "Xinyue Zhang"
+        },
+        {
+          "authorId": "2267693166",
+          "name": "Lulu Zhou"
+        },
+        {
+          "authorId": "2454981681",
+          "name": "Zhenqing Yang"
+        }
+      ],
+      "abstract": "To study the effect of strain engineering on the thermoelectric properties of SnSe, we combined first-principles calculation and Boltzmann transport theory to study the effect of −4% to 4% strain on SnSe thermoelectric properties. Compressive strain enhances the maximum power factor (PFmax) of p-type SnSe from 2.3 to 4.3 mW·m−1·K−2. Specifically, under a −3% compressive strain, the thermoelectric figure of merit (ZT) experiences a 50% enhancement, increasing from 0.18 to 0.27. Conversely, for n-type, tensile strain leads to a 26% rise in the PFₘₐₓ, from 53.6 to 67.6 mW·m−1·K−2. Notably, the 4% tensile strain increased the ZT value of n-type SnSe by 123% from 0.66 to 1.47. Importantly, tensile strain effectively reduces lattice thermal conductivity through enhanced phonon scattering, synergistically improving ZT with the enhanced power factor. The results show that strain can effectively improve the thermoelectric properties of SnSe, and that n-type SnSe has great potential in thermoelectric materials."
+    },
+    {
+      "paperId": "3dec635ceb4395169c341284f0f554647fd8d16f",
+      "externalIds": {
+        "MAG": "2905311321",
+        "DOI": "10.1021/jacs.8b12450",
+        "CorpusId": 56489808,
+        "PubMed": "30543394"
+      },
+      "url": "https://www.semanticscholar.org/paper/3dec635ceb4395169c341284f0f554647fd8d16f",
+      "title": "Realizing High Thermoelectric Performance in p-Type SnSe through Crystal Structure Modification.",
+      "venue": "Journal of the American Chemical Society",
+      "year": 2018,
+      "citationCount": 160,
+      "openAccessPdf": {
+        "url": "",
+        "status": "CLOSED",
+        "license": null,
+        "disclaimer": "Notice: Paper or abstract available at https://api.unpaywall.org/v2/10.1021/jacs.8b12450?email=<INSERT_YOUR_EMAIL> or https://doi.org/10.1021/jacs.8b12450, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+      },
+      "authors": [
+        {
+          "authorId": "51306586",
+          "name": "Bingchao Qin"
+        },
+        {
+          "authorId": "2111225207",
+          "name": "Dongyang Wang"
+        },
+        {
+          "authorId": "72471726",
+          "name": "Wenke He"
+        },
+        {
+          "authorId": "2145955029",
+          "name": "Yang Zhang"
+        },
+        {
+          "authorId": "7263633",
+          "name": "Haijun Wu"
+        },
+        {
+          "authorId": "3214683",
+          "name": "S. Pennycook"
+        },
+        {
+          "authorId": "39597355",
+          "name": "Li-dong Zhao"
+        }
+      ],
+      "abstract": "The simple binary compound SnSe has been reported as a robust thermoelectric material for energy conversion by showing strong anharmonicity and multiple electronic valence bands. Herein, we report a record-high average ZT value of ∼1.6 at 300-793 K with maximum ZT values ranging from 0.8 at 300 K to 2.1 at 793 K in p-type SnSe crystals. This remarkable thermoelectric performance arises from the enhanced power factor and lowered lattice thermal conductivity through crystal structure modification via Te alloying. Our results elucidate that Te alloying increases the carrier mobility by making the bond lengths more nearly equal and sharpening the valence bands; meanwhile, the Seebeck coefficient remains large due to multiple valence bands. As a result, a record-high power factor of ∼55 μW cm-1 K-2 at 300 K is achieved. Additionally, Te alloying promotes Sn atom displacements, thus leading to a lower lattice thermal conductivity. Our conclusions are well supported by electron localization function calculations, the Callaway model, and structural characterization via aberration-corrected scanning transmission electron microscopy. Our approach of modifying crystal structures could also be applied in other low-symmetry thermoelectric materials and represents a new strategy to enhance thermoelectric performance."
+    },
+    {
+      "paperId": "f73f8f3383e0a38664e698a945309751355520e8",
+      "externalIds": {
+        "PubMedCentral": "5074331",
+        "MAG": "2341387768",
+        "DOI": "10.1002/anie.201601420",
+        "CorpusId": 5036422,
+        "PubMed": "27094703"
+      },
+      "url": "https://www.semanticscholar.org/paper/f73f8f3383e0a38664e698a945309751355520e8",
+      "title": "Facile Surfactant‐Free Synthesis of p‐Type SnSe Nanoplates with Exceptional Thermoelectric Power Factors",
+      "venue": "Angewandte Chemie",
+      "year": 2016,
+      "citationCount": 87,
+      "openAccessPdf": {
+        "url": "https://onlinelibrary.wiley.com/doi/pdfdirect/10.1002/anie.201601420",
+        "status": "HYBRID",
+        "license": "CCBY",
+        "disclaimer": "Notice: Paper or abstract available at https://pmc.ncbi.nlm.nih.gov/articles/PMC5074331, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+      },
+      "authors": [
+        {
+          "authorId": "49041885",
+          "name": "Guang Han"
+        },
+        {
+          "authorId": "145313627",
+          "name": "S. Popuri"
+        },
+        {
+          "authorId": "47848926",
+          "name": "H. Greer"
+        },
+        {
+          "authorId": "40416791",
+          "name": "J. Bos"
+        },
+        {
+          "authorId": "3676367",
+          "name": "Wuzong Zhou"
+        },
+        {
+          "authorId": "117258915",
+          "name": "A. Knox"
+        },
+        {
+          "authorId": "34388799",
+          "name": "A. Montecucco"
+        },
+        {
+          "authorId": "2124628",
+          "name": "J. Siviter"
+        },
+        {
+          "authorId": "2452566",
+          "name": "E. A. Man"
+        },
+        {
+          "authorId": "2074535429",
+          "name": "Martin Macauley"
+        },
+        {
+          "authorId": "2321949",
+          "name": "D. Paul"
+        },
+        {
+          "authorId": "2145385066",
+          "name": "Wenguang Li"
+        },
+        {
+          "authorId": "3355556",
+          "name": "M. Paul"
+        },
+        {
+          "authorId": "144702895",
+          "name": "Min Gao"
+        },
+        {
+          "authorId": "40173723",
+          "name": "Tracy K. N. Sweet"
+        },
+        {
+          "authorId": "143937346",
+          "name": "R. Freer"
+        },
+        {
+          "authorId": "4095380",
+          "name": "F. Azough"
+        },
+        {
+          "authorId": "14076527",
+          "name": "H. Baig"
+        },
+        {
+          "authorId": "92109210",
+          "name": "N. Sellami"
+        },
+        {
+          "authorId": "2895578",
+          "name": "T. Mallick"
+        },
+        {
+          "authorId": "2779425",
+          "name": "D. Gregory"
+        }
+      ],
+      "abstract": "Abstract A surfactant‐free solution methodology, simply using water as a solvent, has been developed for the straightforward synthesis of single‐phase orthorhombic SnSe nanoplates in gram quantities. Individual nanoplates are composed of {100} surfaces with {011} edge facets. Hot‐pressed nanostructured compacts (E g≈0.85 eV) exhibit excellent electrical conductivity and thermoelectric power factors (S 2 σ) at 550 K. S 2 σ values are 8‐fold higher than equivalent materials prepared using citric acid as a structure‐directing agent, and electrical properties are comparable to the best‐performing, extrinsically doped p‐type polycrystalline tin selenides. The method offers an energy‐efficient, rapid route to p‐type SnSe nanostructures."
+    }
+  ]
+}

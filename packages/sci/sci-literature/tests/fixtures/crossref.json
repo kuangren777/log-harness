@@ -1,0 +1,300 @@
+{
+  "status": "ok",
+  "message-type": "work-list",
+  "message-version": "1.0.0",
+  "message": {
+    "facets": {},
+    "total-results": 1104075,
+    "items": [
+      {
+        "DOI": "10.54227/mlab.20240008",
+        "title": [
+          "Development of Solution-Processed p-Type Polycrystalline SnSe Thermoelectric Nanomaterials"
+        ],
+        "author": [
+          {
+            "given": "Yu",
+            "family": "Liu",
+            "sequence": "first",
+            "affiliation": [],
+            "role": [
+              {
+                "role": "author",
+                "vocabulary": "crossref"
+              }
+            ]
+          }
+        ],
+        "issued": {
+          "date-parts": [
+            [
+              2024
+            ]
+          ]
+        },
+        "container-title": [
+          "Materials Lab"
+        ],
+        "is-referenced-by-count": 0,
+        "URL": "https://doi.org/10.54227/mlab.20240008",
+        "abstract": "<jats:p>SnSe has emerged as a promising mid-temperature thermoelectric (TE) material, noted for its intrinsically low lattice thermal conductivity and favorable electronic properties. Solution-processing provides a scalable and adaptable approach to synthesizing polycrystalline SnSe, allowing for precise control over nanostructure, defect density, and dopant distribution, which are essential factors in optimizing TE performance. Advances in doping/alloying, defect engineering and surface functionalization have been shown to enhance carrier concentrations, Seebeck coefficients, and reduced lattice thermal conductivity in p-type SnSe, resulting in notable TE efficiency. However, achieving comparable efficiency in solution-processed n-type SnSe remains challenging due to limited electron carrier concentration. In addition, low carrier mobility further limits the TE performance of polycrystalline SnSe at low temperatures. This perspective briefly explores the development of solution-processed SnSe nanostructures, with a focus on ongoing advancements in processing techniques and optimization strategies essential for promoting solution-processed SnSe toward practical TE applications.</jats:p>"
+      },
+      {
+        "DOI": "10.54227/mlab.20240011",
+        "title": [
+          "The Role of Ag8GeS6 Addition in p-type SnSe with Enhanced Thermoelectric Properties"
+        ],
+        "author": [
+          {
+            "given": "Zhen-Hua",
+            "family": "Ge",
+            "sequence": "first",
+            "affiliation": [],
+            "role": [
+              {
+                "role": "author",
+                "vocabulary": "crossref"
+              }
+            ]
+          }
+        ],
+        "issued": {
+          "date-parts": [
+            [
+              2024
+            ]
+          ]
+        },
+        "container-title": [
+          "Materials Lab"
+        ],
+        "is-referenced-by-count": 0,
+        "URL": "https://doi.org/10.54227/mlab.20240011",
+        "abstract": "<jats:p>Polycrystalline SnSe is anticipated to perform in thermoelectric applications within the intermediate temperature range due to its superior machinability and more accessible synthesis conditions relative to single-crystal SnSe. Nonetheless, the subpar electrical properties of SnSe present a significant challenge in strengthening its electrical transport performance while preserving its intrinsic low heat conductivity, hence impeding the advancement of polycrystalline SnSe performance. This work examined the alterations in thermoelectric characteristics following the introduction of Ag8GeS6 compound into SnSe. When the Ag8GeS6 enters the SnSe matrix, the carrier concentration increases due to the Ag+ substitution, and the n-type second phase Ag2Se in the SnSe matrix acts as an electron attraction center also play an important role. Therefore, the electrical transport property increases from 306 μW m-1 K-2 of the pristine sample to 617 μW m-1 K-2 of the SnSe doped with 0.25 weight percent Ag8GeS6 sample at 873 K. Besides, the thermal conductivity is kept by the point defects, second phase, and dislocations, which can enhance the phonon scattering, and a low lattice thermal conductivity of 0.3 W m-1 K-1 for the SnSe doped with 0.125 weight percent Ag8GeS6 sample is obtained at 873 K. Consequently, a peak ZT value of 1.3 at 873 K and a high average ZT value of 0.57 from 323-873 K were achieved for SnSe doped with 0.25 weight percent Ag8GeS6. This demonstrates the potential in the field of power generation.</jats:p>"
+      },
+      {
+        "abstract": "<jats:p>We used density functional and many-body perturbation theory to calculate the quasiparticle band structures and electronic transport parameters of p-type SnSe both for the low-temperature Pnma and high-temperature Cmcm phases. The Pnma phase has an indirect band gap of 0.829 eV, while the Cmcm has a direct band gap of 0.464 eV. Both phases exhibit multiple local band extrema within an energy range comparable to the thermal energy of carriers from the global extrema. We calculated the electronic transport coefficients as a function of doping concentration and temperature for single-crystal and polycrystalline materials to understand the previous experimental measurements. The electronic transport coefficients are highly anisotropic and are strongly affected by bipolar transport effects at high temperature. Our results indicate that SnSe exhibits optimal thermoelectric performance at high temperature when doped in the 1019–1020 cm−3 range.</jats:p>",
+        "DOI": "10.1063/1.4907805",
+        "is-referenced-by-count": 159,
+        "title": [
+          "Quasiparticle band structures and thermoelectric transport properties of p-type SnSe"
+        ],
+        "author": [
+          {
+            "given": "Guangsha",
+            "family": "Shi",
+            "sequence": "first",
+            "affiliation": [
+              {
+                "name": "University of Michigan Department of Materials Science and Engineering, , Ann Arbor, Michigan 48109, USA"
+              }
+            ],
+            "role": [
+              {
+                "vocabulary": "crossref",
+                "role": "author"
+              }
+            ]
+          },
+          {
+            "given": "Emmanouil",
+            "family": "Kioupakis",
+            "sequence": "additional",
+            "affiliation": [
+              {
+                "name": "University of Michigan Department of Materials Science and Engineering, , Ann Arbor, Michigan 48109, USA"
+              }
+            ],
+            "role": [
+              {
+                "vocabulary": "crossref",
+                "role": "author"
+              }
+            ]
+          }
+        ],
+        "container-title": [
+          "Journal of Applied Physics"
+        ],
+        "link": [
+          {
+            "URL": "https://pubs.aip.org/aip/jap/article-pdf/doi/10.1063/1.4907805/13245561/065103_1_online.pdf",
+            "content-type": "application/pdf",
+            "content-version": "vor",
+            "intended-application": "syndication"
+          },
+          {
+            "URL": "https://pubs.aip.org/aip/jap/article-pdf/doi/10.1063/1.4907805/13245561/065103_1_online.pdf",
+            "content-type": "unspecified",
+            "content-version": "vor",
+            "intended-application": "similarity-checking"
+          }
+        ],
+        "issued": {
+          "date-parts": [
+            [
+              2015,
+              2,
+              10
+            ]
+          ]
+        },
+        "URL": "https://doi.org/10.1063/1.4907805"
+      },
+      {
+        "DOI": "10.1360/tb-2024-0796",
+        "title": [
+          "Recent progress in n-type SnSe crystals thermoelectric materials"
+        ],
+        "author": [
+          {
+            "given": "Lizhong",
+            "family": "Su",
+            "sequence": "first",
+            "affiliation": [],
+            "role": [
+              {
+                "role": "author",
+                "vocabulary": "crossref"
+              }
+            ]
+          },
+          {
+            "given": "Xiaokun",
+            "family": "Feng",
+            "sequence": "additional",
+            "affiliation": [],
+            "role": [
+              {
+                "role": "author",
+                "vocabulary": "crossref"
+              }
+            ]
+          }
+        ],
+        "issued": {
+          "date-parts": [
+            [
+              2024,
+              8,
+              23
+            ]
+          ]
+        },
+        "container-title": [
+          "Chinese Science Bulletin"
+        ],
+        "is-referenced-by-count": 2,
+        "URL": "https://doi.org/10.1360/tb-2024-0796",
+        "link": [
+          {
+            "URL": "https://engine.scichina.com/doi/pdf/CC2EF6976BE84182B8D0DEECF6229135",
+            "content-type": "application/pdf",
+            "content-version": "vor",
+            "intended-application": "text-mining"
+          },
+          {
+            "URL": "https://www.sciengine.com/doi/10.1360/TB-2024-0796",
+            "content-type": "text/html",
+            "content-version": "vor",
+            "intended-application": "text-mining"
+          },
+          {
+            "URL": "https://engine.scichina.com/doi/pdf/CC2EF6976BE84182B8D0DEECF6229135",
+            "content-type": "unspecified",
+            "content-version": "vor",
+            "intended-application": "similarity-checking"
+          }
+        ]
+      },
+      {
+        "DOI": "10.1016/j.scriptamat.2016.08.009",
+        "title": [
+          "Enhanced thermoelectric performance of p-type SnSe doped with Zn"
+        ],
+        "author": [
+          {
+            "given": "J.C.",
+            "family": "Li",
+            "sequence": "first",
+            "affiliation": [],
+            "role": [
+              {
+                "vocabulary": "crossref",
+                "role": "author"
+              }
+            ]
+          },
+          {
+            "given": "D.",
+            "family": "Li",
+            "sequence": "additional",
+            "affiliation": [],
+            "role": [
+              {
+                "vocabulary": "crossref",
+                "role": "author"
+              }
+            ]
+          },
+          {
+            "given": "X.Y.",
+            "family": "Qin",
+            "sequence": "additional",
+            "affiliation": [],
+            "role": [
+              {
+                "vocabulary": "crossref",
+                "role": "author"
+              }
+            ]
+          },
+          {
+            "given": "J.",
+            "family": "Zhang",
+            "sequence": "additional",
+            "affiliation": [],
+            "role": [
+              {
+                "vocabulary": "crossref",
+                "role": "author"
+              }
+            ]
+          }
+        ],
+        "issued": {
+          "date-parts": [
+            [
+              2017,
+              1
+            ]
+          ]
+        },
+        "container-title": [
+          "Scripta Materialia"
+        ],
+        "is-referenced-by-count": 144,
+        "URL": "https://doi.org/10.1016/j.scriptamat.2016.08.009",
+        "link": [
+          {
+            "URL": "https://api.elsevier.com/content/article/PII:S1359646216303773?httpAccept=text/plain",
+            "content-type": "text/plain",
+            "content-version": "vor",
+            "intended-application": "text-mining"
+          },
+          {
+            "URL": "https://api.elsevier.com/content/article/PII:S1359646216303773?httpAccept=text/xml",
+            "content-type": "text/xml",
+            "content-version": "vor",
+            "intended-application": "text-mining"
+          }
+        ]
+      }
+    ],
+    "items-per-page": 5,
+    "query": {
+      "start-index": 0,
+      "search-terms": null
+    }
+  }
+}

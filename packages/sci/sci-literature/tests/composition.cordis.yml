@@ -1,0 +1,18 @@
+# The smallest real composition that mounts the literature layer: the session
+# store the tool records into, the tool registry and prompt assembly it joins,
+# and the JSON-backed storage domain its query history lives in. The storage
+# root is per-run, so it comes from the environment the suite sets before boot.
+- name: '@deepseek-ai/dsh-session'
+- name: '@deepseek-ai/dsh-system-prompt'
+- name: '@deepseek-ai/dsh-tools'
+- name: '@deepseek-ai/dsh-storage'
+- name: '@deepseek-ai/dsh-storage-json'
+  config:
+    root: !!js process.env.DSH_SCI_LITERATURE_TEST_ROOT
+- name: '@deepseek-ai/dsh-storage-domain'
+  config:
+    backend: json
+- name: '@deepseek-ai/dsh-sci-literature'
+  config:
+    mailto: !!js process.env.SCI_LITERATURE_MAILTO ?? ''
+    historyLimit: 3

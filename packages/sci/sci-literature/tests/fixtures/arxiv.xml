@@ -1,0 +1,177 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/rM5Yd4R66bIxCFW9Y3kaRCVC248</id>
+  <title>arXiv Query: search_query=all:n-type AND all:SnSe AND all:thermoelectric&amp;id_list=&amp;start=0&amp;max_results=5</title>
+  <updated>2026-08-29T21:33:59Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=all:n-type+AND+(all:SnSe+AND+all:thermoelectric)&amp;start=0&amp;max_results=5&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>5</opensearch:itemsPerPage>
+  <opensearch:totalResults>9</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/1601.00753v2</id>
+    <title>n-type SnSe$_{1-x}$ for Thermoelectric Application</title>
+    <updated>2016-01-06T12:02:32Z</updated>
+    <link href="https://arxiv.org/abs/1601.00753v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1601.00753v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We report the synthesis of n-type SnSe$_{1-x}$ using a self-sacrificial, facile, solvo-thermal synthesis route. Electrical and thermal transport measurements suggest a low thermal conductivity and a significant thermopower in the temperature range 100 - 400\,K. We also propose the possibility of developing an all SnSe thermoelectric module.</summary>
+    <category term="cond-mat.mtrl-sci" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2016-01-05T07:18:06Z</published>
+    <arxiv:comment>MicroCom2016 conference</arxiv:comment>
+    <arxiv:primary_category term="cond-mat.mtrl-sci"/>
+    <author>
+      <name>Tutul Bera</name>
+    </author>
+    <author>
+      <name>Anup V. Sanchela</name>
+    </author>
+    <author>
+      <name>C. V. Tomy</name>
+    </author>
+    <author>
+      <name>Ajay D. Thakur</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1502.04599v3</id>
+    <title>Electronic structure and thermoelectric properties of n- and p-type SnSe from first principles calculations</title>
+    <updated>2015-04-27T08:20:55Z</updated>
+    <link href="https://arxiv.org/abs/1502.04599v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1502.04599v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We present results of electronic band structure, Fermi surface and electron transport properties calculations in orthorhombic $n$- and $p$-type SnSe, applying Korringa-Kohn-Rostoker method and Boltzmann transport approach. The analysis accounted for temperature effect on crystallographic parameters in $Pnma$ structure as well as the phase transition to $CmCm$ structure at $T_c\sim 807 $K. Remarkable modifications of conduction and valence bands were notified upon varying crystallographic parameters within the structure before $T_c$, while the phase transition mostly leads to jump in the band gap value. The diagonal components of kinetic parameter tensors (velocity, effective mass) and resulting transport quantity tensors (electrical conductivity $σ$, thermopower $S$ and power factor PF) were computed in wide range of temperature ($15-900 $K) and, hole ($p-$type) and electron ($n-$type) concentration ($10^{17}-10^{21}$ cm$^{-3}$). SnSe is shown to have strong anisotropy of the electron transport properties for both types of charge conductivity, as expected for the layered structure. In general, $p$-type effective masses are larger than $n$-type ones. Interestingly, $p$-type SnSe has strongly non-parabolic dispersion relations, with the 'pudding-mold'-like shape of the highest valence band. The analysis of $σ$, $S$ and PF tensors indicates, that the inter-layer electron transport is beneficial for thermoelectric performance in $n$-type SnSe, while this direction is blocked in $p$-type SnSe, where in-plane transport is preferred. Our results predict, that $n$-type SnSe is potentially even better thermoelectric material than $p$-type one. Theoretical results are compared with single crystal $p$-SnSe measurements, and good agreement is found.</summary>
+    <category term="cond-mat.mtrl-sci" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2015-02-16T16:20:04Z</published>
+    <arxiv:primary_category term="cond-mat.mtrl-sci"/>
+    <author>
+      <name>K. Kutorasinski</name>
+    </author>
+    <author>
+      <name>B. Wiendlocha</name>
+    </author>
+    <author>
+      <name>S. Kaprzyk</name>
+    </author>
+    <author>
+      <name>J. Tobola</name>
+    </author>
+    <arxiv:doi>10.1103/PhysRevB.91.205201</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1103/PhysRevB.91.205201" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2112.07256v3</id>
+    <title>Direct observation of multiple conduction-band minima in high-performance thermoelectric SnSe</title>
+    <updated>2022-10-13T08:31:54Z</updated>
+    <link href="https://arxiv.org/abs/2112.07256v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2112.07256v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We report time- and angle-resolved photoemission spectroscopy on SnSe which currently attracts great interest due to its extremely high thermoelectric performance. Laser-assisted photoemission signals are observed within $\pm$20 fs of the pump pulse arrival. Around 30-50 fs after the photoexcitation, the conduction band minima are not populated by the photoexcited electrons while the valence bands are considerably broadened. In going from 90 fs to 550 fs after the photoexcitation, the photoexcited carriers are decayed into the multiple conduction band minima. The observed conduction bands are consistent with the band structure calculations. The multiple conduction minima suggest possibility of high and anisotropic thermoelectric performance of n-type SnSe single crystal if it is realized.</summary>
+    <category term="cond-mat.mtrl-sci" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2021-12-14T09:45:25Z</published>
+    <arxiv:comment>5 pages, 4 figures</arxiv:comment>
+    <arxiv:primary_category term="cond-mat.mtrl-sci"/>
+    <arxiv:journal_ref>Scripta Materialia 223, 115081 (2023)</arxiv:journal_ref>
+    <author>
+      <name>Mario Okawa</name>
+    </author>
+    <author>
+      <name>Yuka Akabane</name>
+    </author>
+    <author>
+      <name>Mizuki Maeda</name>
+    </author>
+    <author>
+      <name>Gangjian Tan</name>
+    </author>
+    <author>
+      <name>Li-Dong Zhao</name>
+    </author>
+    <author>
+      <name>Mercouri G. Kanatzidis</name>
+    </author>
+    <author>
+      <name>Takeshi Suzuki</name>
+    </author>
+    <author>
+      <name>Mari Watanabe</name>
+    </author>
+    <author>
+      <name>Jiadi Xu</name>
+    </author>
+    <author>
+      <name>Qianhui Ren</name>
+    </author>
+    <author>
+      <name>Masami Fujisawa</name>
+    </author>
+    <author>
+      <name>Teruto Kanai</name>
+    </author>
+    <author>
+      <name>Jiro Itatani</name>
+    </author>
+    <author>
+      <name>Shik Shin</name>
+    </author>
+    <author>
+      <name>Kozo Okazaki</name>
+    </author>
+    <author>
+      <name>Naurang L. Saini</name>
+    </author>
+    <author>
+      <name>Takashi Mizokawa</name>
+    </author>
+    <arxiv:doi>10.1016/j.scriptamat.2022.115081</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1016/j.scriptamat.2022.115081" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1505.02601v3</id>
+    <title>First-principles study of anisotropic thermoelectric transport properties of IV-VI semiconductor compounds SnSe and SnS</title>
+    <updated>2015-10-13T09:34:25Z</updated>
+    <link href="https://arxiv.org/abs/1505.02601v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1505.02601v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We conduct comprehensive investigations of both thermal and electrical transport properties of SnSe and SnS using first-principles calculations combined with the Boltzmann transport theory. Due to the distinct layered lattice structure, SnSe and SnS exhibit similarly anisotropic thermal and electrical behaviors. The cross-plane lattice thermal conductivity $κ_{L}$ is 40-60% lower than the in-plane values. Extremely low $κ_{L}$ is found for both materials because of high anharmonicity. It is suggested that nanostructuring would be difficult to further decrease $κ_{L}$ because of the short mean free paths of dominant phonon modes (1-30 nm at 300 K) while alloying would be efficient in reducing $κ_{L}$ considering that the relative $κ_{L}$ contribution ($\sim$ 65%) of optical phonons is remarkably large. On the electrical side, the anisotropic electrical conductivities are mainly due to the different effective masses of holes and electrons along the $a$, $b$ and $c$ axes. This leads to the highest optimal $ZT$ values along the $b$ axis and lowest ones along the $a$ axis in both $p$-type materials. However, the $n$-type ones exhibit the highest $ZT$s along the $a$ axis due to the enhancement of power factor when the chemical potential gradually approaches the secondary band valley that causes significant increase in electron mobility and density of states. SnSe exhibits larger optimal $ZT$s compared with SnS in both $p$-type and $n$-type materials. For both materials, the peak $ZT$s of $n$-type materials are much higher than those of $p$-type ones along the same direction. The predicted highest $ZT$ values at 750 K are 1.0 in SnSe and 0.6 in SnS along the $b$ axis for the $p$-type doping while those for the $n$-type doping reach 2.7 in SnSe and 1.5 in SnS along the $a$ axis, rendering them among the best bulk thermoelectric materials for large-scale applications.</summary>
+    <category term="cond-mat.mtrl-sci" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2015-05-11T13:26:45Z</published>
+    <arxiv:primary_category term="cond-mat.mtrl-sci"/>
+    <arxiv:journal_ref>Phys. Rev. B 92, 115202 (2015)</arxiv:journal_ref>
+    <author>
+      <name>Ruiqiang Guo</name>
+    </author>
+    <author>
+      <name>Xinjiang Wang</name>
+    </author>
+    <author>
+      <name>Youdi Kuang</name>
+    </author>
+    <author>
+      <name>Baoling Huang</name>
+    </author>
+    <arxiv:doi>10.1103/PhysRevB.92.115202</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1103/PhysRevB.92.115202" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2412.00940v1</id>
+    <title>Control of sphalerite-chalcopyrite phase transition in CdSnAs2 for n-type thermoelectrics with high power factor</title>
+    <updated>2024-12-01T19:11:12Z</updated>
+    <link href="https://arxiv.org/abs/2412.00940v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2412.00940v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Practical applications of thermoelectric (TE) materials are constrained by less developments of high-performance n-type materials compared to their p-type counterparts. Chalcopyrite CdSnAs2 is a promising n-type semiconductor for thermoelectrics from its narrow bandgap around 0.2 eV and exceptionally high electron mobility. In this study, we investigated the crystal growth, microstructure, and thermoelectric properties of CdSnAs2. Contrary to conventional theory of unidirectional melt growth, CdSnAs2 samples at higher cooling rates exhibited better crystallinity, while some cracks were observed in samples cooled more slowly. Thermal analyses clarified that a phase transition from sphalerite to chalcopyrite occurred after solidification in the case of slow cooling, leading to dislocations and cracks due to the lattice mismatch between phases. The analysis at rapid cooling suggested that supercooling lowers the solidification temperature and produces an appropriate microstructure. Consequently, the sample grown at the highest cooling rate (7.6 K/min) achieved an ultrahigh power factor of 3.18 mW/mK^2 at 600 K and a peak zT of 0.62 at 682 K. In the power factor, CdSnAs2 surpasses conventional binary n-type TE materials such as SnSe and PbTe, proving that CdSnAs2 is a high potential candidate for mid-temperature TE applications.</summary>
+    <category term="cond-mat.mtrl-sci" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-12-01T19:11:12Z</published>
+    <arxiv:primary_category term="cond-mat.mtrl-sci"/>
+    <author>
+      <name>Shoki Kishida</name>
+    </author>
+    <author>
+      <name>Norihiko. L. Okamoto</name>
+    </author>
+    <author>
+      <name>Ryoji Katsube</name>
+    </author>
+    <author>
+      <name>Akira Nagaoka</name>
+    </author>
+    <author>
+      <name>Yoshitaro Nose</name>
+    </author>
+  </entry>
+</feed>
