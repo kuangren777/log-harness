@@ -106,6 +106,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Folds the session log into three owned tables and reads the tables sci-skills and sci-memory own; rebuildable because the log is the only input.',
   },
   {
+    key: 'sciLiterature',
+    pkg: 'sci-literature',
+    title: 'Science-research literature search',
+    mode: 'core',
+    consumers: ['sci-profile'],
+    note: 'Fans one query out to OpenAlex, Semantic Scholar, arXiv and Crossref, merges the replies by DOI / arXiv id / title, registers literature_search, and serves the 检索 view over sci.literature.',
+  },
+  {
     key: 'sciMemory',
     pkg: 'sci-memory',
     title: 'Science-research memory nodes and recall',

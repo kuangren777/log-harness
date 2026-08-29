@@ -21,6 +21,7 @@
 | --- | --- | --- | --- | --- | --- |
 | `@deepseek-ai/dsh-sci-tier` | `suggest_tier_upgrade` | `ctx.tools` | `tool/call`、`sci/tier-upgrade-suggested`、`tool/result` | - | suggest_tier_upgrade 是均衡档位唯一与扇出相关的工具：它记录任务已超出单次处理的范围，把选择权留给用户，而不是让 agent 悄悄启动蜂群。 |
 | `@deepseek-ai/dsh-sci-plan` | `declare_research_plan` | `ctx.tools` | `tool/call`、`sci/plan-declared`、`tool/result` | - | declare_research_plan 在扇出前点名各条并行工作线；档位门禁消费其 sci/plan-declared 事件，在声明之前拒绝扇出工具。 |
+| `@deepseek-ai/dsh-sci-literature` | `literature_search` | `ctx.tools`、`ctx.systemPrompt`、`ctx.storageDomain` | `tool/call`、`sci/literature-searched`、`tool/result` | - | literature_search 一次调用扇出到 OpenAlex、Semantic Scholar、arXiv 与 Crossref 并合并结果，因此从 `sources` 里去掉某个来源不会改变模型可见的 schema。 |
 | `@deepseek-ai/dsh-sci-deliver` | `deliver_files` | `ctx.tools`、`ctx.fs`、`ctx.systemPrompt` | `tool/call`、`sci/delivered`、`sci/delivery-failed`、`tool/result` | - | deliver_files 是文件送达用户的唯一途径；沙箱内的 `sci deliver` CLI 把同一份请求写进 spool，插件在轮次开始时拾取，走同一条校验链。 |
 | `@deepseek-ai/dsh-camel-runtime` | `fork_workspace` | `ctx.tools`、`ctx.e2b` | `tool/call`、`sci/fork-completed`、`tool/result` | - | fork_workspace 是集群档在隔离环境里跑竞争变体的唯一途径：每个变体都从 Dormice 工作区的同一份 AgentENV 快照恢复，只有 stdout、stderr、退出码与收集目录回流。 |
 | `@deepseek-ai/dsh-office-univer` | `univer_api`、`univer_compile_svg`、`univer_execute`、`univer_export`、`univer_import`、`univer_inspect`、`univer_lint`、`univer_new`、`univer_resources`、`univer_screenshot`、`univer_status`、`univer_unit`、`univer_worktree` | `ctx.tools`、`ctx.univer`、`ctx.attachments` | `tool/call`、`tool/result`、`univer_worktree` 的 merge 与 discard 会触发一次 tools/pre-execute 审批 ask | - | 本目录收录的是 `@deepseek-ai/dsh-office-univer/tools` 在不撤下任何工具时注册的集合。每一个名字都可以通过该行的 `disabledTools` 撤下；宿主没有 Chromium 或没有出网的部署，应当撤下 `univer_screenshot`、`univer_lint` 与 `univer_resources`；`univer_screenshot` 还额外要求挂载附件存储。以默认的 `tools: true` 挂载包入口会注册同一个集合。 |
@@ -149,6 +150,45 @@ suggest_tier_upgrade 是均衡档位唯一与扇出相关的工具：它记录�
 来源：[`packages/sci/sci-plan/src/index.ts`](../packages/sci/sci-plan/src/index.ts)
 
 declare_research_plan 在扇出前点名各条并行工作线；档位门禁消费其 sci/plan-declared 事件，在声明之前拒绝扇出工具。
+
+<a id="deepseek-aidsh-sci-literature"></a>
+
+## `@deepseek-ai/dsh-sci-literature`
+
+### `literature_search`
+
+一次调用同时检索 OpenAlex、Semantic Scholar、arXiv 与 Crossref 的学术文献。返回合并去重后的作品，含作者、期刊、年份、被引数、摘要，以及可解析的 DOI 或 arXiv id。答案是论文时用它而不是 web_search。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "Topic to search for, at most 300 characters. Every source receives this text unchanged."
+    },
+    "year_from": {
+      "type": "number",
+      "description": "Inclusive earliest publication year."
+    },
+    "year_to": {
+      "type": "number",
+      "description": "Inclusive latest publication year."
+    },
+    "limit": {
+      "type": "number",
+      "description": "Records to return; an integer in 1..20, default 10."
+    }
+  },
+  "required": [
+    "query"
+  ]
+}
+```
+
+源码：[`packages/sci/sci-literature/src/index.ts`](../packages/sci/sci-literature/src/index.ts)
+
+literature_search 一次调用扇出到 OpenAlex、Semantic Scholar、arXiv 与 Crossref 并合并结果，因此从 `sources` 里去掉某个来源不会改变模型可见的 schema。
 
 <a id="deepseek-aidsh-sci-deliver"></a>
 

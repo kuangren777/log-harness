@@ -1243,6 +1243,38 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'sciLiterature',
+    summary: 'Literature search across four public indexes, and the query history of the browser view that drives it.',
+    description: 'Literature search across four public indexes, and the query history of the browser view that drives it. The service performs reads only: it never creates, resumes, or drives an Agent or Session.',
+    methods: [
+      {
+        signature: 'async search(request: LiteratureSearchRequest, signal?: AbortSignal): Promise<LiteratureSearchResult>',
+        description: 'Search every configured index and merge the answers into one ranked list.\n\nFailures of individual sources are reported, not thrown: the caller gets the records the other indexes returned plus a `sourceErrors` entry naming each one that did not answer.',
+        parameters: [{ name: 'request', description: 'the search as a tool call or the browser view states it.' }, { name: 'signal', description: 'optional caller cancellation, merged with each source\'s own timeout.' }],
+        returns: 'the merged, ranked, and truncated records with the failure report.',
+        throws: ['LiteratureError `LITERATURE_INVALID_REQUEST` for a request {@link validateRequest} refuses, or `LITERATURE_ALL_SOURCES_FAILED` when no index answered.'],
+      },
+      {
+        signature: '@Remote(\'search\') remoteSearch(request: LiteratureSearchRequest): Promise<LiteratureSearchResult>',
+        description: 'Search from the browser view, which has no cancellation of its own.',
+        parameters: [{ name: 'request', description: 'the search the view states.' }],
+        returns: 'the merged, ranked, and truncated records with the failure report.',
+      },
+      {
+        signature: '@Remote(\'recent\') recent(): Promise<LiteratureRecentResult>',
+        description: 'The queries this profile searched, newest first.',
+        parameters: [],
+        returns: 'the retained history rows.',
+      },
+      {
+        signature: '@Remote(\'forget\') async forget(request: LiteratureForgetRequest): Promise<LiteratureForgetResult>',
+        description: 'Drop one query from the history.',
+        parameters: [{ name: 'request', description: 'the row to drop; an id the table does not hold is not an error.' }],
+        returns: '`{ ok: true }` once the row is absent.',
+      },
+    ],
+  },
+  {
     key: 'sciMemory',
     summary: 'Memory observation, its durable index, and the recall endpoints over past sessions.',
     description: 'Memory observation, its durable index, and the recall endpoints over past sessions. The service reads and repairs memory nodes; it never creates, resumes, or drives an Agent or Session.',
@@ -3761,6 +3793,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'KvUnitDescriptor',
     declaration: 'export interface KvUnitDescriptor {\n    readonly name: string;\n    readonly version: number;\n    readonly tables: readonly string[];\n    readonly hasGlobal: boolean;\n}',
+  },
+  {
+    name: 'LiteratureForgetRequest',
+    declaration: 'export interface LiteratureForgetRequest {\n    id: string;\n}',
+  },
+  {
+    name: 'LiteratureForgetResult',
+    declaration: 'export interface LiteratureForgetResult {\n    ok: true;\n}',
+  },
+  {
+    name: 'LiteratureHistoryEntry',
+    declaration: 'export interface LiteratureHistoryEntry {\n    id: string;\n    query: string;\n    at: number;\n    hits: number;\n    sourceErrors?: string;\n}',
+  },
+  {
+    name: 'LiteratureRecentResult',
+    declaration: 'export interface LiteratureRecentResult {\n    entries: readonly LiteratureHistoryEntry[];\n}',
   },
   {
     name: 'LlmAdapter',

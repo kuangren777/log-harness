@@ -48,6 +48,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/e2b/dormice': { kind: 'indirect', reason: 'The Dormice sandbox owner registers no model-visible context; fs-e2b/subprocess-e2b and their tool consumers own every rendered effect.' },
   'packages/sci/sci-audit': { kind: 'indirect', reason: 'The audit projection reads the session log and writes storage tables only; the gates and tools it projects own every model-visible effect.' },
   'packages/client/ui-sci-files': { kind: 'none', reason: 'A browser-side details-column mode over the workspace RPCs; it registers no tool, prompt section, or session event, and reads files only on the user\'s gesture.' },
+  'packages/client/ui-sci-search': { kind: 'none', reason: 'Browser-side 检索 view and literature_search hit cards over the sci.literature Remote; registers nothing model-facing.' },
   'packages/client/ui-sci-shell': { kind: 'none', reason: 'Browser-side icon rail, theme toggle and profile popover; registers nothing model-facing.' },
   'packages/client/ui-sci-conversation': { kind: 'none', reason: 'Browser-side conversation skin (tool cards, agent galaxy, artifact chips); registers nothing model-facing.' },
   'packages/sci/sci-credit': { kind: 'none', reason: 'The metering registers no prompt, tool, or context; its balance refusal is an error finish the agent loop raises as an LlmError, so it reaches the user and never enters a model request.' },

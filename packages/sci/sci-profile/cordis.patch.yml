@@ -117,6 +117,9 @@
     # workflow cards, the produced-artifact chips, and the 打开产出 header action.
     - id: ui-sci-conversation
       name: '@deepseek-ai/dsh-client-ui-sci-conversation'
+    # The 检索 full-screen view and the literature_search hit cards.
+    - id: ui-sci-search
+      name: '@deepseek-ai/dsh-client-ui-sci-search'
 
 # ── persistence the science layer reads back ───────────────────────────────
 
@@ -238,6 +241,13 @@
       name: '@deepseek-ai/dsh-sci-memory'
       config:
         memoryDir: /home/user/sci/memory
+
+    # literature_search: OpenAlex + Semantic Scholar + arXiv + Crossref in one
+    # call, plus the sci.literature Remote the 检索 view reads.
+    - id: sci-literature
+      name: '@deepseek-ai/dsh-sci-literature'
+      config:
+        mailto: !!js process.env.SCI_LITERATURE_MAILTO ?? ''
 
     # The six-table audit projection and `sci audit rebuild`.
     - id: sci-audit

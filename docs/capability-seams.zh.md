@@ -12,6 +12,8 @@ flowchart LR
   pkg_sci_audit["sci-audit"]
   svc_sciAudit["ctx.sciAudit<br/>Science-research audit projection"]
   pkg_sci_profile["sci-profile"]
+  pkg_sci_literature["sci-literature"]
+  svc_sciLiterature["ctx.sciLiterature<br/>Science-research literature search"]
   pkg_sci_memory["sci-memory"]
   svc_sciMemory["ctx.sciMemory<br/>Science-research memory nodes and recall"]
   pkg_sci_remote_hosts["sci-remote-hosts"]
@@ -271,6 +273,7 @@ flowchart LR
   pkg_sandbox_local --> svc_sandbox
   pkg_sandbox_policy --> svc_sandboxPolicy
   pkg_sci_audit --> svc_sciAudit
+  pkg_sci_literature --> svc_sciLiterature
   pkg_sci_memory --> svc_sciMemory
   pkg_sci_remote_hosts --> svc_sciRemoteHosts
   pkg_sci_tier --> svc_sciTierFork
@@ -372,6 +375,7 @@ flowchart LR
   svc_sandboxPolicy --> pkg_fs_sandbox
   svc_sandboxPolicy --> pkg_terminal_bash
   svc_sciAudit --> pkg_sci_profile
+  svc_sciLiterature --> pkg_sci_profile
   svc_sciMemory --> pkg_sci_profile
   svc_sciRemoteHosts --> pkg_sci_profile
   svc_sciTierFork --> pkg_sci_profile
@@ -454,6 +458,7 @@ flowchart LR
 | ctx 键 | 角色 | 所属包 | 实现 | 直接消费方 | 配套插件 | 说明 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `ctx.sciAudit` | `core` | [`sci-audit`](../packages/sci/sci-audit) | - | [`sci-profile`](../packages/sci/sci-profile) | - | 将会话日志折叠进本包拥有的三张表，并读取 sci-skills 与 sci-memory 拥有的表；由于日志是唯一输入，可重建。 |
+| `ctx.sciLiterature` | `core` | [`sci-literature`](../packages/sci/sci-literature) | - | [`sci-profile`](../packages/sci/sci-profile) | - | 把一次查询扇出到 OpenAlex、Semantic Scholar、arXiv 与 Crossref，按 DOI / arXiv id / 标题合并回复，注册 literature_search，并经 sci.literature 服务于「检索」视图。 |
 | `ctx.sciMemory` | `core` | [`sci-memory`](../packages/sci/sci-memory) | - | [`sci-profile`](../packages/sci/sci-profile) | - | 观察已接受的记忆目录写入，回填来源会话，并基于投影后的日志提供 recall。 |
 | `ctx.sciRemoteHosts` | `core` | [`sci-remote-hosts`](../packages/sci/sci-remote-hosts) | - | [`sci-profile`](../packages/sci/sci-profile) | - | 拥有沙箱 ssh config 中一段有界的托管块；块外字节保持不变，私钥留在凭据 seam 内。 |
 | `ctx.sciTierFork` | `core` | [`sci-tier`](../packages/sci/sci-tier) | - | [`sci-profile`](../packages/sci/sci-profile) | - | 创建一个以其所替换的均衡档位会话为种子的集群档位会话，而非 fork 该会话的对话。 |

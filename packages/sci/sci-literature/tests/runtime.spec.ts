@@ -50,7 +50,7 @@ async function boot(config: Partial<Config> = {}): Promise<Context> {
   await ctx.plugin(Storage)
   await ctx.plugin(StorageJson, { root })
   await ctx.plugin(StorageDomain, { backend: 'json' })
-  await ctx.plugin(LiteratureRuntime, config)
+  await ctx.plugin(LiteratureRuntime, config as Config)
   return ctx
 }
 

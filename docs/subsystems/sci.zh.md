@@ -4,7 +4,7 @@
 
 `sci` 层是建立在 harness 之上的产品组合，而不是主干的新组成部分：它复刻了一个被研究过的科研智能体平台的行为——那个平台的全部产品表面都是服务端拼装的 prompt——并把其中每条规则落到一个类型化扩展点上。[`packages/sci`](../../packages/sci) 下的每个包，要么是既有事件上的策略，要么是模型可见的工具，要么是存储投影，要么是把它们组合起来的 bundle；agent 循环没有改动。沙箱执行由 E2B seam 的 [`dormice`](../../packages/e2b/dormice) provider 承担。
 
-其中四个包发布了服务，本页是它们词汇的归属地。
+其中五个包发布了服务，本页是它们词汇的归属地。
 
 ## `ctx.sciAudit` —— 审计投影
 
@@ -21,6 +21,14 @@
 观察落在记忆目录内、已被接受的 write 与 edit 工具调用，解析节点的 frontmatter，在节点未声明来源会话 id 时补写，并记录写入发生在第几轮。两个 RPC 操作服务于召回：`index` 每会话返回一行定位信息，`session` 把一个会话投影成剥掉工具流量、保留压缩点的干净对话。写入时序分布是一项**度量**而非门禁——被研究平台的「当场写记忆」规则带逃逸口，实测执行率为零，所以这一层选择把行为**可见化**，而不是假装换个更软的提醒就会奏效。
 
 契约（`MemoryIndexRecord`、`RecallIndexValue`、`RecallSessionRequest`、`RecallSessionResult`）记录在[包 README](../../packages/sci/sci-memory/README.zh.md)。
+
+## `ctx.sciLiterature` —— 文献检索
+
+源码：[`packages/sci/sci-literature/src/runtime.ts`](../../packages/sci/sci-literature/src/runtime.ts)
+
+一次查询并行打到 OpenAlex、Semantic Scholar、arXiv 与 Crossref；每个来源各自超时，失败进入 `sourceErrors` 而不是让整个调用失败，因此某个来源被限流只会削弱结果，不会拖垮工具。返回被归一化为同一种记录，按 DOI、arXiv id 或归一化标题合并，再按来源内名次加被引数排序。同一个运行时为模型注册 `literature_search` 工具及其 prompt 章节，经 `sci.literature` Remote 命名空间服务于「检索」视图，并在 `sci_literature` domain 里保留一小段查询历史——那是便利存储而非日志投影，因为浏览器检索没有会话。
+
+契约（`LiteratureRecord`、`LiteratureSearchRequest`、`LiteratureSearchResult`、`LiteratureRecentResult`）记录在[包 README](../../packages/sci/sci-literature/README.zh.md)。
 
 ## `ctx.sciRemoteHosts` —— 托管的 SSH 主机
 
@@ -105,6 +113,51 @@ planRows(): readonly PlanRecord[]
 Types: [SessionId](core.zh.md)
 
 Source: [`packages/sci/sci-audit/src/index.ts`](../../packages/sci/sci-audit/src/index.ts)
+
+<a id="ctxsciliterature--literatureruntime"></a>
+
+### `ctx.sciLiterature` — `LiteratureRuntime`
+
+Literature search across four public indexes, and the query history of the browser view that drives it. The service performs reads only: it never creates, resumes, or drives an Agent or Session.
+
+```ts cordis-catalog
+/**
+ * Search every configured index and merge the answers into one ranked list.
+ *
+ * Failures of individual sources are reported, not thrown: the caller gets
+ * the records the other indexes returned plus a `sourceErrors` entry naming
+ * each one that did not answer.
+ * @param request - the search as a tool call or the browser view states it.
+ * @param signal - optional caller cancellation, merged with each source's own timeout.
+ * @returns the merged, ranked, and truncated records with the failure report.
+ * @throws LiteratureError `LITERATURE_INVALID_REQUEST` for a request
+ *   {@link validateRequest} refuses, or `LITERATURE_ALL_SOURCES_FAILED` when
+ *   no index answered.
+ */
+async search(request: LiteratureSearchRequest, signal?: AbortSignal): Promise<LiteratureSearchResult>
+
+/**
+ * Search from the browser view, which has no cancellation of its own.
+ * @param request - the search the view states.
+ * @returns the merged, ranked, and truncated records with the failure report.
+ */
+@Remote('search') remoteSearch(request: LiteratureSearchRequest): Promise<LiteratureSearchResult>
+
+/**
+ * The queries this profile searched, newest first.
+ * @returns the retained history rows.
+ */
+@Remote('recent') recent(): Promise<LiteratureRecentResult>
+
+/**
+ * Drop one query from the history.
+ * @param request - the row to drop; an id the table does not hold is not an error.
+ * @returns `{ ok: true }` once the row is absent.
+ */
+@Remote('forget') async forget(request: LiteratureForgetRequest): Promise<LiteratureForgetResult>
+```
+
+Source: [`packages/sci/sci-literature/src/runtime.ts`](../../packages/sci/sci-literature/src/runtime.ts)
 
 <a id="ctxscimemory--scimemoryservice"></a>
 

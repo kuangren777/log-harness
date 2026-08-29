@@ -4,7 +4,7 @@ English | [中文](sci.zh.md)
 
 The `sci` layer is a product composition over the harness, not a new part of the spine: it reproduces the behaviour of a studied research-agent platform whose entire product surface was server-side prompt assembly, and lands each of those rules on a typed extension point instead. Every package under [`packages/sci`](../../packages/sci) is either a policy on an existing event, a model-facing tool, a storage projection, or the bundle that composes them; the agent loop is unchanged. Sandbox execution is the [`dormice`](../../packages/e2b/dormice) provider of the E2B seam.
 
-Four of those packages publish a service, and this page is where their vocabulary lives.
+Five of those packages publish a service, and this page is where their vocabulary lives.
 
 ## `ctx.sciAudit` — audit projection
 
@@ -21,6 +21,14 @@ Source: [`packages/sci/sci-memory/src/index.ts`](../../packages/sci/sci-memory/s
 Observes accepted write and edit tool calls that land inside the memory directory, parses the node's frontmatter, backfills the originating session id when the node omits it, and records the turn the write happened in. Two RPC operations serve recall: `index` returns one orientation row per session, and `session` projects one session into clean dialogue with tool traffic stripped and compaction points kept. The write-timing distribution is a measurement, not a gate — the studied platform's "write memory on the spot" rule had an escape clause and measured zero compliance, so this layer makes the behaviour visible instead of pretending a softer reminder would work.
 
 Contracts (`MemoryIndexRecord`, `RecallIndexValue`, `RecallSessionRequest`, `RecallSessionResult`) are documented in [the package README](../../packages/sci/sci-memory/README.md).
+
+## `ctx.sciLiterature` — literature search
+
+Source: [`packages/sci/sci-literature/src/runtime.ts`](../../packages/sci/sci-literature/src/runtime.ts)
+
+One query fans out to OpenAlex, Semantic Scholar, arXiv and Crossref in parallel; each source has its own timeout and its failure lands in `sourceErrors` instead of failing the call, so a rate-limited source degrades the result rather than the tool. Replies are normalized to one record shape, merged by DOI, arXiv id or normalized title, and ranked by per-source rank plus citations. The same runtime registers the `literature_search` tool and its prompt section for the model, serves the 检索 view over the `sci.literature` Remote namespace, and keeps a short query history in the `sci_literature` domain — a convenience store, not a log projection, because browser searches have no session.
+
+Contracts (`LiteratureRecord`, `LiteratureSearchRequest`, `LiteratureSearchResult`, `LiteratureRecentResult`) are documented in [the package README](../../packages/sci/sci-literature/README.md).
 
 ## `ctx.sciRemoteHosts` — managed SSH hosts
 
@@ -105,6 +113,51 @@ planRows(): readonly PlanRecord[]
 Types: [SessionId](core.md)
 
 Source: [`packages/sci/sci-audit/src/index.ts`](../../packages/sci/sci-audit/src/index.ts)
+
+<a id="ctxsciliterature--literatureruntime"></a>
+
+### `ctx.sciLiterature` — `LiteratureRuntime`
+
+Literature search across four public indexes, and the query history of the browser view that drives it. The service performs reads only: it never creates, resumes, or drives an Agent or Session.
+
+```ts cordis-catalog
+/**
+ * Search every configured index and merge the answers into one ranked list.
+ *
+ * Failures of individual sources are reported, not thrown: the caller gets
+ * the records the other indexes returned plus a `sourceErrors` entry naming
+ * each one that did not answer.
+ * @param request - the search as a tool call or the browser view states it.
+ * @param signal - optional caller cancellation, merged with each source's own timeout.
+ * @returns the merged, ranked, and truncated records with the failure report.
+ * @throws LiteratureError `LITERATURE_INVALID_REQUEST` for a request
+ *   {@link validateRequest} refuses, or `LITERATURE_ALL_SOURCES_FAILED` when
+ *   no index answered.
+ */
+async search(request: LiteratureSearchRequest, signal?: AbortSignal): Promise<LiteratureSearchResult>
+
+/**
+ * Search from the browser view, which has no cancellation of its own.
+ * @param request - the search the view states.
+ * @returns the merged, ranked, and truncated records with the failure report.
+ */
+@Remote('search') remoteSearch(request: LiteratureSearchRequest): Promise<LiteratureSearchResult>
+
+/**
+ * The queries this profile searched, newest first.
+ * @returns the retained history rows.
+ */
+@Remote('recent') recent(): Promise<LiteratureRecentResult>
+
+/**
+ * Drop one query from the history.
+ * @param request - the row to drop; an id the table does not hold is not an error.
+ * @returns `{ ok: true }` once the row is absent.
+ */
+@Remote('forget') async forget(request: LiteratureForgetRequest): Promise<LiteratureForgetResult>
+```
+
+Source: [`packages/sci/sci-literature/src/runtime.ts`](../../packages/sci/sci-literature/src/runtime.ts)
 
 <a id="ctxscimemory--scimemoryservice"></a>
 

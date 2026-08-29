@@ -726,6 +726,27 @@ Source: [`packages/sci/camel-runtime/src/types.ts:84`](../packages/sci/camel-run
 
 Source: [`packages/sci/sci-workspace/src/types.ts:126`](../packages/sci/sci-workspace/src/types.ts)
 
+<a id="sciliterature-searched--log-only"></a>
+
+#### `sci/literature-searched` — log-only
+
+```ts persistence-catalog
+/**
+ * One `literature_search` call finished and its records reached the model.
+ *
+ * The record text itself is already in the `tool/result` this event sits
+ * beside, so nothing here is required to rebuild a model request; the event
+ * adds only the merged hit count and which sources failed, which the result
+ * text summarizes but does not carry as data. A build that does not know
+ * this type may therefore skip it, and it is appended `ignorable: true`.
+ * @param data - the query, the merged hit count before truncation, and one
+ *   `<source>:<code>` pair per source that did not answer.
+ */
+'sci/literature-searched': SciLiteratureSearchedData
+```
+
+Source: [`packages/sci/sci-literature/src/events.ts:29`](../packages/sci/sci-literature/src/events.ts)
+
 <a id="scimemory-written--log-only"></a>
 
 #### `sci/memory-written` — log-only

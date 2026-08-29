@@ -294,6 +294,7 @@
     { "path": "./packages/sci/sci-deliver" },
     { "path": "./packages/sci/sci-workspace" },
     { "path": "./packages/sci/sci-memory" },
+    { "path": "./packages/sci/sci-literature" },
     { "path": "./packages/sci/sci-plan" },
     { "path": "./packages/sci/sci-guard" },
     { "path": "./packages/sci/sci-credit" },

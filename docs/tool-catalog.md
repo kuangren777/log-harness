@@ -17,6 +17,7 @@ This table connects model-visible tool names to the plugin package and service s
 | --- | --- | --- | --- | --- | --- |
 | `@deepseek-ai/dsh-sci-tier` | `suggest_tier_upgrade` | `ctx.tools` | `tool/call`, `sci/tier-upgrade-suggested`, `tool/result` | - | suggest_tier_upgrade is the balanced tier's only fan-out-adjacent tool: it records that the task outgrew a single pass and leaves the choice to the user, instead of the agent quietly starting a swarm. |
 | `@deepseek-ai/dsh-sci-plan` | `declare_research_plan` | `ctx.tools` | `tool/call`, `sci/plan-declared`, `tool/result` | - | declare_research_plan names the parallel lines of work before a fan-out; the tier gate consumes its sci/plan-declared event and refuses a fan-out tool until one is declared. |
+| `@deepseek-ai/dsh-sci-literature` | `literature_search` | `ctx.tools`, `ctx.systemPrompt`, `ctx.storageDomain` | `tool/call`, `sci/literature-searched`, `tool/result` | - | literature_search fans out to OpenAlex, Semantic Scholar, arXiv, and Crossref in one call and merges them, so the model-visible schema does not change when a source is dropped from `sources`. |
 | `@deepseek-ai/dsh-sci-deliver` | `deliver_files` | `ctx.tools`, `ctx.fs`, `ctx.systemPrompt` | `tool/call`, `sci/delivered`, `sci/delivery-failed`, `tool/result` | - | deliver_files is the only way a file reaches the user; the in-sandbox `sci deliver` CLI writes the same request into the spool the plugin drains at turn start, through the same validation. |
 | `@deepseek-ai/dsh-camel-runtime` | `fork_workspace` | `ctx.tools`, `ctx.e2b` | `tool/call`, `sci/fork-completed`, `tool/result` | - | fork_workspace is the cluster tier's only way to run competing variants in isolation: every variant resumes from one AgentENV snapshot of the Dormice workspace, and only stdout, stderr, the exit code, and the collected directory flow back. |
 | `@deepseek-ai/dsh-office-univer` | `univer_api`, `univer_compile_svg`, `univer_execute`, `univer_export`, `univer_import`, `univer_inspect`, `univer_lint`, `univer_new`, `univer_resources`, `univer_screenshot`, `univer_status`, `univer_unit`, `univer_worktree` | `ctx.tools`, `ctx.univer`, `ctx.attachments` | `tool/call`, `tool/result`, `a tools/pre-execute approval ask on univer_worktree merge and discard` | - | The catalogued set is what `@deepseek-ai/dsh-office-univer/tools` registers with nothing withheld. Every name is withholdable through that row's `disabledTools`, and a deployment whose host ships no Chromium or no outbound network is expected to withhold `univer_screenshot`, `univer_lint`, and `univer_resources`; `univer_screenshot` additionally requires an attachment store. Mounting the package entry with its default `tools: true` registers the same set. |
@@ -145,6 +146,45 @@ Announce how you intend to split the work before you fan out to a swarm. Declare
 Source: [`packages/sci/sci-plan/src/index.ts`](../packages/sci/sci-plan/src/index.ts)
 
 declare_research_plan names the parallel lines of work before a fan-out; the tier gate consumes its sci/plan-declared event and refuses a fan-out tool until one is declared.
+
+<a id="deepseek-aidsh-sci-literature"></a>
+
+## `@deepseek-ai/dsh-sci-literature`
+
+### `literature_search`
+
+Search the academic literature across OpenAlex, Semantic Scholar, arXiv, and Crossref in one call. Returns merged, de-duplicated works with authors, venue, year, citation count, abstract, and a resolvable DOI or arXiv id. Use this instead of web_search whenever the answer is a paper.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "Topic to search for, at most 300 characters. Every source receives this text unchanged."
+    },
+    "year_from": {
+      "type": "number",
+      "description": "Inclusive earliest publication year."
+    },
+    "year_to": {
+      "type": "number",
+      "description": "Inclusive latest publication year."
+    },
+    "limit": {
+      "type": "number",
+      "description": "Records to return; an integer in 1..20, default 10."
+    }
+  },
+  "required": [
+    "query"
+  ]
+}
+```
+
+Source: [`packages/sci/sci-literature/src/index.ts`](../packages/sci/sci-literature/src/index.ts)
+
+literature_search fans out to OpenAlex, Semantic Scholar, arXiv, and Crossref in one call and merges them, so the model-visible schema does not change when a source is dropped from `sources`.
 
 <a id="deepseek-aidsh-sci-deliver"></a>
 

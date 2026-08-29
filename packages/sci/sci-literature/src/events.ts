@@ -23,7 +23,6 @@ declare module '@deepseek-ai/dsh-session/types' {
      * adds only the merged hit count and which sources failed, which the result
      * text summarizes but does not carry as data. A build that does not know
      * this type may therefore skip it, and it is appended `ignorable: true`.
-     * @mode append
      * @param data - the query, the merged hit count before truncation, and one
      *   `<source>:<code>` pair per source that did not answer.
      */

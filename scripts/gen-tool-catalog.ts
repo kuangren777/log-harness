@@ -6,8 +6,9 @@
  * `.agents/notes/implemented/process/2026-07-02-tool-schema-catalog.md`.
  */
 
-import { globSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, resolve } from 'node:path'
+import { globSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { basename, join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -31,6 +32,10 @@ import PlanModeController from '@deepseek-ai/dsh-plan-mode'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as WebSearchExa from '@deepseek-ai/dsh-web-search-exa'
 import * as WebFetchLocal from '@deepseek-ai/dsh-web-fetch-http'
+import Storage from '@deepseek-ai/dsh-storage'
+import * as StorageJson from '@deepseek-ai/dsh-storage-json'
+import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
+import LiteratureRuntime from '@deepseek-ai/dsh-sci-literature'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider, SubagentReportDelivery } from '@deepseek-ai/dsh-subagent'
 import * as ToolSubagentControl from '@deepseek-ai/dsh-tool-subagent-control'
@@ -254,6 +259,21 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'declare_research_plan names the parallel lines of work before a fan-out; the tier gate consumes its sci/plan-declared event and refuses a fan-out tool until one is declared.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-sci-literature',
+    dir: 'sci-literature',
+    source: 'packages/sci/sci-literature/src/index.ts',
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.storageDomain'],
+    writes: ['tool/call', 'sci/literature-searched', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(Storage)
+      await ctx.plugin(StorageJson, { root: mkdtempSync(join(tmpdir(), 'dsh-tool-catalog-literature-')) })
+      await ctx.plugin(StorageDomain, { backend: 'json' })
+      await ctx.plugin(LiteratureRuntime)
+    },
+    note:
+      'literature_search fans out to OpenAlex, Semantic Scholar, arXiv, and Crossref in one call and merges them, so the model-visible schema does not change when a source is dropped from `sources`.',
   },
   {
     pkg: '@deepseek-ai/dsh-sci-deliver',
