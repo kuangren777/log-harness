@@ -7,6 +7,41 @@
  */
 
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SciFilesStoreInstance } from './stores.ts'
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** The outward face only; the mode's own state stays inside this plugin. */
+    sciFiles: ISciFiles
+  }
+}
+
+/**
+ * Cross-plugin locate face (`ctx.sciFiles`): the one gesture another plugin
+ * has for the files mode. The sci conversation's artifact chips are its
+ * consumer — a chip names a path the turn produced and hands it here rather
+ * than reaching for this package's store or its slot entry.
+ */
+export interface ISciFiles {
+  /**
+   * Pin one workspace path in the files mode and bring the mode forward. The
+   * pin outranks auto-locate exactly as a tree click does, so a later
+   * delivery still locates itself.
+   * @param path - absolute or session-cwd-relative file path.
+   */
+  locate(path: string): void
+}
+
+/**
+ * The panel transitions the mode's header drives. Narrower than `ILayout` on
+ * purpose: the header owns two gestures and a test double owes nothing more.
+ */
+export interface SciFilesLayout {
+  /** Toggle the wide details mode (column full-bleed, sidebar collapsed). */
+  toggleDetailsWide(): void
+  /** Close the details column. */
+  closeDetails(): void
+}
 
 /** One row of a listed directory level. */
 export interface SciFileEntry {
@@ -81,8 +116,21 @@ export type OfficeStateOutcome =
   }
   | { readonly ok: false }
 
-/** Wire callbacks the mode's components drive, bound in this plugin's apply closure. */
+/**
+ * What the mode's entry receives from this plugin's apply closure: the wire
+ * callbacks, the panel transitions its header drives, and the mode's own
+ * store instance.
+ *
+ * The store is created in `apply` rather than declared at the registration
+ * seat because `ctx.sciFiles.locate` writes to it before anything renders —
+ * a locate that arrives with the details column closed must land the pin and
+ * only then open the column.
+ */
 export interface SciFilesInjected {
+  /** Shared viewing state of the mode (pin and open directories). */
+  files: SciFilesStoreInstance
+  /** The panel transitions the mode's header drives. */
+  layout: SciFilesLayout
   /**
    * List one directory level for the tree.
    * @param sessionId - session whose project directory scopes the path.

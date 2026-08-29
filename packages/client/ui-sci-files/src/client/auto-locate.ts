@@ -81,3 +81,23 @@ export function latestLocatedPath(nodes: readonly ConversationNode[]): string | 
   }
   return undefined
 }
+
+/**
+ * Every produced file in one conversation window, newest last. A path
+ * produced more than once keeps only its newest position, so the chip row
+ * reads in the order the session last touched each file rather than the order
+ * it first named them.
+ * @param nodes - the snapshot's ordered conversation nodes.
+ * @returns the deduplicated produced paths, oldest first.
+ */
+export function allLocatedPaths(nodes: readonly ConversationNode[]): readonly string[] {
+  const paths: string[] = []
+  for (const node of nodes) {
+    const path = locatedInNode(node)
+    if (path === undefined) continue
+    const at = paths.indexOf(path)
+    if (at !== -1) paths.splice(at, 1)
+    paths.push(path)
+  }
+  return paths
+}

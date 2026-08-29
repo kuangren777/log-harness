@@ -14,16 +14,18 @@ import type {
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { conversationSnapshot, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import type { DirectoryOutcome, FileReadOutcome, OfficeStateOutcome, SciFilesInjected } from '../src/client/contract.ts'
+import type { ISciFiles } from '../src/client/contract.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { createOfficeStateReader, SCOPE_ATTACH_RETRY_DELAYS_MS } from '../src/client/office-state.ts'
 import { apply as nodeApply } from '../src/index.ts'
-import { watchProducedFiles, type ProducedFileSessions } from '../src/client/watch-produced.ts'
+import { currentProducedPath, watchProducedFiles, type ProducedFileSessions } from '../src/client/watch-produced.ts'
 
 // The shipped Chinese copy is what this suite asserts, so it states the
 // browser locale the service reads at startup.
 usePinnedBrowserLanguages('zh-CN')
 
 const SLOT = 'conversation.details.mode'
+const TOOL_SLOT = 'conversation.details.tool'
 const SESSION = 's1' as SessionId
 
 afterEach(() => { vi.unstubAllGlobals() })
@@ -42,15 +44,20 @@ async function bench(sessions?: ProducedFileSessions) {
   const readFile = vi.fn(async () => rpc({ ok: true, value: { path: '/p/a.md', size: 1, mediaType: 'text/markdown', encoding: 'utf8', content: 'x' } }))
   ctx.provide('connection', { api: { workspace: { listDirectory, readFile } } } as never)
   const showDetailsMode = vi.fn()
-  ctx.provide('layout', { showDetailsMode } as never)
+  const toggleDetailsWide = vi.fn()
+  const closeDetails = vi.fn()
+  ctx.provide('layout', { showDetailsMode, toggleDetailsWide, closeDetails } as never)
   const list = createSnapshotStore<SessionListState>({ current: undefined } as SessionListState)
   ctx.provide('sessions', sessions ?? { list, binding: () => undefined } as never)
   const slots = ctx.get('slots') as SlotRegistry
   const declare = () => slots.register({
     name: 'root',
-    children: { [SLOT]: { kind: 'list', scope: 'session' } },
+    children: {
+      [SLOT]: { kind: 'list', scope: 'session' },
+      [TOOL_SLOT]: { kind: 'single', scope: 'session' },
+    },
   } as never, () => null)
-  return { ctx, slots, declare, listDirectory, readFile, showDetailsMode }
+  return { ctx, slots, declare, listDirectory, readFile, showDetailsMode, toggleDetailsWide, closeDetails }
 }
 
 /** The injected face of the installed entry. */
@@ -325,11 +332,111 @@ describe('office state read', () => {
     expect(bodiless).toHaveBeenCalledTimes(1)
   })
 
+  it('hands the mode its own store instance, so a locate made before the first render survives', async () => {
+    const b = await bench()
+    b.declare()
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    expect(faceOf(b.slots).files).toBe(faceOf(b.slots).files)
+  })
+
+  it('narrows the layout service to the two gestures the header drives', async () => {
+    const b = await bench()
+    b.declare()
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const face = faceOf(b.slots)
+
+    face.layout.toggleDetailsWide()
+    expect(b.toggleDetailsWide).toHaveBeenCalledTimes(1)
+    face.layout.closeDetails()
+    expect(b.closeDetails).toHaveBeenCalledTimes(1)
+  })
+
   it('publishes one reader identity, so the frame does not re-query on every render', async () => {
     const b = await bench()
     b.declare()
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     expect(faceOf(b.slots).officeState).toBe(faceOf(b.slots).officeState)
+  })
+})
+
+describe('the tool details body', () => {
+  it('shadows the built-in body, and gives the seat back with its fiber', async () => {
+    const b = await bench()
+    b.declare()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const entries = b.slots.entries(TOOL_SLOT)
+    expect(entries).toHaveLength(1)
+    // Lower than the built-in registration's default 0, so this one renders.
+    expect(entries[0]?.options.priority).toBe(-10)
+    await fiber.dispose()
+    expect(b.slots.entries(TOOL_SLOT)).toHaveLength(0)
+  })
+})
+
+describe('the locate service', () => {
+  it('is published while the plugin is loaded, and withdrawn with it', async () => {
+    const b = await bench()
+    b.declare()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    expect(b.ctx.get('sciFiles')).toBeDefined()
+    await fiber.dispose()
+    expect(b.ctx.get('sciFiles')).toBeUndefined()
+  })
+
+  it('pins the path and brings the files mode forward', async () => {
+    const b = await bench()
+    b.declare()
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const service = b.ctx.get('sciFiles') as ISciFiles
+
+    service.locate('/p/d/report.pdf')
+    expect(faceOf(b.slots).files.getSnapshot().pinned).toEqual({ path: '/p/d/report.pdf', over: null })
+    expect(b.showDetailsMode).toHaveBeenCalledWith('files')
+  })
+
+  it('records the pin against what the session has already produced', async () => {
+    const world = fakeSessions()
+    world.open(SESSION, [producedNode('/p/out/latest.xlsx')])
+    world.setCurrent(SESSION)
+    const b = await bench(world.sessions)
+    b.declare()
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const service = b.ctx.get('sciFiles') as ISciFiles
+
+    service.locate('/p/d/report.pdf')
+    expect(faceOf(b.slots).files.getSnapshot().pinned)
+      .toEqual({ path: '/p/d/report.pdf', over: '/p/out/latest.xlsx' })
+  })
+
+  it('lands the pin before anything has rendered, so a locate into a closed column keeps it', async () => {
+    // No declare(): the details column has no strip and the mode never
+    // mounted, which is exactly the state a chip click arrives in.
+    const b = await bench()
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const service = b.ctx.get('sciFiles') as ISciFiles
+    service.locate('/p/d/report.pdf')
+
+    b.declare()
+    await Promise.resolve()
+    expect(faceOf(b.slots).files.getSnapshot().pinned).toEqual({ path: '/p/d/report.pdf', over: null })
+  })
+})
+
+describe('current produced file', () => {
+  it('reads the newest produced file of the current session', () => {
+    const world = fakeSessions()
+    world.open(SESSION, [producedNode('/p/out/a.xlsx'), producedNode('/p/out/b.xlsx')])
+    world.setCurrent(SESSION)
+    expect(currentProducedPath(world.sessions)).toBe('/p/out/b.xlsx')
+  })
+
+  it('reads nothing while no session is current, or before one is assembled', () => {
+    const world = fakeSessions()
+    expect(currentProducedPath(world.sessions)).toBeUndefined()
+    world.setCurrent(SESSION)
+    expect(currentProducedPath(world.sessions)).toBeUndefined()
   })
 })
 

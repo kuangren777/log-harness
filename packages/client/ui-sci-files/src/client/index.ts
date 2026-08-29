@@ -1,13 +1,16 @@
 /**
  * Files-mode plugin, browser half: registers the Files entry of the details
- * column's mode strip and binds the three wire calls its components drive.
+ * column's mode strip, shadows that column's `tool` body with the sci
+ * reading, publishes `ctx.sciFiles`, and binds the three wire calls the
+ * components drive.
  *
  * All adaptation lives here — the directory rows and the read outcomes become
  * the plain vocabulary of `./contract.ts` (the office runtime's answer, which
  * carries its own retry, in `./office-state.ts`), so the components never see
  * an RPC error envelope or a wire type. Composing this plugin out of
- * cordis.yml removes the tab entirely; the details column falls back to its
- * single built-in mode with no strip at all.
+ * cordis.yml removes the tab entirely, returns the built-in card-aware `tool`
+ * body, and withdraws the locate service; the details column falls back to
+ * its single built-in mode with no strip at all.
  */
 import type { ConnectionHandle, SessionId } from '@deepseek-ai/dsh-client-connection/client'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
@@ -17,13 +20,18 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {
-  DirectoryErrorCode, DirectoryOutcome, FileReadErrorCode, FileReadOutcome, SciFilesInjected,
+  DirectoryErrorCode, DirectoryOutcome, FileReadErrorCode, FileReadOutcome, ISciFiles, SciFilesInjected,
 } from './contract.ts'
 import { FilesMode } from './FilesMode.tsx'
+import { SciToolDetails } from './SciToolDetails.tsx'
 import { createOfficeStateReader, SCOPE_ATTACH_RETRY_DELAYS_MS } from './office-state.ts'
 import { createSciFilesStore } from './stores.ts'
-import { watchProducedFiles } from './watch-produced.ts'
+import { currentProducedPath, watchProducedFiles } from './watch-produced.ts'
 import { en, NS, zh, type SciFilesKey } from './locales.ts'
+
+export type { ISciFiles } from './contract.ts'
+export { allLocatedPaths, locatedPath } from './auto-locate.ts'
+export { toolDisplayName } from './tool-names.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -104,12 +112,26 @@ async function listLevel(
  */
 export function apply(ctx: ClientContext): void {
   const connection = ctx.get('connection') as ConnectionHandle
-  const store = createSciFilesStore()
+  // One instance for the whole plugin body, not a seat declaration: locate()
+  // writes the pin before the details column has ever rendered, and a store
+  // the framework instantiates at first render would drop that write.
+  const files = createSciFilesStore().create()
   // One reader per plugin body: the frame's read effect depends on this
   // identity, so a per-call reader would re-query on every render.
   const officeState = createOfficeStateReader(SCOPE_ATTACH_RETRY_DELAYS_MS)
 
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-sci-files: dictionaries')
+
+  const sciFiles: ISciFiles = {
+    locate: (path) => {
+      // Recorded against what the session has produced right now, exactly as
+      // a tree click is: the chip the user clicked outranks auto-locate until
+      // the session delivers something newer.
+      files.actions.pin(path, currentProducedPath(ctx.sessions) ?? null)
+      ctx.layout.showDetailsMode(MODE_ID)
+    },
+  }
+  ctx.effect(() => ctx.reflect.provide('sciFiles', sciFiles), 'ui-sci-files: locate service')
 
   // Auto-locate: a file the session just produced brings this column forward.
   // The mode then shows that file by deriving it (see FilesMode), so the two
@@ -120,6 +142,11 @@ export function apply(ctx: ClientContext): void {
   )
 
   const injected = (): SciFilesInjected => ({
+    files,
+    layout: {
+      toggleDetailsWide: () => { ctx.layout.toggleDetailsWide() },
+      closeDetails: () => { ctx.layout.closeDetails() },
+    },
     listDirectory: (sessionId, path) => listLevel(connection.api, sessionId, path),
     readFile: async (sessionId, path): Promise<FileReadOutcome> => {
       const response = await connection.api.workspace.readFile({ sessionId, path })
@@ -138,7 +165,15 @@ export function apply(ctx: ClientContext): void {
     order: 10,
     label: () => ctx.locale.bind(NS)('files.tab'),
     locale: NS,
-    store,
     inject: injected,
   }, FilesMode))
+
+  // Shadowing, not sharing: the `tool` mode's body is a single seat, and a
+  // lower priority than the built-in registration's default takes it. Leaving
+  // this plugin out of the composition returns the built-in card-aware body.
+  ctx.slots.inject('conversation.details.tool', () => ctx.slots.register({
+    name: 'conversation.details.tool',
+    priority: -10,
+    locale: NS,
+  }, SciToolDetails))
 }

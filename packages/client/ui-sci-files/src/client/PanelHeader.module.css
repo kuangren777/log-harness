@@ -1,0 +1,138 @@
+/* Files-mode panel header: extension badge, identity, reading switch, and
+   the three panel gestures on one 58px row. */
+
+.root {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  height: 58px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 29px;
+  height: 29px;
+  border-radius: 10px;
+  color: var(--dsw-alias-label-primary-foreground);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.badgeDoc {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.badgePdf {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.badgeSheet {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.badgeWord {
+  background: var(--dsw-sci-accent-a, var(--dsw-alias-state-business-primary));
+}
+
+.badgeSlides {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.badgeImage {
+  background: var(--dsw-sci-accent-b, var(--dsw-alias-label-secondary));
+}
+
+.badgeOther {
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.segmented {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.segment {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.segment[aria-pressed='true'] {
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+}
+
+.segment:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.action:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}

@@ -15,6 +15,7 @@ import type { ReactNode } from 'react'
 import type { FileReadOutcome, OfficeStateOutcome, SciFileContent } from './contract.ts'
 import type { SciFilesKey } from './locales.ts'
 import { OfficeFrame } from './OfficeFrame.tsx'
+import { decodeBase64 } from './download.ts'
 import { dataUrl, formatSize, highlightLanguage, previewKindFor } from './media.ts'
 import { fileName, isOfficePath } from './paths.ts'
 import css from './FilePreview.module.css'
@@ -29,6 +30,13 @@ export interface FilePreviewProps {
   readFile: (sessionId: SessionId, path: string) => Promise<FileReadOutcome>
   /** Read one office document's collaboration state. */
   officeState: (sessionId: SessionId, path: string) => Promise<OfficeStateOutcome>
+  /**
+   * Publish the bytes this pane read, so the panel header, the source view,
+   * and the download work from the same read instead of asking for a second
+   * one. Null while nothing was read: no selection, an office document the
+   * runtime streams instead, or a read that failed.
+   */
+  onFile?: ((file: SciFileContent | null) => void) | undefined
   /** Localized preview copy. */
   t: Translate<SciFilesKey>
 }
@@ -38,27 +46,40 @@ export interface FilePreviewProps {
  * @param props - owner-controlled preview props.
  * @returns the preview element for the current selection.
  */
-export function FilePreview({ sessionId, path, readFile, officeState, t }: FilePreviewProps) {
+export function FilePreview({ sessionId, path, readFile, officeState, onFile, t }: FilePreviewProps) {
+  const read = path !== undefined && !isOfficePath(path)
+  // A selection with no read to make still reports, so a header left over
+  // from the previous file does not describe this one.
+  useEffect(() => {
+    if (!read) onFile?.(null)
+  }, [read, path, onFile])
+
   if (path === undefined) return <div className={css.note}>{t('preview.none')}</div>
   if (isOfficePath(path)) {
     return <OfficeFrame sessionId={sessionId} path={path} officeState={officeState} t={t} />
   }
   // Keyed by path so a new selection starts from the loading state instead of
   // showing the previous file's bytes until the next read settles.
-  return <ReadPreview key={path} sessionId={sessionId} path={path} readFile={readFile} officeState={officeState} t={t} />
+  return <ReadPreview
+    key={path} sessionId={sessionId} path={path}
+    readFile={readFile} officeState={officeState} onFile={onFile} t={t}
+  />
 }
 
 /** The read-and-dispatch half, mounted per selected non-office path. */
-function ReadPreview({ sessionId, path, readFile, officeState, t }: FilePreviewProps & { path: string }) {
+function ReadPreview({ sessionId, path, readFile, officeState, onFile, t }: FilePreviewProps & { path: string }) {
   const [outcome, setOutcome] = useState<FileReadOutcome | null>(null)
 
   useEffect(() => {
     let live = true
+    onFile?.(null)
     void readFile(sessionId, path).then((next) => {
-      if (live) setOutcome(next)
+      if (!live) return
+      setOutcome(next)
+      onFile?.(next.ok ? next.file : null)
     })
     return () => { live = false }
-  }, [sessionId, path, readFile])
+  }, [sessionId, path, readFile, onFile])
 
   if (outcome === null) return <div className={css.note}>{t('preview.loading')}</div>
   if (!outcome.ok) return <div className={css.note} role="alert">{t(`preview.error.${outcome.code}`)}</div>
@@ -121,12 +142,4 @@ function PdfFrame({ file }: { file: SciFileContent }) {
 
   if (url === null) return null
   return <embed className={css.pdf} type={file.mediaType} src={url} />
-}
-
-/** The raw bytes behind a base64 payload. */
-function decodeBase64(content: string): Uint8Array<ArrayBuffer> {
-  const binary = atob(content)
-  const bytes = new Uint8Array(new ArrayBuffer(binary.length))
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
-  return bytes
 }

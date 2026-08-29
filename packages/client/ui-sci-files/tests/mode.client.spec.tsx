@@ -15,6 +15,18 @@ import { FilesMode, type FilesModeProps } from '../src/client/FilesMode.tsx'
 import { createSciFilesStore } from '../src/client/stores.ts'
 import { zh } from '../src/client/locales.ts'
 
+/** One markdown file as `workspace.readFile` returns it. */
+const REPORT: FileReadOutcome = {
+  ok: true,
+  file: {
+    path: '/p/deliverables/report.md', size: 2048, mediaType: 'text/markdown',
+    encoding: 'utf8', content: '# Title',
+  },
+}
+
+/** A delivery of the file above. */
+const DELIVERED = '{"files":[{"path":"/p/deliverables/report.md"}]}'
+
 const SESSION = 's1' as SessionId
 const CWD = '/p'
 
@@ -36,19 +48,21 @@ function bench(options: { cwd?: string | undefined; active?: boolean; nodes?: re
   const listDirectory = vi.fn(async (_sessionId: SessionId, _path: string): Promise<DirectoryOutcome> => ({ ok: true, entries: [] }))
   const readFile = vi.fn(async (): Promise<FileReadOutcome> => ({ ok: false, code: 'file-not-found' }))
   const officeState = vi.fn(async (): Promise<OfficeStateOutcome> => ({ ok: false }))
+  const toggleDetailsWide = vi.fn()
+  const closeDetails = vi.fn()
   const props = {
     sessionId: SESSION,
     cwd: 'cwd' in options ? options.cwd : CWD,
     active: options.active ?? true,
     useSession: <S,>(select: (s: ConversationSnapshot) => S): S => select(snapshot),
-    useStore: <S,>(select: (s: ReturnType<typeof store.getSnapshot>) => S): S => select(store.getSnapshot()),
-    actions: store.actions,
+    files: store,
+    layout: { toggleDetailsWide, closeDetails },
     listDirectory,
     readFile,
     officeState,
     t: makeTranslate(zh),
   } as unknown as FilesModeProps
-  return { props, store, listDirectory, readFile, officeState }
+  return { props, store, listDirectory, readFile, officeState, toggleDetailsWide, closeDetails }
 }
 
 describe('FilesMode', () => {
@@ -117,7 +131,7 @@ describe('FilesMode', () => {
     const later = bench({
       nodes: [first, produced('deliver_files', '{"files":[{"path":"/p/deliverables/second.pdf"}]}')],
     })
-    view.rerender(<FilesMode {...later.props} useStore={b.props.useStore} actions={b.props.actions} />)
+    view.rerender(<FilesMode {...later.props} files={b.props.files} />)
     await act(async () => {})
     expect(later.readFile).toHaveBeenCalledWith(SESSION, '/p/deliverables/second.pdf')
   })
@@ -144,5 +158,92 @@ describe('FilesMode', () => {
     await act(async () => {})
     fireEvent.click(screen.getByText('main.py'))
     expect(b.store.getSnapshot().pinned).toEqual({ path: '/p/main.py', over: null })
+  })
+})
+
+describe('FilesMode panel header and chips', () => {
+  it('describes the shown file from the read the preview already made', async () => {
+    const b = bench({ nodes: [produced('deliver_files', DELIVERED)] })
+    b.readFile.mockResolvedValue(REPORT)
+    render(<FilesMode {...b.props} />)
+    await act(async () => {})
+    expect(screen.getByText('2 KB · text/markdown')).toBeTruthy()
+    // One read, shared by the header, the source reading, and the download.
+    expect(b.readFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the file source without reading it again, and keeps the preview mounted', async () => {
+    const b = bench({ nodes: [produced('deliver_files', DELIVERED)] })
+    b.readFile.mockResolvedValue(REPORT)
+    const view = render(<FilesMode {...b.props} />)
+    await act(async () => {})
+
+    fireEvent.click(screen.getByText(zh['panel.source']))
+    expect(view.container.querySelector('pre')?.textContent).toBe('# Title')
+    expect(view.container.querySelector('[hidden]')).toBeTruthy()
+    expect(b.readFile).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByText(zh['panel.preview']))
+    expect(view.container.querySelector('[hidden]')).toBeNull()
+  })
+
+  it('offers no source reading for a file no read produced bytes for', async () => {
+    const b = bench({ nodes: [produced('univer_new', '{"file":"/p/w/book.univer"}')] })
+    render(<FilesMode {...b.props} />)
+    await act(async () => {})
+    // An office document is framed by the runtime, never read here.
+    expect(b.readFile).not.toHaveBeenCalled()
+    expect(screen.getByText(zh['panel.source']).disabled).toBe(true)
+  })
+
+  it('falls back to the preview when the selection loses its source reading', async () => {
+    const b = bench({ nodes: [produced('deliver_files', DELIVERED)] })
+    b.readFile.mockResolvedValue(REPORT)
+    const view = render(<FilesMode {...b.props} />)
+    await act(async () => {})
+    fireEvent.click(screen.getByText(zh['panel.source']))
+    expect(view.container.querySelector('[hidden]')).toBeTruthy()
+
+    b.readFile.mockResolvedValue({
+      ok: true,
+      file: { path: '/p/d/plot.png', size: 40, mediaType: 'image/png', encoding: 'base64', content: 'AAA=' },
+    })
+    act(() => { b.store.actions.pin('/p/d/plot.png', '/p/deliverables/report.md') })
+    await act(async () => {})
+    expect(view.container.querySelector('[hidden]')).toBeNull()
+    expect(screen.getByText(zh['panel.source']).disabled).toBe(true)
+  })
+
+  it('saves the shown file, and drives the two panel gestures', async () => {
+    const revokeObjectURL = vi.fn<(url: string) => void>()
+    vi.stubGlobal('URL', Object.assign(URL, {
+      createObjectURL: vi.fn(() => 'blob:mock/0'),
+      revokeObjectURL,
+    }))
+    const b = bench({ nodes: [produced('deliver_files', DELIVERED)] })
+    b.readFile.mockResolvedValue(REPORT)
+    render(<FilesMode {...b.props} />)
+    await act(async () => {})
+
+    fireEvent.click(screen.getByLabelText(zh['panel.download']))
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock/0')
+    fireEvent.click(screen.getByLabelText(zh['panel.wide']))
+    expect(b.toggleDetailsWide).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByLabelText(zh['panel.close']))
+    expect(b.closeDetails).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
+  })
+
+  it('pins the produced file a chip names', async () => {
+    const b = bench({
+      nodes: [
+        produced('deliver_files', DELIVERED),
+        produced('univer_export', '{"output":"/p/out/table.xlsx"}'),
+      ],
+    })
+    render(<FilesMode {...b.props} />)
+    await act(async () => {})
+    fireEvent.click(screen.getByText('report.md'))
+    expect(b.store.getSnapshot().pinned).toEqual({ path: '/p/deliverables/report.md', over: '/p/out/table.xlsx' })
   })
 })

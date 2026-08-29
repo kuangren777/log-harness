@@ -10,7 +10,8 @@ import {
 } from '../src/client/paths.ts'
 import { dataUrl, formatSize, highlightLanguage, previewKindFor } from '../src/client/media.ts'
 import { embeddedViewerUrl } from '../src/client/office-url.ts'
-import { latestLocatedPath, locatedPath } from '../src/client/auto-locate.ts'
+import { allLocatedPaths, latestLocatedPath, locatedPath } from '../src/client/auto-locate.ts'
+import { toolDisplayName } from '../src/client/tool-names.ts'
 import { createSciFilesStore, shownPath } from '../src/client/stores.ts'
 
 /** A settled successful tool result carrying one call's raw arguments. */
@@ -189,6 +190,60 @@ describe('produced-file derivation', () => {
       result('univer_export', '{"output":"/p/windowless.xlsx"}', { call: null }),
       { kind: 'assistant-message', seq: 9 } as unknown as ConversationNode,
     ])).toBe('/p/a.univer')
+  })
+})
+
+describe('produced-file collection', () => {
+  it('collects every produced file in the window, oldest first', () => {
+    expect(allLocatedPaths([
+      result('univer_new', '{"file":"/p/w/book.univer"}'),
+      result('write_file', '{"path":"/p/w/notes.md"}'),
+      result('deliver_files', '{"files":[{"path":"/p/d/a.pdf"},{"path":"/p/d/b.pdf"}]}'),
+    ])).toEqual(['/p/w/book.univer', '/p/d/b.pdf'])
+  })
+
+  it('keeps only the newest position of a file produced twice', () => {
+    expect(allLocatedPaths([
+      result('univer_export', '{"output":"/p/out/a.xlsx"}'),
+      result('univer_new', '{"file":"/p/w/book.univer"}'),
+      result('univer_export', '{"output":"/p/out/a.xlsx"}'),
+    ])).toEqual(['/p/w/book.univer', '/p/out/a.xlsx'])
+  })
+
+  it('collects nothing from a window that produced nothing', () => {
+    expect(allLocatedPaths([])).toEqual([])
+    expect(allLocatedPaths([
+      result('univer_export', '{"output":"/p/failed.xlsx"}', { isError: true }),
+      result('write_file', '{"path":"/p/a.txt"}'),
+    ])).toEqual([])
+  })
+})
+
+describe('tool display names', () => {
+  it('names the tools a research session runs', () => {
+    expect(toolDisplayName('web_search')).toBe('文献检索')
+    expect(toolDisplayName('web_fetch')).toBe('网页浏览')
+    expect(toolDisplayName('bash')).toBe('命令执行')
+    expect(toolDisplayName('read')).toBe('读取文件')
+    expect(toolDisplayName('write')).toBe('写入文件')
+    expect(toolDisplayName('edit')).toBe('修改文件')
+    expect(toolDisplayName('subagent')).toBe('子智能体')
+    expect(toolDisplayName('workflow')).toBe('多智能体流程')
+    expect(toolDisplayName('skill')).toBe('技能')
+    expect(toolDisplayName('deliver_files')).toBe('交付文件')
+    expect(toolDisplayName('declare_research_plan')).toBe('研究计划')
+    expect(toolDisplayName('todo')).toBe('任务清单')
+    expect(toolDisplayName('ask_user')).toBe('询问用户')
+  })
+
+  it('shares one noun across the office runtime family', () => {
+    expect(toolDisplayName('univer_new')).toBe('文档操作')
+    expect(toolDisplayName('univer_export')).toBe('文档操作')
+  })
+
+  it('shows an unmapped tool under the name it was called by', () => {
+    expect(toolDisplayName('grep')).toBe('grep')
+    expect(toolDisplayName('')).toBe('')
   })
 })
 

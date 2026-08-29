@@ -23,3 +23,24 @@
   min-height: 0;
   overflow: auto;
 }
+
+/* The preview keeps its read while the source reading shows, so it is hidden
+   rather than unmounted; the flex display above would otherwise beat the
+   hidden attribute's own rule. */
+.preview[hidden] {
+  display: none;
+}
+
+.source {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 20px;
+  overflow: auto;
+  color: var(--dsw-alias-label-secondary);
+  font-family: ui-monospace, monospace;
+  font-size: 12.5px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

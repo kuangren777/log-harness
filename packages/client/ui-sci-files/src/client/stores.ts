@@ -54,8 +54,11 @@ export function createSciFilesStore(): EngineStoreHandle<SciFilesState, SciFiles
   })
 }
 
-/** The mode's store handle type, for the components' `PropsStore` share. */
+/** The mode's store handle type. */
 export type SciFilesStore = ReturnType<typeof createSciFilesStore>
+
+/** One live instance of that store, as the mode's injected face carries it. */
+export type SciFilesStoreInstance = ReturnType<SciFilesStore['create']>
 
 /**
  * The file the mode shows: the user's pick while it still outranks what the

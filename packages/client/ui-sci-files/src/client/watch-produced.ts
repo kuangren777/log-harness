@@ -28,6 +28,21 @@ export interface ProducedFileSessions {
 }
 
 /**
+ * The newest file the current session has produced, read once. The pin
+ * `ctx.sciFiles.locate` records needs the same reading the mode derives at
+ * render, so a locate made while nothing newer exists keeps outranking
+ * auto-locate until the next delivery.
+ * @param sessions - the sessions service.
+ * @returns the produced path, or undefined with no current or assembled session.
+ */
+export function currentProducedPath(sessions: ProducedFileSessions): string | undefined {
+  const current = sessions.list.getSnapshot().current
+  if (current === undefined) return undefined
+  const session = sessions.binding(current)?.session
+  return session === undefined ? undefined : latestLocatedPath(session.getSnapshot().nodes)
+}
+
+/**
  * Call `onProduced` whenever the current session produces a file after this
  * watcher started following it.
  *
