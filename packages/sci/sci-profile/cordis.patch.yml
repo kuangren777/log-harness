@@ -108,6 +108,10 @@
     # a host row.
     - id: ui-sci-files
       name: '@deepseek-ai/dsh-client-ui-sci-files'
+    # The workbench icon rail (ui-layout's `rail` slot): view buttons, theme
+    # toggle, profile popover over the gate API, aurora backdrop. Browser-only.
+    - id: ui-sci-shell
+      name: '@deepseek-ai/dsh-client-ui-sci-shell'
 
 # ── persistence the science layer reads back ───────────────────────────────
 

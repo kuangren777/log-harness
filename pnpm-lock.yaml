@@ -6773,6 +6773,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-sci-files':
         specifier: workspace:^
         version: link:../../client/ui-sci-files
+      '@deepseek-ai/dsh-client-ui-sci-shell':
+        specifier: workspace:^
+        version: link:../../client/ui-sci-shell
       '@deepseek-ai/dsh-dormice':
         specifier: workspace:^
         version: link:../../e2b/dormice

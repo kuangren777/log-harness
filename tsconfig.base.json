@@ -257,6 +257,7 @@
       "@deepseek-ai/dsh-office-univer/types": ["./packages/office/univer/src/types.ts"],
       "@deepseek-ai/dsh-office-univer/invariant": ["./packages/office/univer/src/invariant.ts"],
       "@deepseek-ai/dsh-client-ui-sci-files": ["./packages/client/ui-sci-files/src"],
+      "@deepseek-ai/dsh-client-ui-sci-shell": ["./packages/client/ui-sci-shell/src"],
       "@deepseek-ai/dsh-*": [
         "./packages/core/*/src",
         "./packages/prompt/*/src",

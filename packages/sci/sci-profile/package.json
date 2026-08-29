@@ -49,6 +49,7 @@
     "@deepseek-ai/dsh-client-ui-brand-sci": "workspace:^",
     "@deepseek-ai/dsh-client-ui-directory-picker-browse": "workspace:^",
     "@deepseek-ai/dsh-client-ui-sci-files": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-sci-shell": "workspace:^",
     "@deepseek-ai/dsh-dormice": "workspace:^",
     "@deepseek-ai/dsh-fs-e2b": "workspace:^",
     "@deepseek-ai/dsh-host-directory-picker-e2b": "workspace:^",
