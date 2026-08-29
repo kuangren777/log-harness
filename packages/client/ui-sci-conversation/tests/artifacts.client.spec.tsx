@@ -10,7 +10,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ArtifactChips } from '../src/client/ArtifactChips.tsx'
 import {
-  handedOverForClosing, sciArtifactsDefinition, type SciArtifactsTurnData,
+  handedOverForClosing, SCI_ARTIFACTS_KEY, sciArtifactsDefinition, type SciArtifactsTurnData,
 } from '../src/client/artifacts-node.ts'
 import { basename, dirname, extensionBadge, selectArtifacts } from '../src/client/artifacts-select.ts'
 import type { ArtifactChipsProps } from '../src/client/contract.ts'
@@ -147,6 +147,15 @@ describe('the hand-over fold', () => {
       .toThrow(/requires turn\/start/u)
   })
 
+  it('publishes under its own kind, which is the only key the assembler accepts', () => {
+    const state = { turn: TURN, calls: new Map(), produced: [] }
+    const data = sciArtifactsDefinition.buildLocationData?.({ state } as never, 'turn')
+    // conversation-assembler.ts:731-735 throws on any other key, so a Turn
+    // data key and its Definition's kind are one fact, not two.
+    expect(data?.key).toBe(sciArtifactsDefinition.kind)
+    expect(data?.key).toBe(SCI_ARTIFACTS_KEY)
+  })
+
   it('publishes on the turn scope only', () => {
     const state = { turn: TURN, calls: new Map(), produced: [] }
     expect(sciArtifactsDefinition.buildLocationData?.({ state } as never, 'step')).toBeNull()
@@ -182,7 +191,7 @@ describe('the tail claim', () => {
         data: {
           get: (key: string) => {
             if (key === 'deliverables') return mutations === undefined ? undefined : { produced: mutations }
-            if (key === 'sciArtifacts') return handOvers === undefined ? undefined : { produced: handOvers }
+            if (key === SCI_ARTIFACTS_KEY) return handOvers === undefined ? undefined : { produced: handOvers }
             return undefined
           },
         },

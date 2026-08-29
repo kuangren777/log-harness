@@ -34,8 +34,13 @@ export interface SciArtifactsTurnData {
 
 declare module '@deepseek-ai/dsh-client-runtime/client' {
   interface ConversationTurnDataMap {
-    /** Hand-over and export paths accumulated in this Turn. */
-    sciArtifacts: SciArtifactsTurnData
+    /**
+     * Hand-over and export paths accumulated in this Turn. The key is the
+     * Definition's own kind because the assembler requires exactly that:
+     * `conversation-assembler.ts:731-735` rejects a Location value whose key
+     * is anything else, which is what makes a Turn key unambiguously owned.
+     */
+    'sci-artifacts': SciArtifactsTurnData
   }
 }
 
@@ -46,8 +51,12 @@ interface SciArtifactsState extends SciArtifactsTurnData {
   readonly calls: ReadonlyMap<string, { readonly name: string; readonly argsRaw: string }>
 }
 
-/** This Definition's kind, and the Turn data key it publishes under. */
-export const SCI_ARTIFACTS_KEY = 'sciArtifacts'
+/**
+ * This Definition's kind, which is also the Turn data key it publishes under.
+ * One constant for both: the assembler rejects any other key, so they cannot
+ * be allowed to drift.
+ */
+export const SCI_ARTIFACTS_KEY = 'sci-artifacts'
 
 /**
  * The paths one Turn handed over, up to and including a closing seq.
@@ -72,7 +81,7 @@ export function handedOverForClosing(
 
 /** Turn-local hand-over accumulator; it publishes no view Node. */
 export const sciArtifactsDefinition: ConversationNodeDefinition<SciArtifactsState> = {
-  kind: 'sci-artifacts',
+  kind: SCI_ARTIFACTS_KEY,
   match: (event) => {
     if (event.type === 'turn/start') return { id: String(event.data.turn), role: 'start' }
     if (event.type === 'tool/call') return { id: String(event.data.turn), role: 'update' }

@@ -5,7 +5,7 @@
  * neither is complete alone. ui-deliverables' `deliverables` knows every
  * mutation the turn landed, by render intent rather than by tool name, but a
  * pure hand-over (`deliver_files`) or an office export writes through no
- * mutation card and leaves no trace in it. This package's own `sciArtifacts`
+ * mutation card and leaves no trace in it. This package's own `sci-artifacts`
  * (see `./artifacts-node.ts`) knows exactly those calls and nothing else.
  * Together they are the files a researcher means by "output".
  *

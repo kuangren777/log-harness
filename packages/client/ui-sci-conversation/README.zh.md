@@ -6,9 +6,9 @@ CaMeL Science 对对话流的读法：每次工具调用一张统一的卡片、
 
 工具卡占用 [ui-tool](../ui-tool/README.zh.md) 的 `tool.call.frame`——包住整次调用的那个单占位座位。这个座位之所以存在，是因为另一条路走不通：遮蔽 `tool-call` Chat Node 条目会连它的 `children` 声明一起遮蔽，而一个子槽位只允许一个声明者，于是遮蔽方永远无法重新声明 `tool.call.toolview`，所有专属视图都会停止渲染。占用外框则把那次分发留在 ui-tool 内，由它把已经渲染好的专属视图作为 `body` 交给这张卡片——工作台因此重做了每一次调用的外观，而没有顶掉其中任何一个。
 
-芯片行以 `priority: -10` 注册进 `conversation.chat.turnTail` 这条 chain，低于 [ui-deliverables](../ui-deliverables/README.zh.md) 的默认 `0`，因此先被试；chain 只会选出一个胜者，这正是芯片替换掉那个包的产出文件行而不是与它并列的原因。它的认领是两份 Turn 作用域读数的并集而非二选一：Deliverables 知道这一轮落地的每一次改写（按渲染意图而非工具名判定），本包自己的 `sciArtifacts` Turn 数据知道那些不经改写卡片的交付与 Office 导出。研究者说「产出」时指的是两者，所以任一非空即认领，并按「改写在前」的顺序全部列出。
+芯片行以 `priority: -10` 注册进 `conversation.chat.turnTail` 这条 chain，低于 [ui-deliverables](../ui-deliverables/README.zh.md) 的默认 `0`，因此先被试；chain 只会选出一个胜者，这正是芯片替换掉那个包的产出文件行而不是与它并列的原因。它的认领是两份 Turn 作用域读数的并集而非二选一：Deliverables 知道这一轮落地的每一次改写（按渲染意图而非工具名判定），本包自己的 `sci-artifacts` Turn 数据知道那些不经改写卡片的交付与 Office 导出。研究者说「产出」时指的是两者，所以任一非空即认领，并按「改写在前」的顺序全部列出。
 
-第二份读数来自本包在此注册的一个 Turn 作用域 `ConversationNodeDefinition`。它折叠一轮里已结束的 `deliver_files` 与 `univer_export` 调用——把每个 `tool/result` 配回那次给出文件名的 `tool/call`，因为结果事件只带结局、从不带参数——并把结果作为 Turn 数据发布。它自身不渲染任何节点。
+第二份读数来自本包在此注册的一个 Turn 作用域 `ConversationNodeDefinition`，发布用的 key 是 `sci-artifacts`——装配器要求一个 Definition 的 Location key 必须等于它自己的 kind，所以两者是同一个常量。它折叠一轮里已结束的 `deliver_files` 与 `univer_export` 调用——把每个 `tool/result` 配回那次给出文件名的 `tool/call`，因为结果事件只带结局、从不带参数——并把结果作为 Turn 数据发布。它自身不渲染任何节点。
 
 卡片头刻意保持统一——图标、名称、参数摘要、耗时、状态——因为研究流是被扫读的。名称取自 [ui-sci-files](../ui-sci-files/README.zh.md) 的 `toolDisplayName`，所以卡片与详情面板对同一次调用的读法天然一致，本包只额外提供图标。摘要取调用参数里的第一个字符串字段并压成一行，本仓库的每个工具都把主语放在那里。耗时取已结束调用自己的两个时间戳，运行中则是逐秒推进的活秒表——秒表只在该调用仍在途时存在，因此已归档的会话不挂任何定时器。
 
