@@ -1,4 +1,17 @@
+/* Component root: the rail beside the grid frame. Keeping the rail OUT of the
+   grid is what lets the frame stay at exactly three tracks, which external
+   readers index by position, and it makes the frame's own measured box net of
+   the rail without any arithmetic. */
+.shell {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-base);
+}
+
 .frame {
+  flex: 1;
+  min-width: 0;
   position: relative; /* anchors the drag handles, which straddle column borders */
   display: grid;
   grid-template-rows: 100%;
@@ -22,9 +35,10 @@
   }
 }
 
-/* Leading `auto` track: an unoccupied rail measures zero and costs no space. */
+/* Sized by its occupant; an unoccupied rail is a zero-width flex item and
+   costs no space. */
 .railCol {
-  grid-row: 1;
+  flex: 0 0 auto;
   min-width: 0;
   overflow: hidden;
 }
@@ -49,11 +63,11 @@
   border-left: 1px solid var(--dsw-alias-border-l2);
 }
 
-/* A keyed view spans every track right of the rail and stacks over the parked
-   conversation columns (same grid row, later in DOM order). */
+/* A keyed view spans all three tracks and stacks over the parked conversation
+   columns (same grid row, later in DOM order). */
 .viewCol {
   grid-row: 1;
-  grid-column: 2 / span 3;
+  grid-column: 1 / span 3;
   min-width: 0;
   display: flex;
   flex-direction: column;

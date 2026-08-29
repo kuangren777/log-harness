@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-08-29-layout-view-rail.md
-2026-08-29-layout-view-rail.md: 952889333d42a5620f5b85897ce2ae6794de235b
-2026-08-29-layout-view-rail.zh.md: 307426f0737495fc5316b323e4f4486875e85b5d
+2026-08-29-layout-view-rail.md: 5750b014defadfc2b0494b757dd382b41f19cdd9
+2026-08-29-layout-view-rail.zh.md: 8f9719622f41f187475a15627cae73459b7c3be8

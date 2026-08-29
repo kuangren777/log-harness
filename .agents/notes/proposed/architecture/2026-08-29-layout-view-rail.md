@@ -14,9 +14,9 @@ The `sci` profile needs several full-width screens beside the conversation (a li
 
 `ui-layout` gains two generic root children and two store fields, and nothing sci-specific.
 
-- `'rail'` (`single`, `root`) is a leftmost column outside the sidebar. Its occupant receives `{ view, showView }`. The frame measures the rendered rail with the ResizeObserver it already runs and subtracts that width from the viewport for the column solve, the drag-handle offsets and the auto-collapse breakpoint, so an unoccupied rail costs zero pixels and changes nothing for the existing bundles.
+- `'rail'` (`single`, `root`) is a leftmost column outside the sidebar. Its occupant receives `{ view, showView }`. The component root becomes a flex row holding the rail and then the grid frame, so the rail sits BESIDE the grid rather than in it: the frame keeps exactly three tracks, and the box its own ResizeObserver already reports is net of the rail. No width is measured or subtracted anywhere, and an unoccupied rail is a zero-width flex item that changes nothing for the existing bundles.
 - `'view'` (`keyed`, `root`) holds full-bleed screens keyed by view id. The store's `view` (default `'conversation'`) selects one; `ILayout.showView(id)` writes it. While a keyed view shows, the three columns are parked rather than unmounted: their tracks collapse to zero, the column elements carry `visibility:hidden`, `aria-hidden` and `inert`, and the view renders in an extra grid cell spanning the parked tracks. Parking keeps the conversation occupants' element identity, so a composer draft and a scroll position survive a round trip through another screen.
-- `detailsWide` with `ILayout.toggleDetailsWide()` gives the details column `DETAILS_WIDE_RATIO` of the inner width (never less than `DETAILS_MAX`), zeroes the sidebar track and withdraws both drag handles while active; `closeDetails` resets it.
+- `detailsWide` with `ILayout.toggleDetailsWide()` gives the details column `DETAILS_WIDE_RATIO` of the frame width (never less than `DETAILS_MAX`), zeroes the sidebar track and withdraws both drag handles while active; `closeDetails` resets it.
 
 The frame root carries `data-view` and `data-details-wide` so stylesheets can key on the state without a hook.
 
@@ -28,18 +28,18 @@ The frame root carries `data-view` and `data-details-wide` so stylesheets can ke
 
 **Unmount the three columns while a keyed view shows.** Simpler frame code, and the first cut did this. It loses composer drafts and scroll positions on every screen switch, which the profile's multi-screen workflow would hit constantly. Replaced by parking.
 
-**Let the rail occupant declare a fixed width.** Would avoid a measurement, but couples the frame to one occupant's CSS. Measuring keeps the rail free to size itself.
+**Make the rail a fourth grid track.** The first cut did this, measuring the rail and subtracting it from the viewport. It broke every positional track reader: `apps/web/tests/details-session-lifecycle.e2e.ts` finds AppFrame as the only element with an inline grid template and reads track 0 as the sidebar, and `smoke-real.e2e.ts` asserts the template has exactly three tracks. Putting the rail beside the grid keeps that contract and deletes the measurement at the same time.
 
 ## Acceptance criteria
 
-- With no `rail` occupant the frame's column math, handle offsets and breakpoint are unchanged (existing `app-frame` tests still pass unmodified in intent).
-- With a 66px rail occupant, `computeColumns` receives `viewport − 66` and both handles shift by 66.
+- The frame's inline `grid-template-columns` has exactly three tracks in every mode (conversation, keyed view, wide details); a mode may zero a track but never adds or drops one.
+- The rail renders as the frame's previous sibling inside the flex shell, and with no `rail` occupant the frame's column math, handle offsets and breakpoint are unchanged (existing `app-frame` tests still pass unmodified in intent).
 - `showView('x')` renders the `view` entry keyed `x`, keeps all three column `renderSlot` calls, marks the columns `data-view-hidden` / `aria-hidden` / `inert`, and renders no drag handle; `showView('conversation')` returns the same column elements.
-- `toggleDetailsWide()` opens a closed column, sets the details track to `max(round(inner × DETAILS_WIDE_RATIO), DETAILS_MAX)`, zeroes the sidebar track; `closeDetails()` clears the flag.
+- `toggleDetailsWide()` opens a closed column, sets the details track to `max(round(frame width × DETAILS_WIDE_RATIO), DETAILS_MAX)`, zeroes the sidebar track; `closeDetails()` clears the flag.
 - Every file in `packages/client/ui-layout/src` stays at 100% coverage; `pnpm run test:gui` and `tsc -b tsconfig.client.json` pass.
 
 ## Risks
 
 - Parked columns still render, so a heavy conversation keeps paying React render cost behind another screen. Acceptable for the profile's screen sizes; a future `display:none` after a delay would trade that cost for a re-layout on return.
-- The rail width participates in the auto-collapse breakpoint, so a rail shifts the narrow threshold by its width. This is the intended semantics — the rail really consumes width — but it is a visible change for any bundle that mounts one.
+- The frame's measured box shrinks by the rail, so the auto-collapse breakpoint and the whole concession solve see less width once a rail is mounted. This is the intended semantics — the rail really consumes width — but it is a visible change for any bundle that mounts one, and it now arrives through layout rather than arithmetic.
 - `inert` is set through an empty-string attribute because React 18's typings lack it; React 19 accepts the boolean prop, and the cast is confined to one constant.

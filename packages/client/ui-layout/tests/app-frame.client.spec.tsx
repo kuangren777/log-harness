@@ -8,9 +8,9 @@
  * concession response to viewport change, and details staying mounted at
  * zero width are the preserved behavior assertions. jsdom has no layout
  * engine, so the frame width comes from a mocked getBoundingClientRect and
- * resizes are driven through the ResizeObserver stub; the same mock answers
- * the rail column (matched by its CSS-module class) with `railWidth`, which
- * is how a rail occupant's measured width enters the column math.
+ * resizes are driven through the ResizeObserver stub. The rail is a sibling
+ * of the grid frame rather than a track in it, so nothing here has to model a
+ * rail width: the frame's own box is already net of it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
@@ -48,9 +48,6 @@ class ResizeObserverStub {
 }
 
 let frameWidth = 1920
-// Rendered width of the rail column; 0 models the unoccupied rail (the `auto`
-// track measures nothing) and any other value models a rail occupant.
-let railWidth = 0
 
 /** Test-local selector hook over a framework-neutral store instance. */
 function hookOf<T>(inst: { subscribe: (fn: () => void) => () => void; getSnapshot: () => T }) {
@@ -98,13 +95,16 @@ function mountFrame() {
     />
   )
   const utils = render(element())
-  const frame = utils.container.firstElementChild as HTMLElement
-  return { instance, frame, slotCalls, rerenderFrame: () => { utils.rerender(element()) }, ...utils }
+  // The component root is the flex shell; the grid frame is its second child,
+  // right after the rail column.
+  const shell = utils.container.firstElementChild as HTMLElement
+  const frame = utils.container.querySelector<HTMLElement>('[class*="frame"]')!
+  return { instance, shell, frame, slotCalls, rerenderFrame: () => { utils.rerender(element()) }, ...utils }
 }
 
-/** Sidebar and details track widths of the four-track template (rail | sidebar | center | details). */
+/** Sidebar and details track widths of the three-track template (sidebar | center | details). */
 function tracks(frame: HTMLElement): number[] {
-  const m = /^auto (\d+)px minmax\(0, 1fr\) (\d+)px$/.exec(frame.style.gridTemplateColumns)
+  const m = /^(\d+)px minmax\(0, 1fr\) (\d+)px$/.exec(frame.style.gridTemplateColumns)
   if (m === null) throw new Error(`unexpected template: ${frame.style.gridTemplateColumns}`)
   return [Number(m[1]), Number(m[2])]
 }
@@ -120,7 +120,6 @@ function drag(handle: Element, fromX: number, toX: number): void {
 
 beforeEach(() => {
   frameWidth = 1920
-  railWidth = 0
   selectedSession.current = 's-test' as SessionId
   selectedSessionBlank.current = false
   baselinesReady.current = true
@@ -130,9 +129,7 @@ beforeEach(() => {
   vi.stubGlobal('cancelAnimationFrame', (h: number) => { clearTimeout(h) })
   window.innerWidth = frameWidth
   Element.prototype.getBoundingClientRect = function () {
-    // The rail column answers its own width; everything else is the frame box.
-    const width = this.className.includes('railCol') ? railWidth : frameWidth
-    return { width, height: 1080, top: 0, left: 0, right: width, bottom: 1080, x: 0, y: 0, toJSON: () => ({}) }
+    return { width: frameWidth, height: 1080, top: 0, left: 0, right: frameWidth, bottom: 1080, x: 0, y: 0, toJSON: () => ({}) }
   }
   // jsdom lacks pointer capture: emulate per-element so hasPointerCapture gates pass.
   const captured = new WeakSet<Element>()
@@ -295,11 +292,15 @@ describe('AppFrame', () => {
   })
 })
 
-describe('AppFrame — rail track', () => {
-  it('renders the rail slot in the first grid track with the frame view state', () => {
-    const { frame, slotCalls, getByTestId } = mountFrame()
-    expect(frame.style.gridTemplateColumns.startsWith('auto ')).toBe(true)
-    expect(getByTestId('rail-content')).toBeTruthy()
+describe('AppFrame — rail column', () => {
+  it('renders the rail beside the frame, not inside its grid', () => {
+    const { shell, frame, slotCalls, getByTestId } = mountFrame()
+    const rail = getByTestId('rail-content').parentElement!
+    // Sibling order inside the flex shell: rail, then the grid frame. The
+    // frame's own box is therefore already net of the rail.
+    expect(rail.parentElement).toBe(shell)
+    expect(rail.nextElementSibling).toBe(frame)
+    expect(rail.style.gridTemplateColumns).toBe('')
     const railCall = slotCalls.find(c => c.key === 'rail')!.props as { view: string; showView: unknown }
     expect(railCall.view).toBe(CONVERSATION_VIEW)
     expect(typeof railCall.showView).toBe('function')
@@ -313,26 +314,19 @@ describe('AppFrame — rail track', () => {
     expect(frame.dataset['view']).toBe('library')
   })
 
-  it('offsets the drag handles by the measured rail width', () => {
-    railWidth = 66
+  it('keeps exactly three grid tracks in every mode', () => {
+    // e2e goldens and the web smoke read these tracks by position: a mode may
+    // zero a track but must never add or drop one.
     const { frame, instance } = mountFrame()
-    act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    // Collapse the center track to one token so a plain space split counts tracks.
+    const trackCount = () => frame.style.gridTemplateColumns.replace('minmax(0, 1fr)', 'auto').split(' ').length
+    expect(trackCount()).toBe(3)
     act(() => { instance.actions.openDetails() })
-    const handles = frame.querySelectorAll<HTMLElement>('[class*="handle"]')
-    expect(handles[0]!.style.left).toBe('346px') // rail 66 + sidebar 280
-    expect(handles[1]!.style.left).toBe('1560px') // rail 66 + inner 1854 - details 360
-  })
-
-  it('subtracts the rail width from the viewport before the concession solve', () => {
-    frameWidth = 1250
-    const { frame, instance } = mountFrame()
-    act(() => { instance.actions.openDetails() })
-    expect(tracks(frame)).toEqual([280, 330]) // no rail: details shrinks to fit
-    railWidth = 66
-    act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
-    // 1184px of inner width no longer holds a 300px details column beside the
-    // center floor, so the chain auto-closes it.
-    expect(tracks(frame)).toEqual([280, 0])
+    expect(trackCount()).toBe(3)
+    act(() => { instance.actions.toggleDetailsWide() })
+    expect(trackCount()).toBe(3)
+    act(() => { instance.actions.showView('library') })
+    expect(trackCount()).toBe(3)
   })
 })
 
