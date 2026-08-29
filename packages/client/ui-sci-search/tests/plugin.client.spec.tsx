@@ -12,6 +12,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { makeTranslate, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
+import literatureRemote from '@deepseek-ai/dsh-sci-literature/remote'
 import * as SearchInvariant from '../src/invariant.ts'
 import { apply as nodeApply } from '../src/index.ts'
 import { apply, inject } from '../src/client/index.ts'
@@ -28,6 +29,9 @@ const VIEW = 'view'
 const RAIL = 'rail.item'
 const TOOLVIEW = 'tool.call.toolview'
 
+/** Cordis service key the mounted namespace registers itself under. */
+const NAMESPACE = 'remote.sci.literature'
+
 /** The history the fake host answers with. */
 const RECENT: readonly RecentQuery[] = [{ id: 'h1', query: 'zT', at: 7, hits: 3 }]
 
@@ -38,6 +42,10 @@ interface FakeWorkspace { workspaceId: string; sessionIds: readonly string[] }
 
 /** Bench inputs each deep-dive case varies. */
 interface BenchOptions {
+  /** Whether the mount installs its namespace service; false leaves it absent. */
+  mounts?: boolean
+  /** Hold the mount open until `release()`, to observe the pre-mount window. */
+  defer?: boolean
   current?: string
   workspaces?: readonly FakeWorkspace[]
   recentWorkspaceId?: string
@@ -58,8 +66,20 @@ async function bench(options: BenchOptions = {}) {
     recent: vi.fn(async () => ({ ok: true as const, value: { entries: RECENT } })),
     forget: vi.fn(async () => ({ ok: true as const, value: { ok: true as const } })),
   }
-  ctx.provide('remote', { 'sci.literature': literature })
-  ctx.provide('remote.sci.literature', literature)
+  // The Remote service double: `$mount` records the contribution and installs
+  // the namespace service exactly as the real mount does, so this suite
+  // exercises the service key the plugin reads rather than a stub property.
+  const mounted: unknown[] = []
+  const unmount = vi.fn(async () => { disposeNamespace?.() })
+  let disposeNamespace: (() => void) | undefined
+  let releaseMount: (() => void) | undefined
+  const mount = vi.fn(async (contribution: unknown) => {
+    mounted.push(contribution)
+    if (options.defer === true) await new Promise<void>((resolve) => { releaseMount = resolve })
+    if (options.mounts !== false) disposeNamespace = ctx.provide(NAMESPACE, literature)
+    return unmount
+  })
+  ctx.provide('remote', { $mount: mount })
 
   const open = vi.fn()
   const scope = { tag: 'session-scope' }
@@ -93,7 +113,10 @@ async function bench(options: BenchOptions = {}) {
       [TOOLVIEW]: { kind: 'keyed', scope: 'session' },
     },
   } as never, () => null)
-  return { ctx, slots, declare, showView, literature, open, setDraft, inputFor, connectWorkspace, scope }
+  return {
+    ctx, slots, declare, showView, literature, open, setDraft, inputFor, connectWorkspace, scope,
+    mount, mounted, unmount, release: () => { releaseMount?.() },
+  }
 }
 
 /** Install the plugin over a bench and hand back both plus the injected face. */
@@ -111,11 +134,41 @@ function faceOf(slots: SlotRegistry): SciSearchInjected {
 }
 
 describe('ui-sci-search plugin body', () => {
-  it('declares the services it drives', () => {
-    expect(inject).toEqual([
-      'slots', 'locale', 'layout', 'remote', 'remote.sci.literature',
-      'sessions', 'workspaces', 'conversation',
-    ])
+  it('declares the services it drives, and not the one it provides', () => {
+    expect(inject).toEqual(['slots', 'locale', 'layout', 'remote', 'sessions', 'workspaces', 'conversation'])
+    // Injecting the namespace this plugin mounts is the boot deadlock the
+    // mount fixes: the fiber would wait forever for its own apply.
+    expect(inject).not.toContain(NAMESPACE)
+  })
+
+  it('mounts the host contribution before anything it registers can render', async () => {
+    const b = await bench({ defer: true })
+    b.declare()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await Promise.resolve()
+
+    // The generated contribution itself, not a hand-written descriptor.
+    expect(b.mounted).toEqual([literatureRemote])
+    // Nothing is seated while the mount is still out: the view cannot render
+    // against a namespace that does not exist yet.
+    expect(b.slots.entries(VIEW)).toHaveLength(0)
+
+    b.release()
+    await fiber.await()
+    expect(b.slots.entries(VIEW)).toHaveLength(1)
+    expect(b.ctx.get(NAMESPACE)).toBe(b.literature)
+  })
+
+  it('unmounts the namespace with the plugin fiber', async () => {
+    const b = await bench()
+    b.declare()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    expect(b.ctx.get(NAMESPACE)).toBe(b.literature)
+
+    await fiber.dispose()
+    expect(b.unmount).toHaveBeenCalledTimes(1)
+    expect(b.ctx.get(NAMESPACE)).toBeUndefined()
   })
 
   it('installs the view, the rail button, and the tool row, and folds all three up', async () => {
@@ -187,6 +240,18 @@ describe('the injected face over the sci.literature namespace', () => {
     b.literature.recent.mockResolvedValueOnce({ ok: true, value: { entries: [] } } as never)
     await expect(b.face.forget('h1')).resolves.toEqual([])
     expect(b.literature.forget).toHaveBeenCalledWith({ id: 'h1' })
+  })
+
+  it('reports an absent namespace as data, never as a rejected promise', async () => {
+    const b = await installed({ mounts: false })
+    expect(b.ctx.get(NAMESPACE)).toBeUndefined()
+
+    await expect(b.face.search({ query: 'zT' })).resolves
+      .toEqual({ ok: false, code: 'LITERATURE_REMOTE_UNAVAILABLE' })
+    await expect(b.face.recent()).resolves.toEqual([])
+    await expect(b.face.forget('h1')).resolves.toEqual([])
+    expect(b.literature.search).not.toHaveBeenCalled()
+    expect(b.literature.forget).not.toHaveBeenCalled()
   })
 
   it('answers an unreadable post-forget history as an empty strip', async () => {

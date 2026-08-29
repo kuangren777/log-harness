@@ -8,11 +8,14 @@
  * the view, the button, and the row together and leaves every other surface
  * exactly as it was.
  *
- * The wire seam is this file alone. The host answers over the Typert Remote
- * namespace `sci.literature`; the injected face turns its envelopes into the
- * plain records and total outcomes `./contract.ts` declares, so no component
- * ever sees an RPC error.
+ * The wire seam is this file alone. This plugin MOUNTS the host's generated
+ * `sci.literature` Remote contribution itself — the base web-app assembly
+ * (`@deepseek-ai/dsh-api-remotes`) selects the namespaces every profile gets,
+ * and a science-only namespace does not belong in that bundle — and then
+ * turns its envelopes into the plain records and total outcomes
+ * `./contract.ts` declares, so no component ever sees an RPC error.
  */
+import literatureRemote from '@deepseek-ai/dsh-sci-literature/remote'
 import { CONVERSATION_VIEW } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { ClientContext, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the ctx.remote merge carrying the generated namespaces.
@@ -47,9 +50,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 // whole `/client` surface; same-package tests reach the components, the store
 // factory, and the derivations through their own modules.
 
-/** Required services: the three registries, the Remote namespace, and the deep-dive route. */
+/**
+ * Required services: the three registries, the Remote mount point, and the
+ * deep-dive route.
+ *
+ * `remote.sci.literature` is deliberately NOT here: this plugin provides that
+ * namespace service by mounting the contribution, and a fiber that injects
+ * what its own apply provides never activates (the live symptom was
+ * `pending (waiting for service: remote.sci.literature)`).
+ */
 export const inject = [
-  'slots', 'locale', 'layout', 'remote', 'remote.sci.literature', 'sessions', 'workspaces', 'conversation',
+  'slots', 'locale', 'layout', 'remote', 'sessions', 'workspaces', 'conversation',
 ]
 
 /** This entry's position in the icon rail, below the research-flow button. */
@@ -57,6 +68,12 @@ const RAIL_ORDER = 40
 
 /** Wire name of the tool whose calls this package draws. */
 const TOOL_NAME = 'literature_search'
+
+/** Cordis service key the mounted namespace registers itself under. */
+const NAMESPACE_SERVICE = 'remote.sci.literature'
+
+/** The code a search reports when the namespace is not mounted. */
+const NAMESPACE_UNAVAILABLE = 'LITERATURE_REMOTE_UNAVAILABLE'
 
 /**
  * One Remote answer, mirrored from `@deepseek-ai/dsh-typert-protocol` until
@@ -68,10 +85,9 @@ type RemoteAnswer<T> =
 
 /**
  * The three endpoints `sci-literature` exports under `sci.literature`
- * (spec 16-Workbench/04-spec-search.md §2.2). Mirrored for the same reason as
- * the record types in `./contract.ts`: the generated namespace declaration
- * does not exist until that host package is in the tree, and the assembly
- * step replaces both this interface and {@link namespaceOf} with it.
+ * (spec 16-Workbench/04-spec-search.md §2.2), mirrored for the same reason as
+ * the record types in `./contract.ts`: this compilation still states the
+ * record vocabulary itself, so it also states the signatures over it.
  */
 interface LiteratureNamespace {
   search(request: LiteratureSearchRequest): Promise<RemoteAnswer<LiteratureSearchResult>>
@@ -80,15 +96,20 @@ interface LiteratureNamespace {
 }
 
 /**
- * Resolve the host namespace off the Remote service. The cast is the whole
- * seam: cordis resolves `ctx.remote['sci.literature']` to the namespace
- * service registered as `remote.sci.literature`, which this compilation has
- * no generated declaration for yet.
+ * Resolve the mounted namespace.
+ *
+ * `ctx.get`, not `ctx.remote['sci.literature']`: the traceable-service proxy
+ * forwards that property read to the `remote.sci.literature` context
+ * property, and a context property resolves only for a fiber that INJECTED it
+ * (verified against vendored cordis: the read throws `cannot get property
+ * "remote.sci.literature" without inject`). This plugin provides that service
+ * instead of injecting it, so it reads the implementation directly — the same
+ * route ui-skill uses for `connection`.
  * @param ctx - client root context.
- * @returns the namespace face.
+ * @returns the namespace face, or undefined when the mount is not in place.
  */
-function namespaceOf(ctx: ClientContext): LiteratureNamespace {
-  return (ctx.remote as unknown as { 'sci.literature': LiteratureNamespace })['sci.literature']
+function namespaceOf(ctx: ClientContext): LiteratureNamespace | undefined {
+  return ctx.get(NAMESPACE_SERVICE) as LiteratureNamespace | undefined
 }
 
 /**
@@ -110,11 +131,20 @@ async function deepDiveSession(ctx: ClientContext): Promise<SessionId | undefine
 }
 
 /**
- * Client plugin body: register the dictionaries, the view, the rail button,
- * and the tool row.
+ * Client plugin body: mount the host's Remote contribution, then register the
+ * dictionaries, the view, the rail button, and the tool row.
+ *
+ * The mount comes first and is awaited, so nothing this plugin registers can
+ * render before the namespace it calls exists. Its disposer rides an effect
+ * on this fiber: unloading the plugin unmounts the namespace, which is what
+ * makes composing the row out of cordis.yml leave no Remote surface behind.
  * @param ctx - client root context.
+ * @returns nothing; the fiber stays LOADING until the mount settles.
  */
-export function apply(ctx: ClientContext): void {
+export async function apply(ctx: ClientContext): Promise<void> {
+  const unmount = await ctx.remote.$mount(literatureRemote)
+  ctx.effect(() => () => { void unmount() }, 'ui-sci-search: sci.literature remote namespace')
+
   // One handle for the view registration: the search a user ran survives a
   // trip through the research flow and back, which an entry-local state
   // would not.
@@ -122,18 +152,26 @@ export function apply(ctx: ClientContext): void {
 
   const injected = (): SciSearchInjected => ({
     search: async (request: LiteratureSearchRequest): Promise<SearchOutcome> => {
-      const answer = await namespaceOf(ctx).search(request)
+      const namespace = namespaceOf(ctx)
+      // A namespace that is not there is a stated failure code, not a
+      // rejected promise inside a click handler.
+      if (namespace === undefined) return { ok: false, code: NAMESPACE_UNAVAILABLE }
+      const answer = await namespace.search(request)
       return answer.ok ? { ok: true, result: answer.value } : { ok: false, code: answer.error.code }
     },
     recent: async (): Promise<readonly RecentQuery[]> => {
-      const answer = await namespaceOf(ctx).recent()
+      const namespace = namespaceOf(ctx)
+      if (namespace === undefined) return []
+      const answer = await namespace.recent()
       // A history the host cannot read is an empty strip, never a thrown
       // render: the search box itself still works without it.
       return answer.ok ? answer.value.entries : []
     },
     forget: async (id: string): Promise<readonly RecentQuery[]> => {
-      await namespaceOf(ctx).forget({ id })
-      const answer = await namespaceOf(ctx).recent()
+      const namespace = namespaceOf(ctx)
+      if (namespace === undefined) return []
+      await namespace.forget({ id })
+      const answer = await namespace.recent()
       return answer.ok ? answer.value.entries : []
     },
     deepDive: (prompt: string): void => {

@@ -33,6 +33,7 @@
     "client": {
       "inject": [
         "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-sci-literature",
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-brand-sci",
@@ -55,6 +56,7 @@
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/dsh-api-remotes": "workspace:^",
+    "@deepseek-ai/dsh-sci-literature": "workspace:^",
     "@deepseek-ai/dsh-client-locale": "workspace:^",
     "@deepseek-ai/dsh-client-runtime": "workspace:^",
     "@deepseek-ai/dsh-client-ui-brand-sci": "workspace:^",
@@ -67,6 +69,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/dsh-api-remotes": "workspace:^",
+    "@deepseek-ai/dsh-sci-literature": "workspace:^",
     "@deepseek-ai/dsh-client-locale": "workspace:^",
     "@deepseek-ai/dsh-client-runtime": "workspace:^",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:^",

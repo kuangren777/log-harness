@@ -39,6 +39,9 @@
       "path": "../ui-tool"
     },
     {
+      "path": "../../sci/sci-literature"
+    },
+    {
       "path": "../../runtime-diagnostics/invariants"
     }
   ]
