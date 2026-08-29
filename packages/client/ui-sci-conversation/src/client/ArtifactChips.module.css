@@ -1,0 +1,72 @@
+/* Turn artifact chips (design: 研究产出 row). */
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title {
+  color: var(--dsw-alias-label-caption);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 14px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 15px;
+  background: var(--dsw-sci-card-bg);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.chip:hover {
+  background: var(--dsw-sci-hover-bg);
+}
+
+.badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, var(--dsw-sci-accent-a), var(--dsw-sci-accent-b));
+  color: var(--dsw-alias-label-primary-foreground);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dir {
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

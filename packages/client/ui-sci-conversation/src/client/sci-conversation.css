@@ -1,0 +1,51 @@
+/* CaMeL Science conversation skin. Plugin-owned: mounted and removed with the
+ * ui-sci-conversation client row.
+ *
+ * Every rule here selects a stable `data-*` attribute the shipped conversation
+ * writes on purpose (they are listed in this package's README) and then
+ * redefines a token that surface already reads. No CSS-module class is
+ * targeted, no DOM is assumed beyond those attributes, and no literal colour
+ * appears — a rule that cannot express itself in tokens is not written. */
+
+/* The workbench column is wider than the shipped 748px transcript. One
+ * declaration on the conversation root moves the message column, the stats
+ * line, and the composer card together, because the composer's own cap is
+ * derived from this property. */
+[data-phase] {
+  --dsh-chat-content-width: 820px;
+}
+
+/* User bubble: the workbench's white/glass card instead of the shipped fill.
+ * Scoped to the user seat so the same token keeps its shipped value wherever
+ * else it is read. */
+[data-chat-flow-kind='user'],
+[data-chat-flow-kind='steering'] {
+  --dsw-specific-bubble: var(--dsw-sci-user-bubble-bg);
+}
+
+/* Assistant answers carry the flow, so they get the air the design gives
+ * them; the tail that closes a turn keeps the same rhythm. */
+[data-chat-flow-kind='assistant-step'] {
+  line-height: 1.8;
+}
+
+[data-turn-tail] {
+  margin-top: 4px;
+}
+
+/* Composer: a glass card with a gradient send key. The card's fill, its
+ * hairline, and the primary button's two fills are all tokens the shipped
+ * composer reads, so scoping them to the card is the whole change. */
+[data-composer-card] {
+  --dsw-specific-input-major: var(--dsw-sci-glass-bg);
+  --dsw-alias-border-l2-darkmode-thin: var(--dsw-sci-glass-border);
+  --dsw-alias-button-info-fill: linear-gradient(135deg, var(--dsw-sci-accent-a), var(--dsw-sci-accent-b));
+  --dsw-alias-button-info-hover: linear-gradient(135deg, var(--dsw-sci-accent-b), var(--dsw-sci-accent-a));
+  backdrop-filter: blur(30px);
+}
+
+/* Hero: the blank-session state is a landing, not a transcript, so its
+ * composer sits on the narrower card the design draws. */
+[data-phase='hero'] [data-composer-card] {
+  max-width: min(var(--dsh-composer-card-max-width), 720px);
+}

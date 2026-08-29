@@ -1,0 +1,142 @@
+/* The unified tool card (design: 研究流 column, tool card row). */
+.card {
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 15px;
+  background: var(--dsw-sci-card-bg);
+  overflow: hidden;
+  transition: border-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.card[data-open],
+.card[data-card-selected] {
+  border-color: var(--dsw-sci-accent-a);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  min-width: 0;
+}
+
+.disclosure {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 0;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.glyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--dsw-sci-chip-bg);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.glyph[data-status='running'] {
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.glyph[data-status='error'] {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.name {
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.elapsed {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pill {
+  flex: none;
+  padding: 2px 9px;
+  border-radius: var(--dsw-sci-radius-pill);
+  background: var(--dsw-sci-chip-bg);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pill[data-status='running'] {
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.pill[data-status='done'] {
+  background: var(--dsw-alias-state-success-tertiary);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.pill[data-status='error'] {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.action:hover {
+  background: var(--dsw-sci-hover-bg);
+  color: var(--dsw-alias-label-primary);
+}
+
+.chevron {
+  display: inline-flex;
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  transition: transform var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.chevron[data-open] {
+  transform: rotate(180deg);
+}
+
+.body {
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
