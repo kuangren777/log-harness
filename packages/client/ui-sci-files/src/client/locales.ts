@@ -46,8 +46,6 @@ export const zh = {
   'tool.done': '完成',
   'tool.failed': '失败',
   'tool.elapsed': '{seconds} 秒',
-  'tool.args': '调用参数',
-  'tool.result': '结果',
   'tool.result.empty': '这次调用没有返回文本。',
   'tool.truncated': '已截断',
 }
@@ -95,8 +93,6 @@ export const en: Record<SciFilesKey, string> = {
   'tool.done': 'Done',
   'tool.failed': 'Failed',
   'tool.elapsed': '{seconds}s',
-  'tool.args': 'Call arguments',
-  'tool.result': 'Result',
   'tool.result.empty': 'This call returned no text.',
   'tool.truncated': 'Truncated',
 }

@@ -33,11 +33,6 @@ function running(overrides: Partial<RunningToolCall> = {}): RunningToolCall {
   }
 }
 
-/** The `<pre>` under one section label, read verbatim (newlines included). */
-function preText(label: string): string {
-  return screen.getByText(label).parentElement?.querySelector('pre')?.textContent ?? ''
-}
-
 /** Mount the body over one call slice. */
 function details(block: SciToolDetailsProps['block']) {
   render(<SciToolDetails {...({ block, t: makeTranslate(zh) } as unknown as SciToolDetailsProps)} />)
@@ -63,19 +58,11 @@ describe('SciToolDetails', () => {
     details(settled({ call: null, callTime: null }))
     expect(screen.getByText('未知工具 · 调用详情')).toBeTruthy()
     expect(screen.queryByText(/秒$/)).toBeNull()
-    // No call head means no arguments to show either.
-    expect(screen.queryByText(zh['tool.args'])).toBeNull()
   })
 
-  it('pretty-prints the call arguments', () => {
+  it('leaves the call arguments to the owner, which renders them above this seat', () => {
     details(settled())
-    expect(screen.getByText(zh['tool.args'])).toBeTruthy()
-    expect(preText(zh['tool.args'])).toBe('{\n  "query": "thermoelectric"\n}')
-  })
-
-  it('shows arguments a truncated stream left unparseable exactly as they arrived', () => {
-    details(settled({ call: { name: 'bash', argsRaw: '{"command":' } }))
-    expect(preText(zh['tool.args'])).toBe('{"command":')
+    expect(screen.queryByText(/thermoelectric/)).toBeNull()
   })
 
   it('flattens non-text result blocks, and falls back to the structured error', () => {
@@ -116,9 +103,8 @@ describe('SciToolDetails while the call runs', () => {
     expect(screen.getByText('命令执行 · 调用详情')).toBeTruthy()
     expect(screen.getByText(zh['tool.running'])).toBeTruthy()
     expect(screen.getByText('3 秒')).toBeTruthy()
-    expect(screen.queryByText(zh['tool.result'])).toBeNull()
-    // The arguments are readable from the moment the call was dispatched.
-    expect(preText(zh['tool.args'])).toBe('{\n  "command": "ls"\n}')
+    expect(document.querySelector('pre')).toBeNull()
+    expect(screen.queryByText(zh['tool.result.empty'])).toBeNull()
 
     act(() => { vi.advanceTimersByTime(2000) })
     expect(screen.getByText('5 秒')).toBeTruthy()

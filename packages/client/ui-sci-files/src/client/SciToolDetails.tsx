@@ -3,15 +3,19 @@
  * body at a lower shadowing priority.
  *
  * The built-in body is card-aware: it recognizes a terminal, a read, a diff,
- * a search, and shows each in its own shape. This one answers the researcher's
- * question instead — what was asked, and what came back — because in a
- * research session the interesting calls are literature searches, document
- * writes, and sub-agent runs, none of which have a built-in card. Two blocks,
- * both raw, are therefore the whole body: the call's own arguments and the
- * result text exactly as the model saw it.
+ * a search, and shows each in its own shape. This one names the call and shows
+ * what came back verbatim instead, because in a research session the
+ * interesting calls are literature searches, document writes, and sub-agent
+ * runs, none of which have a built-in card.
  *
- * There is no step timeline here. The wire carries a call and a result, not
- * progress between them, so a running call gets an honest stopwatch and
+ * Neither the arguments nor a heading for the result are here: the owner
+ * renders both around this seat (`ui-conversation`'s DetailsPanel puts the
+ * arguments in its Input section and mounts this one under its Output
+ * heading), so the occupant is the result itself, titled by the call it
+ * belongs to.
+ *
+ * There is no step timeline here either. The wire carries a call and a result,
+ * not progress between them, so a running call gets an honest stopwatch and
  * nothing else.
  */
 import { useEffect, useState } from 'react'
@@ -31,7 +35,7 @@ const RESULT_MAX = 20_000
 const TICK_MS = 1000
 
 /**
- * Render the selected call's arguments and result.
+ * Render the selected call's identity, state, and result.
  * @param props - the frozen call slice and this package's locale seat.
  * @returns the details panel body.
  */
@@ -41,7 +45,6 @@ export function SciToolDetails({ block, t }: SciToolDetailsProps) {
   const liveSeconds = useElapsedSeconds(running?.time ?? 0, running !== undefined)
 
   const toolName = settled === undefined ? running?.name : settled.call?.name
-  const argsRaw = settled === undefined ? running?.argsRaw : settled.call?.argsRaw
   const title = t('tool.title', { name: toolName === undefined ? t('tool.unknown') : toolDisplayName(toolName) })
   const status = settled === undefined
     ? t('tool.running')
@@ -60,15 +63,8 @@ export function SciToolDetails({ block, t }: SciToolDetailsProps) {
           {seconds !== null && <span className={css.elapsed}>{t('tool.elapsed', { seconds })}</span>}
         </div>
       </div>
-      {argsRaw !== undefined && (
-        <section className={css.section}>
-          <div className={css.label}>{t('tool.args')}</div>
-          <pre className={css.block}>{prettyJson(argsRaw)}</pre>
-        </section>
-      )}
       {settled !== undefined && (
         <section className={css.section}>
-          <div className={css.label}>{t('tool.result')}</div>
           {output === ''
             ? <div className={css.note}>{t('tool.result.empty')}</div>
             : (
@@ -99,22 +95,6 @@ function useElapsedSeconds(since: number, active: boolean): number {
     return () => { clearInterval(timer) }
   }, [active])
   return Math.max(0, Math.round((now - since) / TICK_MS))
-}
-
-/**
- * The call's arguments as a person reads them; the raw string stands when it
- * is not JSON, which is what a stream cut mid-argument leaves behind.
- * @param raw - the argument string exactly as the model produced it.
- * @returns indented JSON, or the input.
- */
-function prettyJson(raw: string): string {
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2)
-  } catch {
-    // Non-JSON arguments (a truncated stream): the raw string is the only
-    // reading there is, and hiding it would hide the truncation too.
-    return raw
-  }
 }
 
 /**
