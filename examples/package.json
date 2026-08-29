@@ -119,6 +119,7 @@
     "@deepseek-ai/dsh-workflow-worker-thread": "workspace:*",
     "@deepseek-ai/dsh-agent-instructions": "workspace:*",
     "@deepseek-ai/dsh-sci-deliver": "workspace:*",
+    "@deepseek-ai/dsh-sci-literature": "workspace:^",
     "@deepseek-ai/dsh-sci-guard": "workspace:*",
     "@deepseek-ai/dsh-sci-manifest": "workspace:*",
     "@deepseek-ai/dsh-sci-plan": "workspace:*",

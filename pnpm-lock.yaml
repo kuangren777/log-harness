@@ -580,6 +580,9 @@ importers:
       '@deepseek-ai/dsh-sci-guard':
         specifier: workspace:*
         version: link:../packages/sci/sci-guard
+      '@deepseek-ai/dsh-sci-literature':
+        specifier: workspace:^
+        version: link:../packages/sci/sci-literature
       '@deepseek-ai/dsh-sci-manifest':
         specifier: workspace:*
         version: link:../packages/sci/sci-manifest

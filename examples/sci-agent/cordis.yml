@@ -159,6 +159,13 @@
     spoolDir: !!js (process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()) + '/.sci/spool'
     snapshotDir: !!js (process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()) + '/.sci/snapshots'
 
+# literature_search over OpenAlex, Semantic Scholar, arXiv and Crossref; the
+# query history lives in the storage domain mounted above.
+- id: sci-literature
+  name: '@deepseek-ai/dsh-sci-literature'
+  config:
+    mailto: !!js process.env.SCI_LITERATURE_MAILTO ?? ''
+
 # The balanced tier: the section plus the deny-only guard over `fanoutTools`.
 # The composition mounts none of those tools, which is what the plugin verifies
 # against the catalog at load.

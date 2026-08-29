@@ -1,0 +1,27 @@
+isError: false
+---
+检索到 18 条，返回前 5 条：
+[1] Electronic structure and thermoelectric properties of n - and p -type SnSe from first-principles calculations — K. Kutorasiński, Bartłomiej Wiendlocha, S. Kaprzyk et al. · Physical Review B · 2015 · 被引 177 · doi:10.1103/physrevb.91.205201 · arXiv:1502.04599 · pdf https://arxiv.org/pdf/1502.04599
+[2] High-Performance n-type SnSe Thermoelectric Polycrystal Prepared by Arc-Melting — Javier Gainza, Federico Serrano‐Sánchez, João Elias F. S. Rodrigues et al. · Cell Reports Physical Science · 2020 · 被引 41 · doi:10.1016/j.xcrp.2020.100263 · pdf https://www.sciencedirect.com/science/article/pii/S266638642030285X/pdf
+[3] Resonant Levels Induced Seebeck Coefficient Matching Contributes to High Thermoelectric Cooling Efficiency in p‐type SnSe Crystals — Dongrui Liu, Shulin Bai, Yu Tian et al. · Advances in Materials · 2025 · 被引 24 · doi:10.1002/adma.202506999
+[4] Development of Solution-Processed p-Type Polycrystalline SnSe Thermoelectric Nanomaterials — Liu, Yu · Materials Lab · 2024 · 被引 0 · doi:10.54227/mlab.20240008
+[5] n-type SnSe$_{1-x}$ for Thermoelectric Application — Tutul Bera, Anup V. Sanchela, C. V. Tomy et al. · 2016 · arXiv:1601.00753 · pdf https://arxiv.org/pdf/1601.00753v2
+引用时写 DOI 或 arXiv id。
+---
+sci events: [
+  {
+    "type": "sci/tier-resolved",
+    "data": {
+      "tier": "balanced",
+      "presetName": "sci-balanced"
+    }
+  },
+  {
+    "type": "sci/literature-searched",
+    "data": {
+      "query": "n-type SnSe thermoelectric",
+      "hits": 18,
+      "sourceErrors": []
+    }
+  }
+]
