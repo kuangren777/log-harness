@@ -221,7 +221,8 @@ describe('produced-file collection', () => {
 
 describe('tool display names', () => {
   it('names the tools a research session runs', () => {
-    expect(toolDisplayName('web_search')).toBe('文献检索')
+    expect(toolDisplayName('web_search')).toBe('网页搜索')
+    expect(toolDisplayName('literature_search')).toBe('文献检索')
     expect(toolDisplayName('web_fetch')).toBe('网页浏览')
     expect(toolDisplayName('bash')).toBe('命令执行')
     expect(toolDisplayName('read')).toBe('读取文件')

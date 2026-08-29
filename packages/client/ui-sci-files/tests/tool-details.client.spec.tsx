@@ -41,7 +41,7 @@ function details(block: SciToolDetailsProps['block']) {
 describe('SciToolDetails', () => {
   it('titles a settled call by the noun its tool is known as, and reports how long it took', () => {
     details(settled())
-    expect(screen.getByText('文献检索 · 调用详情')).toBeTruthy()
+    expect(screen.getByText('网页搜索 · 调用详情')).toBeTruthy()
     expect(screen.getByText(zh['tool.done'])).toBeTruthy()
     // 3000ms dispatched, 8000ms settled.
     expect(screen.getByText('5 秒')).toBeTruthy()

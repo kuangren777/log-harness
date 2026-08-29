@@ -11,7 +11,8 @@
 
 /** Tools whose Chinese noun is fixed by this table. */
 const TOOL_NAMES: Readonly<Record<string, string>> = {
-  web_search: '文献检索',
+  web_search: '网页搜索',
+  literature_search: '文献检索',
   web_fetch: '网页浏览',
   bash: '命令执行',
   read: '读取文件',
