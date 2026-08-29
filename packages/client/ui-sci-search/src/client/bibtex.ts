@@ -24,14 +24,22 @@ function escapeBraces(value: string): string {
 }
 
 /**
- * The family name of one "Family, Given" author string, reduced to the
- * letters and digits a cite key may carry.
+ * The family name of one author string, reduced to the letters and digits a
+ * cite key may carry.
+ *
+ * The four sources disagree on order: OpenAlex and Semantic Scholar give
+ * display order ("Ruiqiang Guo"), Crossref and arXiv often give inverted
+ * order ("Guo, Ruiqiang"). A comma therefore means the family name leads, and
+ * without one the LAST whitespace-separated token is the family name — taking
+ * the first token would key the entry on the given name.
  * @param author - author as the source gave it.
  * @returns the normalized family name, empty when nothing survives.
  */
 function familyOf(author: string): string {
   const comma = author.indexOf(',')
-  const family = comma === -1 ? author : author.slice(0, comma)
+  // `slice(-1).join('')` rather than an index: split always yields at least
+  // one element, so this is the last token with no impossible absent case.
+  const family = comma === -1 ? author.trim().split(/\s+/u).slice(-1).join('') : author.slice(0, comma)
   return family.normalize('NFKD').replace(/[^\p{L}\p{N}]/gu, '')
 }
 

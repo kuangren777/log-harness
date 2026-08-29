@@ -242,6 +242,23 @@ describe('the injected face over the sci.literature namespace', () => {
     expect(b.literature.forget).toHaveBeenCalledWith({ id: 'h1' })
   })
 
+  it('folds a rejected call into the same stated vocabulary', async () => {
+    const b = await installed()
+    b.literature.search.mockRejectedValueOnce(new Error('socket closed'))
+    await expect(b.face.search({ query: 'zT' })).resolves
+      .toEqual({ ok: false, code: 'LITERATURE_REMOTE_FAILED' })
+
+    // A rejected history read would otherwise surface as an unhandled
+    // rejection inside the view's click chain and freeze the strip.
+    b.literature.recent.mockRejectedValueOnce(new Error('socket closed'))
+    await expect(b.face.recent()).resolves.toEqual([])
+
+    // A rejected forget still re-reads: the host's next answer is the
+    // authority on what the strip shows.
+    b.literature.forget.mockRejectedValueOnce(new Error('socket closed'))
+    await expect(b.face.forget('h1')).resolves.toEqual(RECENT)
+  })
+
   it('reports an absent namespace as data, never as a rejected promise', async () => {
     const b = await installed({ mounts: false })
     expect(b.ctx.get(NAMESPACE)).toBeUndefined()

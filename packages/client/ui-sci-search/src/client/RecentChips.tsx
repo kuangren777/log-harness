@@ -1,7 +1,11 @@
 /**
- * The recent-query strip: one chip per query the host remembers, each a pair
- * of controls sharing a pill — the query itself re-runs the search, the ×
- * forgets that history row.
+ * The recent-query strip: a visible section title over one chip per query the
+ * host remembers, each a pair of controls sharing a pill — the query itself
+ * re-runs the search, the × forgets that history row.
+ *
+ * The title is rendered text, not just the group's accessible name: the strip
+ * is the only thing on the page that explains where those pills came from,
+ * and a sighted user gets no accessible name.
  *
  * The row is addressed by its host id, never by the query text: two searches
  * of the same words are two rows, and forgetting one must not take the other.
@@ -34,28 +38,31 @@ export function RecentChips({ entries, disabled, onPick, onForget, t }: RecentCh
   if (entries.length === 0) return null
   return (
     <div className={css.root} role="group" aria-label={t('recent.title')}>
-      {entries.map(entry => (
-        <span key={entry.id} className={css.chip}>
-          <button
-            type="button"
-            className={css.query}
-            disabled={disabled}
-            title={t('recent.entry', { query: entry.query, hits: entry.hits })}
-            onClick={() => { onPick(entry.query) }}
-          >
-            {entry.query}
-          </button>
-          <button
-            type="button"
-            className={css.forget}
-            disabled={disabled}
-            aria-label={t('recent.forget', { query: entry.query })}
-            onClick={() => { onForget(entry.id) }}
-          >
-            ×
-          </button>
-        </span>
-      ))}
+      <div className={css.title}>{t('recent.title')}</div>
+      <div className={css.chips}>
+        {entries.map(entry => (
+          <span key={entry.id} className={css.chip}>
+            <button
+              type="button"
+              className={css.query}
+              disabled={disabled}
+              title={t('recent.entry', { query: entry.query, hits: entry.hits })}
+              onClick={() => { onPick(entry.query) }}
+            >
+              {entry.query}
+            </button>
+            <button
+              type="button"
+              className={css.forget}
+              disabled={disabled}
+              aria-label={t('recent.forget', { query: entry.query })}
+              onClick={() => { onForget(entry.id) }}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
     </div>
   )
 }

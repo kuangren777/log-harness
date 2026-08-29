@@ -75,6 +75,9 @@ const NAMESPACE_SERVICE = 'remote.sci.literature'
 /** The code a search reports when the namespace is not mounted. */
 const NAMESPACE_UNAVAILABLE = 'LITERATURE_REMOTE_UNAVAILABLE'
 
+/** The code a search reports when the call itself never reached an answer. */
+const REMOTE_FAILED = 'LITERATURE_REMOTE_FAILED'
+
 /**
  * One Remote answer, mirrored from `@deepseek-ai/dsh-typert-protocol` until
  * the host package's generated namespace lands in this compilation.
@@ -110,6 +113,24 @@ interface LiteratureNamespace {
  */
 function namespaceOf(ctx: ClientContext): LiteratureNamespace | undefined {
   return ctx.get(NAMESPACE_SERVICE) as LiteratureNamespace | undefined
+}
+
+/**
+ * Read the history, folding every failure into an empty strip.
+ *
+ * Total on purpose, including a rejected call: the view refreshes the strip
+ * inside the promise chain of a click, so a rejection here would surface as
+ * an unhandled rejection and a strip that silently stops updating.
+ * @param namespace - the mounted namespace.
+ * @returns the remembered queries, or none.
+ */
+async function readRecent(namespace: LiteratureNamespace): Promise<readonly RecentQuery[]> {
+  try {
+    const answer = await namespace.recent()
+    return answer.ok ? answer.value.entries : []
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -156,23 +177,32 @@ export async function apply(ctx: ClientContext): Promise<void> {
       // A namespace that is not there is a stated failure code, not a
       // rejected promise inside a click handler.
       if (namespace === undefined) return { ok: false, code: NAMESPACE_UNAVAILABLE }
-      const answer = await namespace.search(request)
-      return answer.ok ? { ok: true, result: answer.value } : { ok: false, code: answer.error.code }
+      try {
+        const answer = await namespace.search(request)
+        return answer.ok ? { ok: true, result: answer.value } : { ok: false, code: answer.error.code }
+      } catch {
+        // A call that never reached an answer is a stated code too: the view
+        // draws failures, and an unhandled rejection would draw nothing.
+        return { ok: false, code: REMOTE_FAILED }
+      }
     },
     recent: async (): Promise<readonly RecentQuery[]> => {
       const namespace = namespaceOf(ctx)
       if (namespace === undefined) return []
-      const answer = await namespace.recent()
       // A history the host cannot read is an empty strip, never a thrown
       // render: the search box itself still works without it.
-      return answer.ok ? answer.value.entries : []
+      return readRecent(namespace)
     },
     forget: async (id: string): Promise<readonly RecentQuery[]> => {
       const namespace = namespaceOf(ctx)
       if (namespace === undefined) return []
-      await namespace.forget({ id })
-      const answer = await namespace.recent()
-      return answer.ok ? answer.value.entries : []
+      try {
+        await namespace.forget({ id })
+      } catch {
+        // The row may or may not be gone; the strip the host reports next is
+        // the authority either way.
+      }
+      return readRecent(namespace)
     },
     deepDive: (prompt: string): void => {
       void deepDiveSession(ctx).then(

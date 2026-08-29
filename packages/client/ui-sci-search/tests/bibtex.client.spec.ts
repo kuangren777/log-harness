@@ -19,8 +19,18 @@ describe('citeKey', () => {
     expect(citeKey({ ...BARE, authors: ["O'Brien-Smith, Ada"], year: 1999 })).toBe('OBrienSmith1999')
   })
 
-  it('takes the whole name when the source gave no comma', () => {
-    expect(citeKey({ ...BARE, authors: ['Ada Lovelace'], year: 1843 })).toBe('AdaLovelace1843')
+  it('takes the last token as the family name when the source gave no comma', () => {
+    // OpenAlex and Semantic Scholar give display order; keying on the first
+    // token would cite "Ruiqiang Guo" as Ruiqiang2015.
+    expect(citeKey({ ...BARE, authors: ['Ruiqiang Guo'], year: 2015 })).toBe('Guo2015')
+    expect(citeKey({ ...BARE, authors: ['Guo, Ruiqiang'], year: 2015 })).toBe('Guo2015')
+    expect(citeKey({ ...BARE, authors: ['Ada Lovelace'], year: 1843 })).toBe('Lovelace1843')
+  })
+
+  it('reads the same rule for a spaced CJK name and a single-token one', () => {
+    expect(citeKey({ ...BARE, authors: ['李 明'], year: 2015 })).toBe('明2015')
+    expect(citeKey({ ...BARE, authors: ['Aristotle'], year: 2015 })).toBe('Aristotle2015')
+    expect(citeKey({ ...BARE, authors: ['van der Waals, Johannes'], year: 1873 })).toBe('vanderWaals1873')
   })
 })
 

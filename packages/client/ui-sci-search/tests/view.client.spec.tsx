@@ -147,6 +147,29 @@ describe('SearchView recent queries', () => {
   it('draws no strip when the host remembers nothing', async () => {
     await mount({ recent: vi.fn(async () => []) })
     expect(screen.queryByRole('group', { name: '最近检索' })).toBeNull()
+    expect(screen.queryByText('最近检索')).toBeNull()
+  })
+
+  it('titles the strip with visible text, not only an accessible name', async () => {
+    await mount()
+    // The strip is the only thing explaining where the pills came from, so
+    // the title has to be on the page and not just in the a11y tree.
+    expect(screen.getByText('最近检索')).toBeTruthy()
+  })
+
+  it('shows the strip after the first search when the history was empty on mount', async () => {
+    const recent = vi.fn(async (): Promise<readonly RecentQuery[]> => [])
+    await mount({ recent })
+    expect(screen.queryByText('最近检索')).toBeNull()
+
+    // The host writes the row while serving the search, so the strip appears
+    // on the re-read that follows it.
+    recent.mockResolvedValue(RECENT)
+    type('n-type SnSe thermoelectric zT')
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '检索' })) })
+
+    expect(screen.getByText('最近检索')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'n-type SnSe thermoelectric zT' })).toBeTruthy()
   })
 
   it('refills and re-runs a remembered query', async () => {
