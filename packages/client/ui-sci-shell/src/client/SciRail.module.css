@@ -1,0 +1,53 @@
+/* The icon rail: a fixed-width glass column left of the sidebar. Its width is
+   what AppFrame measures for the first grid track, so it is stated here once. */
+
+.root {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  width: 66px;
+  height: 100%;
+  padding: 16px 0;
+  border-inline-end: 1px solid var(--dsw-sci-glass-border);
+  background: var(--dsw-sci-glass-bg);
+  backdrop-filter: blur(30px);
+}
+
+.mark {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin-block-end: 18px;
+  border-radius: 13px;
+  background: conic-gradient(
+    from 40deg,
+    var(--dsw-sci-accent-a),
+    var(--dsw-sci-accent-b),
+    var(--dsw-sci-accent-a)
+  );
+  color: var(--dsw-static-neutral-bluish-00);
+}
+
+.items {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.footer {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}

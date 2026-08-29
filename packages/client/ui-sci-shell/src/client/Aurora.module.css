@@ -1,0 +1,46 @@
+/* Aurora backdrop. The two gradients are the only place in this package that
+   names a colour directly, and even there the stops are the sci accent
+   tokens; `transparent` is a keyword, not a palette value. */
+
+.root {
+  position: absolute;
+  inset: -15%;
+  filter: blur(110px);
+  opacity: var(--dsw-sci-aurora-opacity);
+  pointer-events: none;
+  transition: opacity var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.fieldA {
+  position: absolute;
+  inset-block-start: 8%;
+  inset-inline-start: 6%;
+  width: 44vw;
+  height: 44vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--dsw-sci-accent-a), transparent 65%);
+  animation: aurora-a 18s ease-in-out infinite;
+}
+
+.fieldB {
+  position: absolute;
+  inset-block-end: 2%;
+  inset-inline-end: 4%;
+  width: 40vw;
+  height: 40vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--dsw-sci-accent-b), transparent 65%);
+  animation: aurora-b 22s ease-in-out infinite;
+}
+
+@keyframes aurora-a {
+  0%,
+  100% { transform: translate(-6%, -4%) scale(1); }
+  50% { transform: translate(8%, 6%) scale(1.2); }
+}
+
+@keyframes aurora-b {
+  0%,
+  100% { transform: translate(5%, 8%) scale(1.1); }
+  50% { transform: translate(-9%, -6%) scale(0.92); }
+}
