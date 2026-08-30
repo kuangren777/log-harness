@@ -4,7 +4,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import type { LiteratureRecord, LiteratureSearchResult } from '@deepseek-ai/dsh-sci-literature/types'
 
 /** Records the stub answers with, keyed by nothing: every search returns them all. */
-export let stubbedRecords: readonly LiteratureRecord[] = []
+let stubbedRecords: readonly LiteratureRecord[] = []
 
 /**
  * Set what the next searches answer.

@@ -48,13 +48,6 @@ export interface ILayout {
    */
   showView(id: string): void
   /**
-   * Toggle the wide details mode: the details column takes the full-bleed
-   * width and the sidebar track collapses to zero. Opens the column at the
-   * contract default when it is closed; {@link ILayout.closeDetails} resets
-   * the mode with the column.
-   */
-  toggleDetailsWide(): void
-  /**
    * Open the details column and select mode `id`; an id naming no live
    * `conversation.details.mode` entry leaves the panel on `tool`. The column
    * opens either way — with no registered selector this is exactly
@@ -112,11 +105,6 @@ export class LayoutController implements ILayout {
    */
   showView(id: string): void {
     this.#require().showView(id)
-  }
-
-  /** Toggle the wide details mode (see the {@link ILayout} contract). */
-  toggleDetailsWide(): void {
-    this.#require().toggleDetailsWide()
   }
 
   /**

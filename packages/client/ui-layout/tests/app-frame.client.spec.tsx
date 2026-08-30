@@ -17,7 +17,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { AppFrame } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
 import type { AppFrameProps } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
-import { DETAILS_MAX, DETAILS_WIDE_RATIO, SIDEBAR_COLLAPSED } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
+import { DETAILS_RATIO, SIDEBAR_COLLAPSED } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
 import { CONVERSATION_VIEW, createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
 import type {
   SessionId, SessionListState, WorkspaceListState,
@@ -185,7 +185,7 @@ describe('AppFrame', () => {
     expect(tracks(frame)).toEqual([280, 0])
 
     act(() => { instance.actions.openDetails() })
-    expect(tracks(frame)).toEqual([280, 360])
+    expect(tracks(frame)).toEqual([280, 960])
 
     selectedSession.current = 's-next' as SessionId
     act(() => { rerenderFrame() })
@@ -201,7 +201,7 @@ describe('AppFrame', () => {
     selectedSession.current = 's-next' as SessionId
     selectedSessionBlank.current = false
     act(() => { rerenderFrame() })
-    expect(tracks(frame)).toEqual([280, 360])
+    expect(tracks(frame)).toEqual([280, 960])
 
     selectedSession.current = undefined
     act(() => { rerenderFrame() })
@@ -234,22 +234,20 @@ describe('AppFrame', () => {
     expect(tracks(frame)[0]).toBe(350)
   })
 
-  it('details drag widens leftward (negative dx grows the panel)', () => {
+  it('the open details column is the fixed share and offers no drag handle', () => {
     const { frame, instance } = mountFrame()
     act(() => { instance.actions.openDetails() })
-    const handles = frame.querySelectorAll('[class*="handle"]')
-    drag(handles[1]!, 1560, 1500)
-    expect(tracks(frame)[1]).toBe(420)
+    expect(tracks(frame)).toEqual([280, Math.round(1920 * DETAILS_RATIO)])
+    // Its width is a product decision, not a preference: only the sidebar drags.
+    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(1)
   })
 
-  it('drag base is the rendered (concession-clamped) width, not the preference', () => {
-    frameWidth = 1250 // step-2 squeeze: details renders 330 while preference is 360
+  it('the fixed share auto-closes when it would squeeze the center below its floor', () => {
+    frameWidth = 1100 // 1100/2 = 550; center 1100-280-550 = 270 < DETAILS_CENTER_FLOOR
     const { frame, instance } = mountFrame()
     act(() => { instance.actions.openDetails() })
-    expect(tracks(frame)).toEqual([280, 330])
-    const handles = frame.querySelectorAll('[class*="handle"]')
-    drag(handles[1]!, 920, 930) // shrink by 10 from the rendered width
-    expect(instance.getSnapshot().details).toBe(320)
+    expect(tracks(frame)).toEqual([280, 0])
+    expect(instance.getSnapshot().details).toBe(360)
   })
 
   it('details column stays mounted at zero width', () => {
@@ -269,23 +267,21 @@ describe('AppFrame', () => {
     expect(lastSidebarCall.props).toEqual({ collapsed: true, width: SIDEBAR_COLLAPSED })
   })
 
-  it('viewport shrink triggers the concession chain via ResizeObserver', () => {
+  it('viewport changes re-solve the fixed share via ResizeObserver', () => {
     const { frame, instance } = mountFrame()
     act(() => { instance.actions.openDetails() })
     frameWidth = 1250
     act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
-    expect(tracks(frame)).toEqual([280, 330])
+    expect(tracks(frame)).toEqual([280, 625])
     frameWidth = 1920
     act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
-    expect(tracks(frame)).toEqual([280, 360])
+    expect(tracks(frame)).toEqual([280, 960])
   })
 
-  it('drag handles disappear for collapsed columns', () => {
+  it('only the sidebar owns a drag handle, and it disappears when collapsed', () => {
     const { frame, instance } = mountFrame()
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(1)
     act(() => { instance.actions.openDetails() })
-    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(2)
-    act(() => { instance.actions.closeDetails() })
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(1)
     act(() => { instance.actions.toggleSidebar() })
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
@@ -322,8 +318,6 @@ describe('AppFrame — rail column', () => {
     const trackCount = () => frame.style.gridTemplateColumns.replace('minmax(0, 1fr)', 'auto').split(' ').length
     expect(trackCount()).toBe(3)
     act(() => { instance.actions.openDetails() })
-    expect(trackCount()).toBe(3)
-    act(() => { instance.actions.toggleDetailsWide() })
     expect(trackCount()).toBe(3)
     act(() => { instance.actions.showView('library') })
     expect(trackCount()).toBe(3)
@@ -401,43 +395,6 @@ describe('AppFrame — keyed views', () => {
   })
 })
 
-describe('AppFrame — wide details mode', () => {
-  it('takes the full-bleed width, hides the sidebar, and drops the handles', () => {
-    const { frame, instance, getByTestId } = mountFrame()
-    act(() => { instance.actions.toggleDetailsWide() })
-    expect(tracks(frame)).toEqual([0, Math.round(1920 * DETAILS_WIDE_RATIO)])
-    expect(frame.hasAttribute('data-details-wide')).toBe(true)
-    expect(frame.hasAttribute('data-details-collapsed')).toBe(false)
-    expect(getByTestId('details-content')).toBeTruthy()
-    // Both rendered widths are mode-decided, so neither is draggable.
-    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
-  })
-
-  it('never goes below the ordinary details ceiling on a small frame', () => {
-    frameWidth = 700
-    const { frame, instance } = mountFrame()
-    act(() => { instance.actions.toggleDetailsWide() })
-    expect(Math.round(700 * DETAILS_WIDE_RATIO)).toBeLessThan(DETAILS_MAX)
-    expect(tracks(frame)).toEqual([0, DETAILS_MAX])
-  })
-
-  it('closeDetails leaves the wide mode with the column', () => {
-    const { frame, instance } = mountFrame()
-    act(() => { instance.actions.toggleDetailsWide() })
-    act(() => { instance.actions.closeDetails() })
-    expect(frame.hasAttribute('data-details-wide')).toBe(false)
-    expect(tracks(frame)).toEqual([280, 0])
-    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(1)
-  })
-
-  it('stays ordinary while no Session can own the column', () => {
-    selectedSession.current = undefined
-    const { frame, instance } = mountFrame()
-    act(() => { instance.actions.toggleDetailsWide() })
-    expect(tracks(frame)).toEqual([280, 0])
-    expect(frame.hasAttribute('data-details-wide')).toBe(false)
-  })
-})
 
 describe('AppFrame — narrow-viewport auto-collapse', () => {
   it('mounts collapsed below the breakpoint with no sidebar handle', () => {
@@ -548,6 +505,6 @@ describe('AppFrame — unmount with an in-flight resize frame', () => {
     act(() => { instance.actions.openDetails() })
     frameWidth = 1250
     act(() => { fireResize?.(); fireResize?.(); vi.advanceTimersByTime(20) })
-    expect(tracks(frame)).toEqual([280, 330])
+    expect(tracks(frame)).toEqual([280, 625])
   })
 })

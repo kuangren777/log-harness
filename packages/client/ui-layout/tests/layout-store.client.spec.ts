@@ -8,7 +8,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { CONVERSATION_VIEW, createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
 import {
-  DETAILS_DEFAULT, DETAILS_MAX, DETAILS_MIN,
+  DETAILS_DEFAULT,
   SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN,
 } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
 
@@ -21,7 +21,7 @@ describe('createLayoutStore', () => {
     const { store } = createLayoutStore().create()
     expect(store.getSnapshot()).toEqual({
       sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false,
-      view: CONVERSATION_VIEW, detailsWide: false,
+      view: CONVERSATION_VIEW,
     })
   })
 
@@ -32,16 +32,12 @@ describe('createLayoutStore', () => {
     expect(b.store.getSnapshot().sidebar).toBe(SIDEBAR_DEFAULT)
   })
 
-  it('setSidebar/setDetails clamp into the contract ranges', () => {
+  it('setSidebar clamps into the contract range', () => {
     const { store, actions } = createLayoutStore().create()
     actions.setSidebar(1)
     expect(store.getSnapshot().sidebar).toBe(SIDEBAR_MIN)
     actions.setSidebar(9999)
     expect(store.getSnapshot().sidebar).toBe(SIDEBAR_MAX)
-    actions.setDetails(1)
-    expect(store.getSnapshot().details).toBe(DETAILS_MIN)
-    actions.setDetails(9999)
-    expect(store.getSnapshot().details).toBe(DETAILS_MAX)
   })
 
   it('toggleSidebar flips closed <-> contract default (drag width forgotten)', () => {
@@ -60,7 +56,7 @@ describe('createLayoutStore', () => {
     actions.toggleSidebar()
     expect(store.getSnapshot()).toEqual({
       sidebar: 400, details: 0, narrow: true, narrowExpanded: true,
-      view: CONVERSATION_VIEW, detailsWide: false,
+      view: CONVERSATION_VIEW,
     })
     actions.toggleSidebar()
     expect(store.getSnapshot().narrowExpanded).toBe(false)
@@ -80,13 +76,12 @@ describe('createLayoutStore', () => {
     expect(store.getSnapshot().narrowExpanded).toBe(false)
   })
 
-  it('openDetails uses the contract default, preserves an open width, and closeDetails zeroes', () => {
+  it('openDetails writes the open sentinel, stays idempotent, and closeDetails zeroes', () => {
     const { store, actions } = createLayoutStore().create()
     actions.openDetails()
     expect(store.getSnapshot().details).toBe(DETAILS_DEFAULT)
-    actions.setDetails(500)
     actions.openDetails()
-    expect(store.getSnapshot().details).toBe(500)
+    expect(store.getSnapshot().details).toBe(DETAILS_DEFAULT)
     actions.closeDetails()
     expect(store.getSnapshot().details).toBe(0)
   })
@@ -100,29 +95,10 @@ describe('createLayoutStore', () => {
     expect(store.getSnapshot().view).toBe(CONVERSATION_VIEW)
   })
 
-  it('toggles the wide details mode and closeDetails resets it', () => {
-    const { store, actions } = createLayoutStore().create()
-    actions.openDetails()
-    actions.toggleDetailsWide()
-    expect(store.getSnapshot()).toMatchObject({ details: DETAILS_DEFAULT, detailsWide: true })
-    actions.toggleDetailsWide()
-    expect(store.getSnapshot().detailsWide).toBe(false)
-    actions.toggleDetailsWide()
-    actions.closeDetails()
-    expect(store.getSnapshot()).toMatchObject({ details: 0, detailsWide: false })
-  })
-
-  it('toggleDetailsWide opens a closed details column', () => {
-    const { store, actions } = createLayoutStore().create()
-    actions.toggleDetailsWide()
-    expect(store.getSnapshot()).toMatchObject({ details: DETAILS_DEFAULT, detailsWide: true })
-  })
-
   it('does not persist panel geometry', () => {
     const first = createLayoutStore().create()
     first.actions.setSidebar(400)
     first.actions.openDetails()
-    first.actions.setDetails(500)
     expect(localStorage.getItem(PERSIST_KEY)).toBeNull()
 
     const second = createLayoutStore().create()
@@ -132,7 +108,6 @@ describe('createLayoutStore', () => {
       narrow: false,
       narrowExpanded: false,
       view: CONVERSATION_VIEW,
-      detailsWide: false,
     })
   })
 })

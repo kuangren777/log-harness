@@ -44,9 +44,8 @@ async function bench(sessions?: ProducedFileSessions) {
   const readFile = vi.fn(async () => rpc({ ok: true, value: { path: '/p/a.md', size: 1, mediaType: 'text/markdown', encoding: 'utf8', content: 'x' } }))
   ctx.provide('connection', { api: { workspace: { listDirectory, readFile } } } as never)
   const showDetailsMode = vi.fn()
-  const toggleDetailsWide = vi.fn()
   const closeDetails = vi.fn()
-  ctx.provide('layout', { showDetailsMode, toggleDetailsWide, closeDetails } as never)
+  ctx.provide('layout', { showDetailsMode, closeDetails } as never)
   const list = createSnapshotStore<SessionListState>({ current: undefined } as SessionListState)
   ctx.provide('sessions', sessions ?? { list, binding: () => undefined } as never)
   const slots = ctx.get('slots') as SlotRegistry
@@ -57,7 +56,7 @@ async function bench(sessions?: ProducedFileSessions) {
       [TOOL_SLOT]: { kind: 'single', scope: 'session' },
     },
   } as never, () => null)
-  return { ctx, slots, declare, listDirectory, readFile, showDetailsMode, toggleDetailsWide, closeDetails }
+  return { ctx, slots, declare, listDirectory, readFile, showDetailsMode, closeDetails }
 }
 
 /** The injected face of the installed entry. */
@@ -339,14 +338,12 @@ describe('office state read', () => {
     expect(faceOf(b.slots).files).toBe(faceOf(b.slots).files)
   })
 
-  it('narrows the layout service to the two gestures the header drives', async () => {
+  it('narrows the layout service to the one gesture the header drives', async () => {
     const b = await bench()
     b.declare()
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const face = faceOf(b.slots)
 
-    face.layout.toggleDetailsWide()
-    expect(b.toggleDetailsWide).toHaveBeenCalledTimes(1)
     face.layout.closeDetails()
     expect(b.closeDetails).toHaveBeenCalledTimes(1)
   })

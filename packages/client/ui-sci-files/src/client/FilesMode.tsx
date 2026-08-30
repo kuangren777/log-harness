@@ -93,7 +93,6 @@ export function FilesMode({
         view={shown}
         canSource={canSource}
         onView={setView}
-        onWide={() => { layout.toggleDetailsWide() }}
         onDownload={(picked) => { triggerDownload(picked) }}
         onClose={() => { layout.closeDetails() }}
         t={t}

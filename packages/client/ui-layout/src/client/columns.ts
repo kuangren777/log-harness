@@ -1,24 +1,23 @@
 /**
- * Pure concession-chain column solver for the three-column AppFrame.
- * Chain order is fixed by contract: keep center >= CENTER_MIN by shrinking
- * details, then auto-closing it (derived zero width — preferred width
- * preferences are never rewritten, so widening the window restores them).
- * The sidebar never concedes: its rendered width is always the drag
- * preference (or the collapsed rail), and center absorbs any remaining
- * deficit as the last resort. Inputs are the layout store's plain width
- * preferences (0 = closed); a closed sidebar resolves to the fixed
- * SIDEBAR_COLLAPSED control rail while closed details resolve to zero width.
- * The SIDEBAR_AUTO_COLLAPSE breakpoint is consumed by AppFrame, which decides
+ * Pure column solver for the three-column AppFrame.
+ * The details column has exactly two states: closed (zero width) or open at
+ * DETAILS_RATIO of the frame — no drag range and no wide mode, by product
+ * decision. It auto-closes (derived zero width — the open preference is never
+ * rewritten, so widening the window restores it) only when the fixed share
+ * would squeeze the center below DETAILS_CENTER_FLOOR. The sidebar never
+ * concedes: its rendered width is always the drag preference (or the
+ * collapsed rail), and center absorbs any remaining deficit. Inputs are the
+ * layout store's plain width preferences (0 = closed); a closed sidebar
+ * resolves to the fixed SIDEBAR_COLLAPSED control rail. The
+ * SIDEBAR_AUTO_COLLAPSE breakpoint is consumed by AppFrame, which decides
  * the effective sidebar preference before solving; the solver itself stays
  * breakpoint-free.
  */
 
-/** Resolved widths for one frame; center may drop below CENTER_MIN only at the final fallback. */
+/** Resolved widths for one frame. */
 export interface Columns { sidebar: number; center: number; details: number }
 
-// Contract-frozen geometry: the three-column concession chain's fixed points.
-/** Center column floor; only the final fallback may go below it. */
-export const CENTER_MIN = 640
+// Contract-frozen geometry: the three-column frame's fixed points.
 /** Sidebar drag clamp floor. */
 export const SIDEBAR_MIN = 264
 /** Sidebar drag clamp ceiling. */
@@ -31,19 +30,17 @@ export const SIDEBAR_COLLAPSED = 56
  * LG breakpoint); a manual toggle below it re-expands over the squeezed center
  * (stores.ts narrowExpanded). */
 export const SIDEBAR_AUTO_COLLAPSE = 1024
-/** Details drag clamp floor. */
-export const DETAILS_MIN = 300
-/** Details drag clamp ceiling. */
-export const DETAILS_MAX = 520
-/** Details width before any user drag. */
-export const DETAILS_DEFAULT = 360
 /**
- * Share of the frame's inner width the details column takes in the wide mode
- * (AppFrame, with DETAILS_MAX as the floor so a small frame still gets a
- * usable column). Outside the concession chain on purpose: the wide mode is a
- * deliberate full-bleed reading state, not a solved width.
+ * Open-details sentinel the store writes; the solver renders any non-zero
+ * details preference at DETAILS_RATIO, so the value itself never reaches the
+ * screen. Kept as a width-typed number so the store stays plain px
+ * preferences with 0 = closed.
  */
-export const DETAILS_WIDE_RATIO = 0.72
+export const DETAILS_DEFAULT = 360
+/** The open details column's fixed share of the frame's inner width. */
+export const DETAILS_RATIO = 0.5
+/** Center width below which the fixed-share details column auto-closes. */
+export const DETAILS_CENTER_FLOOR = 320
 
 /**
  * Clamp a panel width into its contract range.
@@ -69,16 +66,13 @@ export function clampWidth(px: number, min: number, max: number): number {
 export function computeColumns(viewport: number, sidebar: number, details: number): Columns {
   // The sidebar is fixed at its preference (or the rail) — it never concedes.
   const s = sidebar === 0 ? SIDEBAR_COLLAPSED : clampWidth(sidebar, SIDEBAR_MIN, SIDEBAR_MAX)
-  const d0 = details === 0 ? 0 : clampWidth(details, DETAILS_MIN, DETAILS_MAX)
+  // Open details take their fixed share of the frame — the preference value
+  // only says open or closed, never a width.
+  const d0 = details === 0 ? 0 : Math.round(viewport * DETAILS_RATIO)
 
-  // Step 1: everything fits at preferred widths.
-  if (s + d0 + CENTER_MIN <= viewport) return { sidebar: s, center: viewport - s - d0, details: d0 }
-
-  // Step 2: shrink details toward its minimum.
-  const d1 = d0 === 0 ? 0 : Math.max(DETAILS_MIN, viewport - s - CENTER_MIN)
-  if (s + d1 + CENTER_MIN <= viewport) return { sidebar: s, center: CENTER_MIN, details: d1 }
-
-  // Step 3: auto-close details (derived — preferences untouched); center
-  // absorbs any remaining deficit (may drop below CENTER_MIN).
-  return { sidebar: s, center: Math.max(0, viewport - s), details: 0 }
+  // The fixed share auto-closes (derived — the preference is untouched) when
+  // it would squeeze the center below its floor; center then absorbs any
+  // remaining deficit (may drop below CENTER_MIN on a tiny frame).
+  const d = d0 !== 0 && viewport - s - d0 < DETAILS_CENTER_FLOOR ? 0 : d0
+  return { sidebar: s, center: Math.max(0, viewport - s - d), details: d }
 }

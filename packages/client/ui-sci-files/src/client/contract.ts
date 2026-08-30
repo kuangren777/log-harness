@@ -33,14 +33,12 @@ export interface ISciFiles {
 }
 
 /**
- * The panel transitions the mode's header drives. Narrower than `ILayout` on
- * purpose: the header owns two gestures and a test double owes nothing more.
+ * The panel transition the mode's header drives. Narrower than `ILayout` on
+ * purpose: the header owns one gesture and a test double owes nothing more.
  */
 export interface SciFilesLayout {
-  /** Toggle the wide details mode (column full-bleed, sidebar collapsed). */
-  toggleDetailsWide(): void
   /** Close the details column. */
-  closeDetails(): void
+  closeDetails: () => void
 }
 
 /** One row of a listed directory level. */

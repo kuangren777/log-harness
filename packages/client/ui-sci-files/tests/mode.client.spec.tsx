@@ -48,7 +48,6 @@ function bench(options: { cwd?: string | undefined; active?: boolean; nodes?: re
   const listDirectory = vi.fn(async (_sessionId: SessionId, _path: string): Promise<DirectoryOutcome> => ({ ok: true, entries: [] }))
   const readFile = vi.fn(async (): Promise<FileReadOutcome> => ({ ok: false, code: 'file-not-found' }))
   const officeState = vi.fn(async (): Promise<OfficeStateOutcome> => ({ ok: false }))
-  const toggleDetailsWide = vi.fn()
   const closeDetails = vi.fn()
   const props = {
     sessionId: SESSION,
@@ -56,13 +55,13 @@ function bench(options: { cwd?: string | undefined; active?: boolean; nodes?: re
     active: options.active ?? true,
     useSession: <S,>(select: (s: ConversationSnapshot) => S): S => select(snapshot),
     files: store,
-    layout: { toggleDetailsWide, closeDetails },
+    layout: { closeDetails },
     listDirectory,
     readFile,
     officeState,
     t: makeTranslate(zh),
   } as unknown as FilesModeProps
-  return { props, store, listDirectory, readFile, officeState, toggleDetailsWide, closeDetails }
+  return { props, store, listDirectory, readFile, officeState, closeDetails }
 }
 
 describe('FilesMode', () => {
@@ -214,7 +213,7 @@ describe('FilesMode panel header and chips', () => {
     expect(screen.getByText(zh['panel.source']).hasAttribute('disabled')).toBe(true)
   })
 
-  it('saves the shown file, and drives the two panel gestures', async () => {
+  it('saves the shown file, and drives the close gesture', async () => {
     const revokeObjectURL = vi.fn<(url: string) => void>()
     vi.stubGlobal('URL', Object.assign(URL, {
       createObjectURL: vi.fn(() => 'blob:mock/0'),
@@ -227,8 +226,6 @@ describe('FilesMode panel header and chips', () => {
 
     fireEvent.click(screen.getByLabelText(zh['panel.download']))
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock/0')
-    fireEvent.click(screen.getByLabelText(zh['panel.wide']))
-    expect(b.toggleDetailsWide).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByLabelText(zh['panel.close']))
     expect(b.closeDetails).toHaveBeenCalledTimes(1)
     vi.unstubAllGlobals()

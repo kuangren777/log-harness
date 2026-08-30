@@ -144,7 +144,6 @@ export function apply(ctx: ClientContext): void {
   const injected = (): SciFilesInjected => ({
     files,
     layout: {
-      toggleDetailsWide: () => { ctx.layout.toggleDetailsWide() },
       closeDetails: () => { ctx.layout.closeDetails() },
     },
     listDirectory: (sessionId, path) => listLevel(connection.api, sessionId, path),

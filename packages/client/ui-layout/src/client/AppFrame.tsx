@@ -28,7 +28,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-import { computeColumns, DETAILS_MAX, DETAILS_WIDE_RATIO, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
+import { computeColumns, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
 import { CONVERSATION_VIEW, type createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
@@ -72,7 +72,7 @@ function DetailsColumn(props: { hidden: boolean; children?: ReactNode }) {
  * One drag handle: pointer capture, rAF-throttled dx reports against the drag-start origin.
  * `side` keys the hover-reveal CSS to the owning column.
  */
-function DragHandle(props: { side: 'sidebar' | 'details'; left: number; onStart: () => void; onDrag: (dx: number) => void; onEnd: () => void }) {
+function DragHandle(props: { side: 'sidebar'; left: number; onStart: () => void; onDrag: (dx: number) => void; onEnd: () => void }) {
   const [dragging, setDragging] = useState(false)
   const origin = useRef(0)
   const latest = useRef(0)
@@ -184,31 +184,24 @@ export function AppFrame({
   // concession-clamped panel must not jump back to the stored preference);
   // it stays frozen for the whole gesture so dx deltas do not compound.
   const sidebarBase = useRef(0)
-  const detailsBase = useRef(0)
   // Track-level transitions pause for the whole gesture: eased tracks would
   // detach the column edge from the pointer (AppFrame.module.css).
   const [dragging, setDragging] = useState(false)
   const onDragEnd = useCallback(() => { setDragging(false) }, [])
   const onSidebarStart = useCallback(() => { sidebarBase.current = colsRef.current.sidebar; setDragging(true) }, [])
-  const onDetailsStart = useCallback(() => { detailsBase.current = colsRef.current.details; setDragging(true) }, [])
   const onSidebarDrag = useCallback((dx: number) => {
     actions.setSidebar(sidebarBase.current + dx)
   }, [actions])
-  const onDetailsDrag = useCallback((dx: number) => {
-    actions.setDetails(detailsBase.current - dx)
-  }, [actions])
 
-  // Mode overrides on top of the solve. Wide details needs a column owner, so
-  // it stays inert until a Session can hold one; a non-conversation view
-  // empties both side tracks and takes the center for its keyed entry.
+  // A non-conversation view empties both side tracks and takes the center for
+  // its keyed entry. The details track is the solver's fixed share — there is
+  // no drag and no wide mode for it.
   const isConversation = panels.view === CONVERSATION_VIEW
-  const wideDetails = panels.detailsWide && detailsSession !== undefined
-  const detailsPx = wideDetails ? Math.max(Math.round(viewport * DETAILS_WIDE_RATIO), DETAILS_MAX) : cols.details
-  const sidebarPx = wideDetails ? 0 : cols.sidebar
+  const detailsPx = cols.details
   // Always exactly three tracks: e2e goldens and the web smoke read them by
   // position, so a mode may zero a track but never add or drop one.
   const template = isConversation
-    ? `${sidebarPx}px minmax(0, 1fr) ${detailsPx}px`
+    ? `${cols.sidebar}px minmax(0, 1fr) ${detailsPx}px`
     : '0px minmax(0, 1fr) 0px'
 
   return (
@@ -227,7 +220,6 @@ export function AppFrame({
         data-view={panels.view}
         data-sidebar-collapsed={sidebarCollapsed || undefined}
         data-details-collapsed={!isConversation || detailsPx === 0 || undefined}
-        data-details-wide={wideDetails || undefined}
         data-dragging={dragging || undefined}
       >
         <div className={css.sidebarCol} {...parked(!isConversation)}>
@@ -266,8 +258,7 @@ export function AppFrame({
             sidebar is fixed-width, and a keyed view and the wide details mode
             both decide their tracks themselves. Offsets are frame-relative,
             and the frame starts after the rail. */}
-        {isConversation && !wideDetails && !sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
-        {isConversation && !wideDetails && cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
+        {isConversation && !sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
       </div>
     </div>
   )

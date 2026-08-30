@@ -8,7 +8,7 @@
  * so it is absent rather than guessed. Source view and download need those
  * same bytes, so both are inert until a read has landed.
  */
-import { IconCloseOutline16, IconDownloadOutline16, IconFullscreenOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCloseOutline16, IconDownloadOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Translate } from '@deepseek-ai/dsh-client-locale/client'
 import type { SciFileContent } from './contract.ts'
 import type { SciFilesKey } from './locales.ts'
@@ -58,7 +58,6 @@ export interface PanelHeaderProps {
   /** Switch the body's reading. */
   onView: (view: PanelView) => void
   /** Toggle the wide details mode. */
-  onWide: () => void
   /** Save the read bytes to disk; only reachable once a read has landed. */
   onDownload: (file: SciFileContent) => void
   /** Close the details column. */
@@ -72,7 +71,7 @@ export interface PanelHeaderProps {
  * @param props - owner-controlled header props.
  * @returns the header row.
  */
-export function PanelHeader({ path, file, view, canSource, onView, onWide, onDownload, onClose, t }: PanelHeaderProps) {
+export function PanelHeader({ path, file, view, canSource, onView, onDownload, onClose, t }: PanelHeaderProps) {
   const extension = path === undefined ? '' : extensionOf(path)
   const name = path === undefined ? t('panel.empty') : fileName(path)
   return (
@@ -101,9 +100,6 @@ export function PanelHeader({ path, file, view, canSource, onView, onWide, onDow
         </button>
       </div>
       <div className={css.actions}>
-        <button type="button" className={css.action} title={t('panel.wide')} aria-label={t('panel.wide')} onClick={onWide}>
-          <IconFullscreenOutline16 size={14} />
-        </button>
         <button
           type="button" className={css.action} title={t('panel.download')} aria-label={t('panel.download')}
           disabled={file === null} onClick={file === null ? undefined : () => { onDownload(file) }}

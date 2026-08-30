@@ -24,7 +24,6 @@ function content(overrides: Partial<SciFileContent> = {}): SciFileContent {
 /** Mount the header over one selection, returning every gesture spy. */
 function header(overrides: Partial<PanelHeaderProps> = {}) {
   const onView = vi.fn()
-  const onWide = vi.fn()
   const onDownload = vi.fn()
   const onClose = vi.fn()
   const props: PanelHeaderProps = {
@@ -33,14 +32,13 @@ function header(overrides: Partial<PanelHeaderProps> = {}) {
     view: 'preview',
     canSource: true,
     onView,
-    onWide,
     onDownload,
     onClose,
     t: makeTranslate(zh),
     ...overrides,
   }
   render(<PanelHeader {...props} />)
-  return { onView, onWide, onDownload, onClose }
+  return { onView, onDownload, onClose }
 }
 
 describe('PanelHeader', () => {
@@ -98,12 +96,12 @@ describe('PanelHeader', () => {
     expect(screen.getByText(zh['panel.preview']).getAttribute('aria-pressed')).toBe('false')
   })
 
-  it('drives the two panel gestures', () => {
+  it('drives the close gesture, and offers no width control', () => {
     const spies = header()
-    fireEvent.click(screen.getByLabelText(zh['panel.wide']))
-    expect(spies.onWide).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByLabelText(zh['panel.close']))
     expect(spies.onClose).toHaveBeenCalledTimes(1)
+    // The column's width is the frame's fixed share: nothing here changes it.
+    expect(screen.queryByLabelText('展开 / 还原')).toBeNull()
   })
 
   it('offers the download only once bytes have arrived', () => {

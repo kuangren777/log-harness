@@ -12,13 +12,11 @@ import type { PanelActions } from '@deepseek-ai/dsh-client-ui-layout/src/client/
 function fakePanels(): PanelActions {
   return {
     setSidebar: vi.fn(),
-    setDetails: vi.fn(),
     toggleSidebar: vi.fn(),
     setNarrow: vi.fn(),
     openDetails: vi.fn(),
     closeDetails: vi.fn(),
     showView: vi.fn(),
-    toggleDetailsWide: vi.fn(),
   }
 }
 
@@ -36,7 +34,6 @@ describe('LayoutController', () => {
     expect(panels.openDetails).toHaveBeenCalledTimes(1)
     expect(panels.closeDetails).toHaveBeenCalledTimes(1)
     expect(panels.setSidebar).not.toHaveBeenCalled()
-    expect(panels.setDetails).not.toHaveBeenCalled()
   })
 
   it('fails loud before the root entry wired its actions', () => {
@@ -46,7 +43,6 @@ describe('LayoutController', () => {
     expect(() => { service.closeDetails() }).toThrow(/panel actions not wired/)
     expect(() => { service.showDetailsMode('files') }).toThrow(/panel actions not wired/)
     expect(() => { service.showView('library') }).toThrow(/panel actions not wired/)
-    expect(() => { service.toggleDetailsWide() }).toThrow(/panel actions not wired/)
   })
 
   it('showDetailsMode opens the column alone while no plugin registered a selector', () => {
@@ -99,16 +95,14 @@ describe('LayoutController', () => {
     expect(fresh).toHaveBeenCalledTimes(2)
   })
 
-  it('forwards the view switch and the wide-details toggle to the attached set', () => {
+  it('forwards the view switch to the attached set', () => {
     const service = new LayoutController()
     const panels = fakePanels()
     service.attachPanels(panels)
 
     service.showView('library')
-    service.toggleDetailsWide()
 
     expect(panels.showView).toHaveBeenCalledWith('library')
-    expect(panels.toggleDetailsWide).toHaveBeenCalledTimes(1)
   })
 
   it('re-attach overwrites the stale action set (entry re-register)', () => {

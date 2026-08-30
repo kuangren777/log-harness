@@ -104,7 +104,7 @@ async function bench(options: BenchOptions = {}) {
   const panels = {
     setSidebar: vi.fn(), setDetails: vi.fn(), toggleSidebar: vi.fn(),
     setNarrow: vi.fn(), openDetails: vi.fn(), closeDetails: vi.fn(),
-    showView: vi.fn(), toggleDetailsWide: vi.fn(),
+    showView: vi.fn(),
   }
   const layout = new LayoutController()
   layout.attachPanels(panels)
