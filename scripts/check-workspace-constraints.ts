@@ -179,6 +179,8 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // `files` entry can spell a hashed name, so the whole emitted directory is
   // allowed for the packages that split.
   '@deepseek-ai/dsh-sci-audit': ['lib/*.js'],
+  '@deepseek-ai/dsh-sci-library': ['lib/*.js'],
+  '@deepseek-ai/dsh-sci-literature': ['lib/*.js'],
   '@deepseek-ai/dsh-sci-memory': ['lib/*.js'],
   // The bundle's patch layer is useless without the trees it points at: the
   // two agent presets are the roster root `cordis.patch.yml` declares, and the

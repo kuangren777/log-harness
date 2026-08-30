@@ -419,8 +419,14 @@ function rootProjectReferences(): Set<string> {
     for (const reference of references) {
       if (typeof reference.path !== 'string') continue
       const target = resolve(dirname(file), reference.path)
-      if (target.endsWith('.json')) queue.push(target)
-      else collected.add(target)
+      // A reference straight to a package's face config covers that package
+      // just as a bare directory reference does; collect its directory too.
+      if (target.endsWith('.json')) {
+        queue.push(target)
+        collected.add(dirname(target))
+      } else {
+        collected.add(target)
+      }
     }
   }
   return collected
