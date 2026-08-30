@@ -15,6 +15,13 @@ import { FilesMode, type FilesModeProps } from '../src/client/FilesMode.tsx'
 import { createSciFilesStore } from '../src/client/stores.ts'
 import { zh } from '../src/client/locales.ts'
 
+// pdf.js touches DOMMatrix at import time, which jsdom lacks; the previews
+// under test only need the module shape, and the pdf cases stub per test.
+vi.mock('pdfjs-dist', () => ({
+  getDocument: vi.fn(() => ({ promise: new Promise(() => {}), destroy: vi.fn() })),
+}))
+vi.mock('pdfjs-dist/build/pdf.worker.mjs', () => ({ WorkerMessageHandler: {} }))
+
 /** One markdown file as `workspace.readFile` returns it. */
 const REPORT: FileReadOutcome = {
   ok: true,
@@ -213,7 +220,7 @@ describe('FilesMode panel header and chips', () => {
     expect(screen.getByText(zh['panel.source']).hasAttribute('disabled')).toBe(true)
   })
 
-  it('saves the shown file, and drives the close gesture', async () => {
+  it('saves the shown file through the header download', async () => {
     const revokeObjectURL = vi.fn<(url: string) => void>()
     vi.stubGlobal('URL', Object.assign(URL, {
       createObjectURL: vi.fn(() => 'blob:mock/0'),
@@ -226,8 +233,8 @@ describe('FilesMode panel header and chips', () => {
 
     fireEvent.click(screen.getByLabelText(zh['panel.download']))
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock/0')
-    fireEvent.click(screen.getByLabelText(zh['panel.close']))
-    expect(b.closeDetails).toHaveBeenCalledTimes(1)
+    // The column ×, not this card, closes the panel now.
+    expect(screen.queryByLabelText(zh['panel.close'])).toBeNull()
     vi.unstubAllGlobals()
   })
 

@@ -97,9 +97,13 @@ export function DetailsPanel({
   const selection = useStore(s => s.selection)
   const callId = selection?.callId
   const callName = useSession(s => (callId === undefined ? undefined : materialFor(s, callId)?.name))
+  // With a visible tab strip the active mode's name is already on screen, so
+  // repeating it as the header would say the same thing twice; the header
+  // then names the COLUMN. The built-in inspector still titles by the
+  // selected call, which the tabs cannot say.
   const title = activeId === DEFAULT_DETAILS_MODE || active === undefined
     ? callName ?? selection?.toolName ?? t('details.title')
-    : active.label
+    : tabs.length > 1 ? t('details.title') : active.label
 
   return (
     <div className={css.root}>

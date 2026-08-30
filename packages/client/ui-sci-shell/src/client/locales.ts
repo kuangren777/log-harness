@@ -18,6 +18,10 @@ export const zh = {
   'profile.vm': '{slug} · {image}',
   'profile.balance': '余额 ${amount}',
   'profile.exhausted': '已用尽',
+  'profile.balanceUnknown': '余额暂不可读',
+  'profile.links.credit': '额度与充值',
+  'profile.links.gate': '账户与虚拟机',
+  'profile.links.admin': '管理后台',
   'profile.logout': '退出登录',
 }
 
@@ -36,6 +40,10 @@ export const en: Record<SciShellKey, string> = {
   'profile.vm': '{slug} · {image}',
   'profile.balance': 'Balance ${amount}',
   'profile.exhausted': 'Exhausted',
+  'profile.balanceUnknown': 'Balance unavailable right now',
+  'profile.links.credit': 'Credit & top-up',
+  'profile.links.gate': 'Account & VMs',
+  'profile.links.admin': 'Admin console',
   'profile.logout': 'Sign out',
 }
 

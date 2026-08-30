@@ -20,6 +20,13 @@ import { createOfficeStateReader, SCOPE_ATTACH_RETRY_DELAYS_MS } from '../src/cl
 import { apply as nodeApply } from '../src/index.ts'
 import { currentProducedPath, watchProducedFiles, type ProducedFileSessions } from '../src/client/watch-produced.ts'
 
+// pdf.js touches DOMMatrix at import time, which jsdom lacks; the previews
+// under test only need the module shape, and the pdf cases stub per test.
+vi.mock('pdfjs-dist', () => ({
+  getDocument: vi.fn(() => ({ promise: new Promise(() => {}), destroy: vi.fn() })),
+}))
+vi.mock('pdfjs-dist/build/pdf.worker.mjs', () => ({ WorkerMessageHandler: {} }))
+
 // The shipped Chinese copy is what this suite asserts, so it states the
 // browser locale the service reads at startup.
 usePinnedBrowserLanguages('zh-CN')
@@ -338,14 +345,12 @@ describe('office state read', () => {
     expect(faceOf(b.slots).files).toBe(faceOf(b.slots).files)
   })
 
-  it('narrows the layout service to the one gesture the header drives', async () => {
+  it('exposes no layout gesture of its own — the column chrome owns closing', async () => {
     const b = await bench()
     b.declare()
     await b.ctx.plugin({ inject: [...inject], apply }).await()
-    const face = faceOf(b.slots)
-
-    face.layout.closeDetails()
-    expect(b.closeDetails).toHaveBeenCalledTimes(1)
+    const face = faceOf(b.slots) as unknown as Record<string, unknown>
+    expect(face['layout']).toBeUndefined()
   })
 
   it('publishes one reader identity, so the frame does not re-query on every render', async () => {

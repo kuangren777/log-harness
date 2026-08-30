@@ -65,7 +65,9 @@ export type ProfileButtonProps =
  */
 export function ProfileButton({ useStore, actions, t }: ProfileButtonProps) {
   const email = useStore(s => s.me?.email ?? '')
-  const label = t('profile.open')
+  // The rail is an icon column, so the full identity lives in the hover title
+  // (and, always, inside the popover itself).
+  const label = email === '' ? t('profile.open') : email
   return (
     <button
       type="button"

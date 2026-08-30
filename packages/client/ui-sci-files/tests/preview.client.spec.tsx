@@ -15,6 +15,14 @@ import type {
 import type { SciFilesKey } from '../src/client/locales.ts'
 import { FilePreview } from '../src/client/FilePreview.tsx'
 import { OfficeFrame } from '../src/client/OfficeFrame.tsx'
+import { getDocument } from 'pdfjs-dist'
+
+// pdf.js touches DOMMatrix at import time, which jsdom lacks; the previews
+// under test only need the module shape, and the pdf cases stub per test.
+vi.mock('pdfjs-dist', () => ({
+  getDocument: vi.fn(() => ({ promise: new Promise(() => {}), destroy: vi.fn() })),
+}))
+vi.mock('pdfjs-dist/build/pdf.worker.mjs', () => ({ WorkerMessageHandler: {} }))
 
 const SESSION = 's1' as SessionId
 const t: Translate<SciFilesKey> = (key, params) =>
@@ -134,16 +142,39 @@ describe('FilePreview', () => {
     expect(image.alt).toBe('fig.png')
   })
 
-  it('hands a PDF to the browser viewer through a blob URL, released with the pane', async () => {
+  it('renders a PDF natively through pdf.js, never the browser plugin', async () => {
+    const destroy = vi.fn()
+    const getPage = vi.fn(async () => ({
+      getViewport: () => ({ width: 100, height: 140 }),
+      render: () => ({ promise: Promise.resolve() }),
+    }))
+    vi.mocked(getDocument).mockReturnValueOnce({
+      promise: Promise.resolve({ numPages: 2, getPage }),
+      destroy,
+    } as never)
     const { view } = await preview('/p/paper.pdf', {
       ok: true,
       file: content({ path: '/p/paper.pdf', mediaType: 'application/pdf', encoding: 'base64', content: 'JVBERi0=', size: 6 }),
     })
-    const embed = view.container.querySelector('embed')
-    expect(embed?.getAttribute('type')).toBe('application/pdf')
-    expect(embed?.getAttribute('src')).toBe(objectUrls[0])
+    await act(async () => {})
+    // No plugin embed: the pages are canvases the panel styles itself.
+    expect(view.container.querySelector('embed')).toBeNull()
+    expect(screen.getByText('preview.pdfPages(2)')).toBeTruthy()
     view.unmount()
-    expect(revokeObjectURL).toHaveBeenCalledWith(objectUrls[0])
+    expect(destroy).toHaveBeenCalled()
+  })
+
+  it('states a PDF that could not be parsed', async () => {
+    vi.mocked(getDocument).mockReturnValueOnce({
+      promise: Promise.reject(new Error('bad pdf')),
+      destroy: vi.fn(),
+    } as never)
+    await preview('/p/paper.pdf', {
+      ok: true,
+      file: content({ path: '/p/paper.pdf', mediaType: 'application/pdf', encoding: 'base64', content: 'JVBERi0=', size: 6 }),
+    })
+    await act(async () => {})
+    expect(screen.getByText('preview.pdfFailed')).toBeTruthy()
   })
 
   it('states that opaque bytes cannot be previewed, and says how many there are', async () => {

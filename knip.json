@@ -708,6 +708,21 @@
       "ignoreDependencies": [
         "@deepseek-ai/.+"
       ]
+    },
+    "packages/sci/sci-remote-hosts": {
+      "ignoreDependencies": [
+        "zod"
+      ]
+    },
+    "packages/sci/sci-tier": {
+      "ignoreDependencies": [
+        "zod"
+      ]
+    },
+    "packages/sci/sci-agents": {
+      "ignoreDependencies": [
+        "zod"
+      ]
     }
   }
 }

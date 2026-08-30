@@ -143,9 +143,6 @@ export function apply(ctx: ClientContext): void {
 
   const injected = (): SciFilesInjected => ({
     files,
-    layout: {
-      closeDetails: () => { ctx.layout.closeDetails() },
-    },
     listDirectory: (sessionId, path) => listLevel(connection.api, sessionId, path),
     readFile: async (sessionId, path): Promise<FileReadOutcome> => {
       const response = await connection.api.workspace.readFile({ sessionId, path })

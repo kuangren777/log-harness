@@ -260,7 +260,9 @@ describe('the chip row', () => {
     expect(screen.getByText(zh['artifacts.title'])).toBeTruthy()
     expect(screen.getByText('MD')).toBeTruthy()
     expect(screen.getByText('report.md')).toBeTruthy()
-    expect(screen.getByText('/w/out')).toBeTruthy()
+    // The directory is hover detail, not a second visible line.
+    expect(screen.queryByText('/w/out')).toBeNull()
+    expect(screen.getByTitle('/w/out/report.md')).toBeTruthy()
   })
 
   it('omits the directory line for a bare file name', () => {

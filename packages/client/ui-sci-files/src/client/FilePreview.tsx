@@ -15,7 +15,7 @@ import type { ReactNode } from 'react'
 import type { FileReadOutcome, OfficeStateOutcome, SciFileContent } from './contract.ts'
 import type { SciFilesKey } from './locales.ts'
 import { OfficeFrame } from './OfficeFrame.tsx'
-import { decodeBase64 } from './download.ts'
+import { PdfPages } from './pdf-pages.tsx'
 import { dataUrl, formatSize, highlightLanguage, previewKindFor } from './media.ts'
 import { fileName, isConvertibleOfficePath, isOfficePath } from './paths.ts'
 import css from './FilePreview.module.css'
@@ -125,26 +125,6 @@ function renderTyped(
   if (kind === 'image') {
     return <img className={css.image} src={dataUrl(file.mediaType, file.encoding, file.content)} alt={fileName(file.path)} />
   }
-  if (kind === 'pdf') return <PdfFrame file={file} />
+  if (kind === 'pdf') return <PdfPages file={file} t={t} />
   return <div className={css.note}>{t('preview.binary')}</div>
-}
-
-/**
- * A PDF in the browser's own viewer. The bytes ride a blob URL rather than a
- * data URL because Chromium refuses to hand a `data:` payload to the PDF
- * plugin; the object URL is revoked with the frame so a panel that browses
- * many documents does not retain every one of them.
- */
-function PdfFrame({ file }: { file: SciFileContent }) {
-  const [url, setUrl] = useState<string | null>(null)
-
-  useEffect(() => {
-    const blob = new Blob([decodeBase64(file.content)], { type: file.mediaType })
-    const objectUrl = URL.createObjectURL(blob)
-    setUrl(objectUrl)
-    return () => { URL.revokeObjectURL(objectUrl) }
-  }, [file.content, file.mediaType])
-
-  if (url === null) return null
-  return <embed className={css.pdf} type={file.mediaType} src={url} />
 }

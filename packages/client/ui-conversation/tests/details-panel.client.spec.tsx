@@ -138,7 +138,7 @@ describe('details column mode host', () => {
     expect(b.view.queryByRole('tablist')).toBeNull()
     // The body is the tool entry's, dispatched through the mode slot.
     expect(b.view.getByTestId('mode-body-tool')).toBeTruthy()
-    expect(b.view.getByText('详情')).toBeTruthy()
+    expect(b.view.getByText('运行状态')).toBeTruthy()
     // Owner currency: session identity, the workspace root, and the shown flag.
     expect(b.owners[0]).toEqual({ sessionId: SID, cwd: '/proj', active: true })
     // The close button stays the panel's own control.
@@ -190,10 +190,11 @@ describe('details column mode host', () => {
     expect(b.chat.store.getSnapshot().detailsMode).toBe('files')
     expect(b.view.getByTestId('mode-body-files')).toBeTruthy()
     expect(b.view.queryByTestId('mode-body-tool')).toBeNull()
-    // A contributed mode titles the header with its own tab label (the tab
-    // row keeps the second occurrence).
-    expect(b.view.getAllByText('文件')).toHaveLength(2)
-    expect(b.view.queryByText('详情')).toBeNull()
+    // With the tab strip on screen the header names the COLUMN, not the mode:
+    // the active tab already says 文件 once, and saying it twice was the
+    // redundancy this header used to carry.
+    expect(b.view.getAllByText('文件')).toHaveLength(1)
+    expect(b.view.getByText('运行状态')).toBeTruthy()
     expect(b.view.getAllByRole('tab').map(tab => tab.getAttribute('aria-selected'))).toEqual(['false', 'true'])
 
     // The tool-call gesture (openDetails) writes the mode back through the store.
@@ -276,7 +277,7 @@ describe('details column mode host', () => {
     // The declaring entry's own mode registration is gone (a disposed fiber
     // mid-teardown): the column keeps its header instead of crashing.
     const b = mountPanel([])
-    expect(b.view.getByText('详情')).toBeTruthy()
+    expect(b.view.getByText('运行状态')).toBeTruthy()
     expect(b.view.queryByRole('tablist')).toBeNull()
     expect(b.owners).toEqual([])
   })

@@ -117,3 +117,24 @@
 .logout:hover {
   background: var(--dsw-alias-interactive-bg-hover-danger);
 }
+
+.links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+
+.link {
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--dsw-alias-label-primary);
+  text-decoration: none;
+}
+
+.link:hover {
+  background: var(--dsw-alias-bg-hover, rgba(127, 127, 127, 0.08));
+}

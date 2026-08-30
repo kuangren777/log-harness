@@ -32,15 +32,6 @@ export interface ISciFiles {
   locate(path: string): void
 }
 
-/**
- * The panel transition the mode's header drives. Narrower than `ILayout` on
- * purpose: the header owns one gesture and a test double owes nothing more.
- */
-export interface SciFilesLayout {
-  /** Close the details column. */
-  closeDetails: () => void
-}
-
 /** One row of a listed directory level. */
 export interface SciFileEntry {
   /** Base name shown in the tree row, leading dot included. */
@@ -128,7 +119,6 @@ export interface SciFilesInjected {
   /** Shared viewing state of the mode (pin and open directories). */
   files: SciFilesStoreInstance
   /** The panel transitions the mode's header drives. */
-  layout: SciFilesLayout
   /**
    * List one directory level for the tree.
    * @param sessionId - session whose project directory scopes the path.

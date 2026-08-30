@@ -44,7 +44,7 @@ const SOURCE_KINDS: ReadonlySet<string> = new Set(['markdown', 'text', 'office']
  * @returns the header-over-tree-over-preview panel, or nothing while another mode shows.
  */
 export function FilesMode({
-  cwd, active, sessionId, useSession, files, layout, listDirectory, readFile, officeState, t,
+  cwd, active, sessionId, useSession, files, listDirectory, readFile, officeState, t,
 }: FilesModeProps) {
   // Bound through the instance rather than passed as methods, and stable per
   // instance so the subscription is not torn down on every render.
@@ -94,7 +94,6 @@ export function FilesMode({
         canSource={canSource}
         onView={setView}
         onDownload={(picked) => { triggerDownload(picked) }}
-        onClose={() => { layout.closeDetails() }}
         t={t}
       />
       <TypeChips

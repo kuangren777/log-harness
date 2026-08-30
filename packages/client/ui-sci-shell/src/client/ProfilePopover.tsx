@@ -19,6 +19,15 @@ import css from './ProfilePopover.module.css'
 /** Where signing out lands the browser. */
 const LOGIN_PATH = '/gate/login'
 
+/** The gate's credit page: balance detail and top-up. */
+const CREDIT_PATH = '/gate/credit'
+
+/** The gate landing: account facts and VM selection. */
+const GATE_PATH = '/gate/'
+
+/** The gate's admin console; the gate itself refuses non-admins. */
+const ADMIN_PATH = '/admin/'
+
 /** The gate calls the popover drives, as `apply` hands them over. */
 export interface ProfilePopoverInjected {
   /** Read the signed-in account. */
@@ -103,12 +112,19 @@ export function ProfilePopover({
             {vm !== undefined && (
               <div className={css.row}>{t('profile.vm', { slug: vm.slug, image: vm.image_tag })}</div>
             )}
-            {balance !== null && (
-              <div className={css.row}>
-                <span>{t('profile.balance', { amount: balance.totalUsd })}</span>
-                {balance.exhausted && <span className={css.exhausted}>{t('profile.exhausted')}</span>}
-              </div>
-            )}
+            {/* The balance row always renders: an unreadable balance is a fact
+                worth a sentence, and the credit page is one click either way. */}
+            <div className={css.row}>
+              {balance !== null
+                ? <span>{t('profile.balance', { amount: balance.totalUsd })}</span>
+                : <span>{t('profile.balanceUnknown')}</span>}
+              {balance !== null && balance.exhausted && <span className={css.exhausted}>{t('profile.exhausted')}</span>}
+            </div>
+            <div className={css.links}>
+              <a className={css.link} href={CREDIT_PATH}>{t('profile.links.credit')}</a>
+              <a className={css.link} href={GATE_PATH}>{t('profile.links.gate')}</a>
+              {me.role === 'admin' && <a className={css.link} href={ADMIN_PATH}>{t('profile.links.admin')}</a>}
+            </div>
             <button type="button" className={css.logout} onClick={onLogout}>{t('profile.logout')}</button>
           </>
         )}

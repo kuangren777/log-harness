@@ -89,15 +89,31 @@ describe('ProfilePopover', () => {
     expect(screen.getByText('已用尽')).toBeTruthy()
   })
 
-  it('omits the tenant, the VM row, and the balance row when the gate reports none', async () => {
+  it('omits the tenant and VM rows, states an unreadable balance, and offers the admin console', async () => {
     const b = bench({
       me: { email: 'root@example', role: 'admin', tenant: null, vms: [], selectedVm: null },
       balance: null,
     })
     await open(b)
     expect(screen.getByText('admin')).toBeTruthy()
-    expect(screen.queryByText(/余额/)).toBeNull()
+    // An unreadable balance is a stated fact, never a hidden row or a number.
+    expect(screen.getByText('余额暂不可读')).toBeTruthy()
+    expect(screen.queryByText(/余额 \$/)).toBeNull()
     expect(screen.queryByText(/·/)).toBeNull()
+    // The management pages are one click away; the admin link needs the role.
+    expect(screen.getByRole('link', { name: '额度与充值' }).getAttribute('href')).toBe('/gate/credit')
+    expect(screen.getByRole('link', { name: '账户与虚拟机' }).getAttribute('href')).toBe('/gate/')
+    expect(screen.getByRole('link', { name: '管理后台' }).getAttribute('href')).toBe('/admin/')
+  })
+
+  it('withholds the admin link from a non-admin', async () => {
+    const b = bench({
+      me: { email: 'o@example', role: 'owner', tenant: null, vms: [], selectedVm: null },
+      balance: null,
+    })
+    await open(b)
+    expect(screen.queryByRole('link', { name: '管理后台' })).toBeNull()
+    expect(screen.getByRole('link', { name: '额度与充值' })).toBeTruthy()
   })
 
   it('degrades to one line when the gate cannot be read, and shows no numbers', async () => {
