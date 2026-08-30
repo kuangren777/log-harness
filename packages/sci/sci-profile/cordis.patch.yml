@@ -120,6 +120,9 @@
     # The 检索 full-screen view and the literature_search hit cards.
     - id: ui-sci-search
       name: '@deepseek-ai/dsh-client-ui-sci-search'
+    # The 知识库 full-screen view, the entry detail page, and the 加入知识库 action.
+    - id: ui-sci-library
+      name: '@deepseek-ai/dsh-client-ui-sci-library'
 
 # ── persistence the science layer reads back ───────────────────────────────
 
@@ -244,6 +247,13 @@
 
     # literature_search: OpenAlex + Semantic Scholar + arXiv + Crossref in one
     # call, plus the sci.literature Remote the 检索 view reads.
+    # The per-user literature + dataset library: sci_library domain, the
+    # library_search / library_add tools, and the /library-api upload route.
+    - id: sci-library
+      name: '@deepseek-ai/dsh-sci-library'
+      config:
+        libraryRoot: /home/user/sci/library
+
     - id: sci-literature
       name: '@deepseek-ai/dsh-sci-literature'
       config:

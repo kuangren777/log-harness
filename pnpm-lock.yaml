@@ -7055,6 +7055,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-sci-files':
         specifier: workspace:^
         version: link:../../client/ui-sci-files
+      '@deepseek-ai/dsh-client-ui-sci-library':
+        specifier: workspace:^
+        version: link:../../client/ui-sci-library
       '@deepseek-ai/dsh-client-ui-sci-search':
         specifier: workspace:^
         version: link:../../client/ui-sci-search
@@ -7088,6 +7091,9 @@ importers:
       '@deepseek-ai/dsh-sci-guard':
         specifier: workspace:^
         version: link:../sci-guard
+      '@deepseek-ai/dsh-sci-library':
+        specifier: workspace:^
+        version: link:../sci-library
       '@deepseek-ai/dsh-sci-literature':
         specifier: workspace:^
         version: link:../sci-literature
