@@ -1,0 +1,86 @@
+/* One entry card: the whole tile is the control that opens the entry. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 18px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-sci-radius-card);
+  background: var(--dsw-sci-card-bg);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.card:hover {
+  background: var(--dsw-sci-hover-bg);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.source {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--dsw-sci-radius-pill);
+  background: var(--dsw-sci-chip-bg);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.year {
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--dsw-font-family-mono, ui-monospace, monospace);
+  font-size: 11px;
+}
+
+.status {
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.title {
+  color: var(--dsw-alias-label-primary);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.abstract {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag {
+  padding: 2px 9px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-sci-radius-pill);
+  background: var(--dsw-sci-chip-bg);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+}
+
+.fact {
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--dsw-font-family-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+}

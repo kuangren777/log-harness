@@ -1,0 +1,132 @@
+/* The full-bleed library: a header row over the query box, the filters, and
+ * the card grid — or the detail page of the open entry. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 34px 32px 48px;
+  overflow-y: auto;
+  background: var(--dsw-alias-bg-base);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 960px;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12.5px;
+}
+
+.box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 20px;
+  padding: 11px 18px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 15px;
+  background: var(--dsw-sci-card-bg);
+}
+
+.boxIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 13.5px;
+}
+
+.input:focus {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.count {
+  margin-top: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 10px;
+  animation: rise var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.note {
+  margin-top: 14px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.error {
+  margin-top: 14px;
+  padding: 14px 18px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-sci-radius-card);
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12.5px;
+}
+
+.back {
+  align-self: flex-start;
+  padding: 7px 15px;
+  border: none;
+  border-radius: var(--dsw-sci-radius-pill);
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}

@@ -1,0 +1,65 @@
+/* The tag chips and the field that adds one. */
+
+.root {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 5px 3px 11px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-sci-radius-pill);
+  background: var(--dsw-sci-chip-bg);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+}
+
+.remove {
+  display: inline-flex;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.remove:hover {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.input {
+  width: 120px;
+  padding: 4px 11px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-sci-radius-pill);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.input:focus {
+  border-color: var(--dsw-alias-brand-text);
+  outline: none;
+}
+
+.add {
+  padding: 4px 12px;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-brand-text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.add:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}

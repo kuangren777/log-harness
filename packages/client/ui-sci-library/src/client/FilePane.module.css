@@ -1,0 +1,77 @@
+/* One stored file: the row, and the preview it opens under itself. */
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 13px;
+  background: var(--dsw-sci-chip-bg);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.name {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.meta {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--dsw-font-family-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+}
+
+.action {
+  flex: none;
+  padding: 4px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-sci-radius-pill);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11.5px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.action:hover {
+  background: var(--dsw-sci-hover-bg);
+  color: var(--dsw-alias-label-primary);
+}
+
+.pdf {
+  width: 100%;
+  height: 62vh;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 11px;
+}
+
+.image {
+  max-width: 100%;
+  border-radius: 11px;
+}
+
+.prose {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.source {
+  overflow: auto;
+  max-height: 40vh;
+}
+
+.note {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11.5px;
+}

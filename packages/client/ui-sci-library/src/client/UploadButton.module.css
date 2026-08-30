@@ -1,0 +1,58 @@
+/* The file picker: a pill-shaped label over a transparent file input, so the
+ * control keeps the browser's own keyboard focus and activation. */
+
+.root {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 18px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-sci-radius-pill);
+  background: var(--dsw-sci-card-bg);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.button:hover {
+  background: var(--dsw-sci-hover-bg);
+}
+
+.button:focus-within {
+  border-color: var(--dsw-alias-brand-text);
+  outline: 2px solid var(--dsw-alias-brand-text);
+  outline-offset: 2px;
+}
+
+.buttonBusy {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.done {
+  color: var(--dsw-alias-state-success-primary);
+  font-size: 11.5px;
+}
+
+.error {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 11.5px;
+}

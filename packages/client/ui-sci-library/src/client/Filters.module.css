@@ -1,0 +1,75 @@
+/* The filter chips over the tag cloud. */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  margin-top: 14px;
+}
+
+.chip {
+  padding: 5px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-sci-radius-pill);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.chip:hover {
+  background: var(--dsw-sci-hover-bg);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.chipOn {
+  border-color: var(--dsw-alias-brand-text);
+  background: var(--dsw-sci-chip-bg);
+  color: var(--dsw-alias-brand-text);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.tagsTitle {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+.tag {
+  padding: 2px 10px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-sci-radius-pill);
+  background: var(--dsw-sci-chip-bg);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tag:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.tagOn {
+  border-color: var(--dsw-alias-brand-text);
+  color: var(--dsw-alias-brand-text);
+}
+
+.tagClear {
+  padding: 2px 8px;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-brand-text);
+  font-size: 11px;
+  cursor: pointer;
+}
