@@ -65,9 +65,8 @@ describe('the log table', () => {
   it('shows a settled call with no timing row as no duration, never as in flight', () => {
     // A refused delegation spawns no child, so it settles with no duration; the
     // cell must not contradict the 失败 status beside it.
-    const b = pageProps()
     const calls = [{ ts: 1_724_000_000_000, sessionId: 's1', callId: 'c9', task: '交付一句问候', status: 'error' as const }]
-    render(<LogPage {...{ ...b.props, calls } as never} />)
+    render(<LogPage {...pageProps({ calls }).props} />)
     expect(screen.queryByText('进行中')).toBeNull()
     expect(screen.getByText('失败')).toBeTruthy()
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1)
