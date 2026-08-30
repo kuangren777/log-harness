@@ -1,0 +1,25 @@
+# The build context is the log-harness checkout. Everything below is either
+# rebuilt inside the image or must not reach it.
+
+# Host node_modules is a pnpm store full of absolute symlinks; it would break
+# the in-image install even where it did not bloat the context.
+**/node_modules
+
+# Build outputs. `lib/` is gitignored and holds no tracked source (verified:
+# `git ls-files | grep -E '(^|/)lib/'` is empty), so excluding it forces a
+# clean build rather than layering over a stale host build.
+**/lib
+**/dist
+**/*.tsbuildinfo
+
+# GIT_SHA replaces `git rev-parse HEAD`; the history itself is dead weight.
+.git
+.github
+
+# Never bake a developer's keys into a layer.
+.env
+**/.env
+**/.env.*
+
+temp
+coverage

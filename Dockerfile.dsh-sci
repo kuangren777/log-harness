@@ -1,0 +1,162 @@
+# dsh-sci — the harness image that runs `dsh --profile sci`.
+#
+# Two stages. The build stage is the repository's OWN build
+# (`pnpm install --frozen-lockfile` then `pnpm run build`, which is
+# `scripts/build.ts` = build:lib + build:web); the runtime stage carries only
+# what `pnpm deploy --prod` resolves for `@deepseek-ai/dsh`, so no vitest, no
+# tsx, no tsdown, and no source tree reach the server. Tests run in the source
+# tree and in CI; the deployed image is verified with a real session probe
+# (11-Deployment-Plan/04-smoke-and-verify.md).
+#
+# Build through build.sh, which supplies GIT_SHA and the tags.
+
+# The private registry mirrors Docker Hub; vm2 cannot reach Hub directly.
+# node:22-slim, not alpine: the repository's engines are `^22.19.0 || >=24`
+# and node-pty/koffi/esbuild build against glibc here.
+ARG NODE_IMAGE=node:22-slim
+
+# ── build ───────────────────────────────────────────────────────────────────
+
+FROM ${NODE_IMAGE} AS build
+ARG DEBIAN_FRONTEND=noninteractive
+
+# node-gyp toolchain for the three dependencies pnpm-workspace.yaml allows
+# build scripts for (esbuild, node-pty, koffi). `git` is NOT for the build
+# itself — GIT_SHA below removes that need — but node-gyp shells out to it.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 make g++ ca-certificates git \
+ && rm -rf /var/lib/apt/lists/*
+
+# packageManager in the root package.json pins pnpm@11.7.0; corepack honours it.
+RUN corepack enable
+
+WORKDIR /src
+COPY . .
+
+# `scripts/client-build-environment.ts:47-58` reads the commit from `git
+# rev-parse HEAD` unless DSH_CLIENT_COMMIT_HASH is set. The build context has
+# no `.git` (see .dockerignore), so the tag's sha is passed in instead. A
+# non-hex value is rejected by that same function, so a wrong GIT_SHA fails the
+# build rather than baking a lie into the client build record.
+ARG GIT_SHA
+ENV DSH_CLIENT_COMMIT_HASH=${GIT_SHA}
+# Browser tab / document title for the sci product (read by apps/web/vite.config.ts).
+ENV DSH_CLIENT_TITLE="CaMeL Science"
+
+# Fail at build time, not at first boot on the server.
+#
+# `dsh --profile sci` composes the bundle list in
+# `packages/boot/app-boot/src/profile.ts:119`
+# (`['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app','@deepseek-ai/dsh-sci-profile']`),
+# and `resolveBundleDir` resolves each name from the dsh INSTALLATION first
+# (`profile.ts:347-358`). A bundle no manifest depends on is not in the
+# installation's dependency closure, so `healProfilesModuleFallback` never
+# links it and the boot dies with "cannot resolve profile bundle". As of this
+# writing NOTHING declares `@deepseek-ai/dsh-sci-profile` — see the README's
+# "Known blocker" section.
+RUN node -e "const p=require('/src/apps/cli/package.json'); \
+  const d={...p.dependencies,...p.peerDependencies}; \
+  if(!d['@deepseek-ai/dsh-sci-profile']){ \
+    console.error('dsh-sci: apps/cli/package.json does not depend on @deepseek-ai/dsh-sci-profile.'); \
+    console.error('dsh-sci: without it `dsh --profile sci` cannot resolve its bundle at boot.'); \
+    console.error('dsh-sci: add the workspace dependency and refresh pnpm-lock.yaml, then rebuild.'); \
+    process.exit(1); \
+  }"
+
+RUN pnpm install --frozen-lockfile
+RUN pnpm run build
+
+# The Univer runtime (`artifacts/gateway.cjs`, `unit-content-worker.mjs`,
+# `render-machine/`, `viewer/`, ~143 MB) is NOT built in this repository: its
+# Univer Pro dependencies come from Univer's insider registry, and vendoring
+# the whole Univer front-end stack into the monorepo was rejected as too heavy
+# (`ClawsGO-System/15-Office-Panel/00-design.md` §1.1). Instead
+# `@deepseek-ai/dsh-office-univer` pulls the published `dsh-univer-office@0.2.10`
+# tarball here, verifies its published integrity hash, and unpacks `artifacts/`
+# into the package (git-ignored there). This must run after `pnpm run build`
+# and before the deploy step below — `pnpm deploy` only copies what already
+# sits on disk inside each workspace package at the time it runs.
+
+# `--legacy` is required: pnpm 11's current deploy implementation needs
+# `injectWorkspacePackages: true`, which this workspace does not set.
+# `--prod` is what keeps vitest, tsx, tsdown, vite, and the whole dev tier out
+# of the runtime stage.
+# `--config.node-linker=hoisted` is required, not cosmetic: the default
+# isolated linker leaves transitive packages only under `.pnpm/`, and the
+# profile module fallback (`$DSH_HOME/profiles/node_modules`, built by
+# `healProfilesModuleFallback`) links only what sits at the top level of the
+# installation's `node_modules/@deepseek-ai/`. Without hoisting, every bundle
+# plugin that is not a DIRECT dependency of apps/cli — 45 of them from the base
+# bundle alone — is unresolvable from a profile directory at boot.
+# Every harness package declares its workspace edges as peerDependencies (the
+# repository convention, stated in CLAUDE.md for `@deepseek-ai/cordis` and
+# followed by all 241 of them). `pnpm deploy` does not resolve peers unless
+# told to, so without `auto-install-peers` the deployed closure stops at the
+# direct dependencies and ~58 Service Definitions never arrive.
+RUN pnpm --filter @deepseek-ai/dsh deploy --prod --legacy \
+      --config.node-linker=hoisted --config.auto-install-peers=true /out
+
+# Fail here, not at first boot on the server, the same discipline as the
+# sci-profile-bundle check above. With `--config.node-linker=hoisted`, a
+# workspace package's own files (not just its dependencies) land directly at
+# `/out/node_modules/@deepseek-ai/<pkg>/`, so `dsh-office-univer`'s
+# `artifacts/` directory reaches here only if BOTH: the fetch step above ran
+# before this deploy, AND the package's `package.json` `files` field lists
+# `artifacts/**` — `pnpm deploy` packs each workspace package by its own
+# `files` allow-list, same as `npm pack` would, so a package that omits
+# `artifacts/**` there silently loses the directory even though the fetch
+# succeeded. That `files` entry is `packages/office/univer/package.json`'s
+# responsibility (T1 of `15-Office-Panel/01-implementation-plan.md`), not
+# something this Dockerfile can add — this assertion is the only thing that
+# catches a regression in it.
+
+# `pnpm deploy` alone does not produce a bootable tree here; the script states
+# both reasons and fails the build if its own probes cannot resolve.
+COPY complete-deploy-tree.mjs /tmp/complete-deploy-tree.mjs
+RUN node /tmp/complete-deploy-tree.mjs /src /out
+
+# `pnpm-workspace.yaml` resolves two vendored framework packages through
+# `overrides: link:vendor/...`. A `link:` override is a symlink into the
+# workspace, and `pnpm deploy` copies neither the link target nor a
+# materialised copy — the deployed tree simply lacks them, and the first
+# `import '@deepseek-ai/cosmokit'` fails at boot with ERR_MODULE_NOT_FOUND.
+# Copy their built form in beside the rest, and fail the build if a new
+# `link:` override appears that this step does not cover.
+RUN set -eu; \
+    node -e "const y=require('fs').readFileSync('/src/pnpm-workspace.yaml','utf8'); \
+      const links=[...y.matchAll(/'([^']+)':\s*'link:([^']+)'/g)].map(m=>({pkg:m[1],dir:m[2]})); \
+      const covered=['@deepseek-ai/cosmokit','@deepseek-ai/schemastery']; \
+      const extra=links.filter(l=>!covered.includes(l.pkg)); \
+      if(extra.length){console.error('dsh-sci: uncovered link: overrides',extra.map(e=>e.pkg).join(', ')); process.exit(1);} \
+      require('fs').writeFileSync('/tmp/links.json', JSON.stringify(links));"; \
+    for d in cosmokit schemastery; do \
+      mkdir -p "/out/node_modules/@deepseek-ai/$d"; \
+      cp -a "/src/vendor/$d/." "/out/node_modules/@deepseek-ai/$d/"; \
+    done
+
+# ── runtime ─────────────────────────────────────────────────────────────────
+
+FROM ${NODE_IMAGE} AS runtime
+
+# `node` (uid 1000) ships with the base image and is the identity the home
+# volume must be owned by; deploy.sh chowns /data/dsh-sci/home to 1000:1000.
+# The harness reaches Dormice over loopback and binds 127.0.0.1:3080, both
+# unprivileged, so nothing here needs root.
+ENV NODE_ENV=production \
+    DSH_HOME=/data/dsh-sci/home
+
+COPY --from=build --chown=root:root /out /opt/dsh
+
+RUN install -d -m 755 -o node -g node /data/dsh-sci /data/dsh-sci/home
+
+USER node
+WORKDIR /data/dsh-sci/home
+
+# The bin `@deepseek-ai/dsh` declares (apps/cli/package.json: "bin":
+# {"dsh":"lib/bin.js"}), invoked directly so compose's `command` is the
+# launcher's own argument list. The path is the app's place in the build root,
+# because the build root is what ships (see the runtime-tree note above). The launcher's flags must come FIRST: its
+# first unrecognized token starts the inner arguments handed to the booted app
+# (apps/cli/src/args.ts:122-128).
+ENTRYPOINT ["node", "/opt/dsh/lib/bin.js"]
+CMD ["--profile", "sci"]
