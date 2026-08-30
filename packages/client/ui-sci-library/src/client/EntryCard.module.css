@@ -1,6 +1,7 @@
 /* One entry card: the whole tile is the control that opens the entry. */
 
 .card {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 8px;

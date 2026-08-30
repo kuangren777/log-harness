@@ -141,6 +141,7 @@
 }
 
 .note {
+  box-sizing: border-box;
   width: 100%;
   padding: 11px 14px;
   border: 1px solid var(--dsw-alias-border-l2);
