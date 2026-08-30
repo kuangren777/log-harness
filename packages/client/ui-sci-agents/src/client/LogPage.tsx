@@ -106,7 +106,11 @@ export function LogPage({ agent, glyphAt, calls, error, onBack, onOpen, t }: Log
                   <td className={css.mono}>{time}</td>
                   <td className={css.task}>{call.task}</td>
                   <td className={css.mono}>
-                    {call.durationMs === undefined ? t('log.pending') : formatDuration(call.durationMs)}
+                    {/* A settled call with no timing row (a refusal spawns no child) has no
+                        duration to claim — 进行中 would contradict the settled status beside it. */}
+                    {call.durationMs !== undefined
+                      ? formatDuration(call.durationMs)
+                      : call.status === 'running' ? t('log.pending') : '—'}
                   </td>
                   <td className={STATUS_CLASSES[call.status]}>{status}</td>
                   {withTokens && (
