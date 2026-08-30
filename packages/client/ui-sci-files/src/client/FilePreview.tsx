@@ -16,7 +16,7 @@ import type { FileReadOutcome, OfficeStateOutcome, SciFileContent } from './cont
 import type { SciFilesKey } from './locales.ts'
 import { OfficeFrame } from './OfficeFrame.tsx'
 import { PdfPages } from './pdf-pages.tsx'
-import { dataUrl, formatSize, highlightLanguage, previewKindFor } from './media.ts'
+import { dataUrl, highlightLanguage, previewKindFor } from './media.ts'
 import { fileName, isConvertibleOfficePath, isOfficePath } from './paths.ts'
 import css from './FilePreview.module.css'
 
@@ -102,7 +102,8 @@ function FileBody({ file, sessionId, officeState, t }: {
   }
   return (
     <div className={css.body}>
-      <div className={css.meta}>{t('preview.size', { size: formatSize(file.size), mediaType: file.mediaType })}</div>
+      {/* No size line here: the panel header already states size · mediaType
+          for the selection, and saying it twice was duplicate chrome. */}
       {renderTyped(kind, file, t)}
       {/* An office format the Viewer cannot open directly says how it becomes
           openable, instead of dead-ending in a runtime-unavailable notice. */}

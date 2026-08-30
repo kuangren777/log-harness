@@ -128,7 +128,6 @@ describe('FilePreview', () => {
       ok: true,
       file: content({ path: '/p/main.py', mediaType: 'text/x-python', content: 'print(1)', size: 8 }),
     })
-    expect(screen.getByText('preview.size(8 B|text/x-python)')).toBeTruthy()
     expect(screen.getByText(/print/)).toBeTruthy()
   })
 
@@ -184,7 +183,8 @@ describe('FilePreview', () => {
         path: '/p/data.bin', mediaType: 'application/octet-stream', encoding: 'base64', content: 'AAAA', size: 2048,
       }),
     })
-    expect(screen.getByText('preview.size(2 KB|application/octet-stream)')).toBeTruthy()
+    // The size · mediaType line lives in the panel header alone now.
+    expect(screen.queryByText(/preview.size/)).toBeNull()
     expect(screen.getByText('preview.binary')).toBeTruthy()
   })
 
