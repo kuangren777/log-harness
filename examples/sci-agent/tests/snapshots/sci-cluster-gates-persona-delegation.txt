@@ -1,0 +1,21 @@
+isError: true
+---
+Error: subagent_scout is refused: declare_research_plan has not been called in this session. Declare the swarm first — name each parallel line of work and what it produces — then call subagent_scout again.
+---
+sci events: [
+  {
+    "type": "sci/tier-resolved",
+    "data": {
+      "tier": "cluster",
+      "presetName": "sci-cluster"
+    }
+  },
+  {
+    "type": "sci/tool-denied",
+    "data": {
+      "toolName": "subagent_scout",
+      "rule": "plan",
+      "reason": "subagent_scout is refused: declare_research_plan has not been called in this session. Declare the swarm first — name each parallel line of work and what it produces — then call subagent_scout again."
+    }
+  }
+]

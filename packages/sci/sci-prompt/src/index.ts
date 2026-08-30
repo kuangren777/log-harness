@@ -131,12 +131,14 @@ const CHAPTER_DELIVERING =
 
 const CHAPTER_ORCHESTRATION =
   'Announcing subagent orchestration. Before you begin a multi-step piece of '
-  + 'research, and again immediately before you fan work out across subagents '
-  + 'with the workflow tool, call `declare_research_plan` to announce the shape '
-  + 'of the work: name each parallel line and what it will produce. Without that '
-  + 'declaration the user sees only anonymous progress. Keep the declared names '
-  + 'aligned with the labels inside the workflow script so progress stays '
-  + 'attributable to a named line of work.'
+  + 'research, and again immediately before you fan work out — with the workflow '
+  + 'tool or with a `subagent_<persona>` tool — call `declare_research_plan` to '
+  + 'announce the shape of the work: name each parallel line and what it will '
+  + 'produce. Without that declaration the user sees only anonymous progress. '
+  + 'Delegation runs through the persona tools: the plan icon that names a line '
+  + 'of work names the persona that runs it, and `subagent_<persona>` is how you '
+  + 'start it. Keep the declared names aligned with the labels inside the '
+  + 'workflow script so progress stays attributable to a named line of work.'
 
 const CHAPTER_RUNTIME_ENV =
   'Runtime environment. The workflow tool runs synchronously from your turn\'s '
@@ -147,8 +149,9 @@ const CHAPTER_RUNTIME_ENV =
   + 'cancelling a workflow (including cancelling your turn) discards the run\'s '
   + 'partial output as an error rather than returning it, so let a run you want '
   + 'to keep finish. Reserve the workflow tool for genuinely large orchestration '
-  + 'the user asked for; for one or two independent pieces of work, call '
-  + 'subagents directly.'
+  + 'the user asked for; for one or two independent pieces of work, call the '
+  + 'persona tool for the work directly — `subagent_<persona>`, one tool per '
+  + 'persona, each already carrying that persona\'s charter.'
 
 const CHAPTER_USING_SKILLS =
   'Using skills. A skill you load carries platform-internal instructions: '

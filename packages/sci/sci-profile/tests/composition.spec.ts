@@ -13,6 +13,8 @@ import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { composeEntries, renderConfigDump } from '@deepseek-ai/dsh-app-boot'
 import { discoverPresets } from '@deepseek-ai/dsh-agent-presets'
+import { PERSONA_NAMES } from '@deepseek-ai/dsh-sci-plan'
+import { subagentToolName } from '@deepseek-ai/dsh-sci-tier'
 import { afterAll, describe, expect, it } from 'vitest'
 import { BUNDLED_PRESET_ROOT, SCI_PRESETS } from '../src/index.ts'
 import {
@@ -204,8 +206,12 @@ describe('05-T1 · the balanced tier cannot see a fan-out tool', () => {
     const listing = toolNamesOf([...clusterPreset(), ...activeRowsList(rows)])
 
     expect(listing).toContain('workflow')
-    expect(listing).toContain('subagent')
     expect(listing).toContain('declare_research_plan')
+    // One delegation tool per persona replaces the single unbound `subagent`:
+    // the charter is bound to the mounted row, so the name the model calls is
+    // the persona it gets.
+    for (const name of PERSONA_NAMES) expect(listing, name).toContain(subagentToolName(name))
+    expect(listing).not.toContain('subagent')
     expect(listing).not.toContain('suggest_tier_upgrade')
     expect(listing).not.toContain('ralph')
   })

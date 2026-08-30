@@ -71,7 +71,7 @@ function packageOf(specifier: string): string {
 }
 
 /** Every row of a composition, flattened through `cordis:group` children. */
-function flattenRows(entries: readonly EntryOptions[]): EntryOptions[] {
+export function flattenRows(entries: readonly EntryOptions[]): EntryOptions[] {
   return entries.flatMap(entry => entry.group === true && Array.isArray(entry.config)
     ? [entry, ...flattenRows(entry.config as EntryOptions[])]
     : [entry])

@@ -44,6 +44,12 @@
     fanoutTools:
       - workflow
       - subagent
+      - subagent_researcher
+      - subagent_adversary
+      - subagent_scout
+      - subagent_writer
+      - subagent_plotter
+      - subagent_deliverer
       - subagent_fork
       - subagent_codex
       - subagent_claude_code

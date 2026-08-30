@@ -72,6 +72,25 @@ describe('sci-cluster-requires-plan', () => {
   }, 60_000)
 })
 
+describe('sci-cluster-gates-persona-delegation', () => {
+  it('denies a persona delegation tool of a session that declared no plan', async () => {
+    const example = await open('cluster')
+
+    // The cluster composition mounts one `tool-subagent` per persona, so the
+    // name the model calls is the persona it gets. The latch has to cover every
+    // one of those names: a gate that only knew the old unbound `subagent`
+    // would let six tools past it.
+    const result = await call(example, 'subagent_scout', {
+      description: 'Find the methods file',
+      prompt: 'Locate the methods section of the entropy paper.',
+    })
+
+    expect(result.isError).toBe(true)
+    expect(example.ctx.tools.schemas().map(schema => schema.name)).toContain('subagent_deliverer')
+    await record('sci-cluster-gates-persona-delegation', example, resultText(example, result))
+  }, 60_000)
+})
+
 describe('sci-deliver-rejects-tmp', () => {
   it('refuses a deliverable that is still in the scratch directory', async () => {
     const example = await open('balanced')
