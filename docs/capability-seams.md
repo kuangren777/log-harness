@@ -12,6 +12,8 @@ flowchart LR
   pkg_sci_profile["sci-profile"]
   pkg_sci_literature["sci-literature"]
   svc_sciLiterature["ctx.sciLiterature<br/>Science-research literature search"]
+  pkg_sci_agents["sci-agents"]
+  svc_sciAgents["ctx.sciAgents<br/>Science-research persona roster"]
   pkg_sci_memory["sci-memory"]
   svc_sciMemory["ctx.sciMemory<br/>Science-research memory nodes and recall"]
   pkg_sci_remote_hosts["sci-remote-hosts"]
@@ -270,6 +272,7 @@ flowchart LR
   pkg_sandbox --> svc_sandbox
   pkg_sandbox_local --> svc_sandbox
   pkg_sandbox_policy --> svc_sandboxPolicy
+  pkg_sci_agents --> svc_sciAgents
   pkg_sci_audit --> svc_sciAudit
   pkg_sci_literature --> svc_sciLiterature
   pkg_sci_memory --> svc_sciMemory
@@ -372,6 +375,7 @@ flowchart LR
   svc_sandboxPolicy --> pkg_bash_sandbox
   svc_sandboxPolicy --> pkg_fs_sandbox
   svc_sandboxPolicy --> pkg_terminal_bash
+  svc_sciAgents --> pkg_sci_profile
   svc_sciAudit --> pkg_sci_profile
   svc_sciLiterature --> pkg_sci_profile
   svc_sciMemory --> pkg_sci_profile
@@ -457,6 +461,7 @@ flowchart LR
 | --- | --- | --- | --- | --- | --- | --- |
 | `ctx.sciAudit` | `core` | [`sci-audit`](../packages/sci/sci-audit) | - | [`sci-profile`](../packages/sci/sci-profile) | - | Folds the session log into three owned tables and reads the tables sci-skills and sci-memory own; rebuildable because the log is the only input. |
 | `ctx.sciLiterature` | `core` | [`sci-literature`](../packages/sci/sci-literature) | - | [`sci-profile`](../packages/sci/sci-profile) | - | Fans one query out to OpenAlex, Semantic Scholar, arXiv and Crossref, merges the replies by DOI / arXiv id / title, registers literature_search, and serves the 检索 view over sci.literature. |
+| `ctx.sciAgents` | `core` | [`sci-agents`](../packages/sci/sci-agents) | - | [`sci-profile`](../packages/sci/sci-profile) | - | Projects the six mounted subagent_* rows for the browser: charters from sci-profile, live configuration from each row's settings section, base models from ctx.llm, and delegation counts and child timings from the session log. |
 | `ctx.sciMemory` | `core` | [`sci-memory`](../packages/sci/sci-memory) | - | [`sci-profile`](../packages/sci/sci-profile) | - | Observes accepted memory-directory writes, backfills the originating session, and serves recall over the projected log. |
 | `ctx.sciRemoteHosts` | `core` | [`sci-remote-hosts`](../packages/sci/sci-remote-hosts) | - | [`sci-profile`](../packages/sci/sci-profile) | - | Owns one delimited block of the sandbox ssh config; bytes outside the block are preserved and private keys stay in the credential seam. |
 | `ctx.sciTierFork` | `core` | [`sci-tier`](../packages/sci/sci-tier) | - | [`sci-profile`](../packages/sci/sci-profile) | - | Creates a cluster-tier session seeded from the balanced session it replaces, rather than forking its conversation. |

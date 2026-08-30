@@ -1813,6 +1813,43 @@ export interface Config {
 
 来源：[`packages/sandbox/sandbox-policy/src/index.ts:67`](../packages/sandbox/sandbox-policy/src/index.ts)
 
+<a id="deepseek-aidsh-sci-agents"></a>
+
+## `@deepseek-ai/dsh-sci-agents`
+
+需要：`agentPresets` · `llm` · `sessionQuery` · `settings`
+
+```ts config-catalog
+/** Deployment-varying choices of the persona-roster layer. */
+export interface Config {
+  /**
+   * Preset id whose composition mounts the six `subagent_<persona>` rows. The
+   * roster ensures this preset's standing mount before reading settings, so the
+   * page answers with no session open; a deployment that renamed the preset
+   * must say so here or every persona would report as uncomposed.
+   */
+  preset: string
+  /**
+   * Absolute path of the persona charter directory, matching the
+   * `@deepseek-ai/dsh-sci-profile` row's `agentsRoot`. Defaults to the tree
+   * bundled in that package.
+   */
+  agentsRoot: string
+  /**
+   * Registered tool names the `web` permission switch withholds. Tool
+   * registration is a composition choice — a deployment may rename or replace
+   * these — so the names cannot be fixed in this package.
+   */
+  webTools: string[]
+  /** Registered tool names the `code` permission switch withholds. */
+  codeTools: string[]
+  /** Registered tool names the `writeLibrary` permission switch withholds. */
+  libraryTools: string[]
+}
+```
+
+来源：[`packages/sci/sci-agents/src/index.ts:102`](../packages/sci/sci-agents/src/index.ts)
+
 <a id="deepseek-aidsh-sci-audit"></a>
 
 ## `@deepseek-ai/dsh-sci-audit`
@@ -2122,7 +2159,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/sci/sci-profile/src/index.ts:68`](../packages/sci/sci-profile/src/index.ts)
+来源：[`packages/sci/sci-profile/src/index.ts:69`](../packages/sci/sci-profile/src/index.ts)
 
 <a id="deepseek-aidsh-sci-prompt"></a>
 
@@ -2145,7 +2182,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/sci/sci-prompt/src/index.ts:238`](../packages/sci/sci-prompt/src/index.ts)
+来源：[`packages/sci/sci-prompt/src/index.ts:241`](../packages/sci/sci-prompt/src/index.ts)
 
 <a id="deepseek-aidsh-sci-remote-hosts"></a>
 
@@ -2269,7 +2306,7 @@ export interface Config {
 export type SciTier = 'balanced' | 'cluster'
 ```
 
-来源：[`packages/sci/sci-tier/src/config.ts:12`](../packages/sci/sci-tier/src/config.ts)
+来源：[`packages/sci/sci-tier/src/config.ts:13`](../packages/sci/sci-tier/src/config.ts)
 
 <a id="deepseek-aidsh-sci-workspace"></a>
 
@@ -3555,7 +3592,7 @@ export interface Config {
 
 依赖：[`AgentOptions`](subsystems/core.zh.md)
 
-来源：[`packages/subagent/tool-subagent/src/index.ts:29`](../packages/subagent/tool-subagent/src/index.ts)
+来源：[`packages/subagent/tool-subagent/src/index.ts:37`](../packages/subagent/tool-subagent/src/index.ts)
 
 <a id="deepseek-aidsh-tool-subagent-report"></a>
 
@@ -3974,6 +4011,7 @@ export interface Config {
 - `@deepseek-ai/dsh-client-ui-plan`（[`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-reference`（[`packages/client/ui-reference/src/index.ts`](../packages/client/ui-reference/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-renderer`（[`packages/client/ui-renderer/src/index.ts`](../packages/client/ui-renderer/src/index.ts)）
+- `@deepseek-ai/dsh-client-ui-sci-agents`（[`packages/client/ui-sci-agents/src/index.ts`](../packages/client/ui-sci-agents/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-sci-conversation`（[`packages/client/ui-sci-conversation/src/index.ts`](../packages/client/ui-sci-conversation/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-sci-files`（[`packages/client/ui-sci-files/src/index.ts`](../packages/client/ui-sci-files/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-sci-search`（[`packages/client/ui-sci-search/src/index.ts`](../packages/client/ui-sci-search/src/index.ts)）

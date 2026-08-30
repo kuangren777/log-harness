@@ -71,6 +71,7 @@
     { "path": "./packages/client/ui-tool" },
     { "path": "./packages/client/ui-deliverables" },
     { "path": "./packages/client/ui-sci-files" },
+    { "path": "./packages/client/ui-sci-agents" },
     { "path": "./packages/client/ui-sci-conversation" },
     { "path": "./packages/client/ui-sci-search" },
     { "path": "./packages/client/ui-sci-shell" },

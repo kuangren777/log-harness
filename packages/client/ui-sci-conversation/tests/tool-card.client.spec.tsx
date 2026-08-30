@@ -90,12 +90,21 @@ describe('card readings', () => {
     expect(draw('univer_export')).toBe(draw('univer_new'))
     expect(draw('univer_export')).not.toBe(draw('mystery_tool'))
     expect(draw('bash')).not.toBe(draw('mystery_tool'))
+    // The six persona-bound delegation tools glyph as the generic one does.
+    expect(draw('subagent_scout')).toBe(draw('subagent'))
   })
 
   it('knows which tools delegate', () => {
     expect(isAgentTool('subagent')).toBe(true)
     expect(isAgentTool('workflow')).toBe(true)
+    // The sci-cluster preset mounts one tool per persona in place of the
+    // single generic `subagent`; each of them shows the galaxy board too.
+    expect(isAgentTool('subagent_researcher')).toBe(true)
+    expect(isAgentTool('subagent_deliverer')).toBe(true)
     expect(isAgentTool('bash')).toBe(false)
+    // The prefix is the whole rule: a tool merely starting with the word is
+    // not one of them.
+    expect(isAgentTool('subagents')).toBe(false)
   })
 
   it('summarizes a call by its first string argument, on one line and capped', () => {

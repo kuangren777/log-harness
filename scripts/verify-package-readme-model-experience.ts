@@ -53,6 +53,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/ui-sci-conversation': { kind: 'none', reason: 'Browser-side conversation skin (tool cards, agent galaxy, artifact chips); registers nothing model-facing.' },
   'packages/sci/sci-credit': { kind: 'none', reason: 'The metering registers no prompt, tool, or context; its balance refusal is an error finish the agent loop raises as an LlmError, so it reaches the user and never enters a model request.' },
   'packages/sci/sci-remote-hosts': { kind: 'indirect', reason: 'The managed SSH block reaches the model only as ordinary shell state; the shell tools own every rendered effect.' },
+  'packages/sci/sci-agents': { kind: 'none', reason: 'The roster registers no tool, prompt section, or session event; its one write is a delegation tool\'s settings section, which that tool owns rendering of.' },
   'packages/attachment/attachment-local': { kind: 'indirect', reason: 'The local backend delegates model request rendering to provider adapters.' },
   'packages/shell/shell': { kind: 'indirect', reason: 'The service interface delegates all model rendering to dsh-tool-bash.' },
   'packages/shell/shell-env': { kind: 'indirect', reason: 'The env service exposes managed DSH_* facts through the shell tools (dsh-tool-bash/dsh-tool-pwsh); it registers no prompt or schema of its own.' },

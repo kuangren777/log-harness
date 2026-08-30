@@ -58,6 +58,58 @@
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxsciagents--agentsruntime"></a>
+
+### `ctx.sciAgents` — `AgentsRuntime`
+
+The roster, its configuration, and its delegation log.
+
+The service performs reads only, apart from the one settings write AgentsRuntime.configure makes; it never creates, resumes, or drives an Agent or Session.
+
+```ts cordis-catalog
+/**
+ * The six personas with their live configuration and this month's real usage.
+ * @returns the roster, in `PERSONA_NAMES` order.
+ */
+@Remote('roster') async roster(): Promise<RosterResult>
+
+/**
+ * Write one persona's availability, base model, or permissions.
+ *
+ * The write lands in the delegation tool's own settings section, which that
+ * tool re-reads on its next execution — so the change reaches the next
+ * delegation without re-registering the tool or restarting the session.
+ * @param request - the persona and the fields the gesture changed.
+ * @returns the persona as the roster reports it after the write.
+ * @throws Error when no persona carries the id, or when the deployment's
+ *   composition mounts no delegation tool for it.
+ */
+@Remote('configure') async configure(request: ConfigureRequest): Promise<ConfigureResult>
+
+/**
+ * One persona's delegations, newest first.
+ * @param request - the persona and how many rows to return.
+ * @returns the delegation log.
+ * @throws Error when no persona carries the id.
+ */
+@Remote('calls') async calls(request: CallsRequest): Promise<CallsResult>
+
+/**
+ * The base models this deployment can route a child to.
+ *
+ * Read from `ctx.llm` — the same directory `sessions.models` serves the
+ * session model picker from — rather than from a list of this package's own,
+ * so a provider a deployment added is offered here the moment it registers.
+ * A provider whose catalog lookup fails is reported instead of failing the
+ * read, exactly as the session picker treats it: the other providers stay
+ * choosable.
+ * @returns the catalog, and the providers that did not answer.
+ */
+@Remote('models') async models(): Promise<ModelsResult>
+```
+
+Source: [`packages/sci/sci-agents/src/index.ts`](../../packages/sci/sci-agents/src/index.ts)
+
 <a id="ctxsciaudit--sciauditservice"></a>
 
 ### `ctx.sciAudit` — `SciAuditService`

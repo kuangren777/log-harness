@@ -1,0 +1,62 @@
+/* One labelled switch row inside a setting card. */
+
+.row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 13px 0;
+}
+
+.row + .row {
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+}
+
+.label {
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.description {
+  margin-top: 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.track {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 980px;
+  background: var(--dsw-sci-chip-bg);
+  cursor: pointer;
+  transition: background var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.trackOn {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-base);
+  transition: left var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.trackOn .knob {
+  left: 21px;
+}

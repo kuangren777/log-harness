@@ -125,6 +125,12 @@ export type { ContinuableSetupContribution } from './activation-setup-registry.t
 export type { SubagentDescendantListEntry, SubagentListEntry } from './list-children.ts'
 export type { SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
 export type { SubagentIdentityProjection, SubagentTimingProjection } from './projection-types.ts'
+// The timing definition itself, not only its view type: a reader folding a cold
+// child log (a roster page counting delegation time) must apply the SAME fold
+// the live registry does, and re-deriving it would drift from the reset
+// discipline that keeps a fork seed's ancestor turns out of the child's total.
+export { subagentTimingProjectionDefinition } from './projection.ts'
+export type { TimingState } from './projection.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
