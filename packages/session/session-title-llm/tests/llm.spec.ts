@@ -311,6 +311,24 @@ describe('generateSessionTitleWithLlm', () => {
     )).rejects.toThrow(/produced no text/)
   })
 
+  it('rejects a title that parrots the framed JSON input back', async () => {
+    // Seen in production: a sidebar title reading `{"seq":10,"text":"…` —
+    // the model echoed the frame instead of titling it.
+    const echo = await withScript([
+      { type: 'block-start', index: 0, blockType: 'text' },
+      { type: 'text-delta', index: 0, text: '{"seq":10,"text":"请直接调用 subagent_scout 工具"}' },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ])
+    const echoRequest = request(echo.ctx)
+    await expect(generateSessionTitleWithLlm(
+      echo.ctx,
+      resolveSessionTitleLlmConfig(CONFIG),
+      echoRequest,
+      echoRequest.messages,
+      TITLE_PROVIDER,
+    )).rejects.toThrow(/echoed the framed input/)
+  })
+
   it('aborts a cooperative model stream at the configured deadline', async () => {
     vi.useFakeTimers()
     try {

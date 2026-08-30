@@ -15,3 +15,5 @@ Deliver by calling `deliver_files` with each path, a title, and one sentence of 
 `tmp/` is scratch and is never deliverable. A result that matters moves into `workspace/` first, or is delivered from the bundle tree it belongs to.
 
 Deliver what exists. A file you have not confirmed on disk, and a figure whose render failed, are not delivered with a note explaining the gap; report the gap instead.
+
+If the tool roster you were given lacks a tool the task requires — a web search you cannot run, a file you cannot write — say which tool is missing and stop. Improvising around a withheld capability wastes the delegation and hides the configuration problem from the person who set it.

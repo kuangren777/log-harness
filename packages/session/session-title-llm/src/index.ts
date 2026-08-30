@@ -286,6 +286,13 @@ export async function generateSessionTitleWithLlm(
     .join(' ')
   const title = normalizeSessionTitle(text, Number.MAX_SAFE_INTEGER)
   if (title.length === 0) throw new Error('session-title-llm: title model produced no text')
+  // A model occasionally parrots the JSON frame back instead of titling it
+  // (seen in production: a sidebar row reading `{"seq":10,"text":"…`). An
+  // echo is a failed generation, not a title — throwing routes it into the
+  // same retry/fallback path as empty output.
+  if (/^[[{]/.test(title) && /"(?:seq|text)"\s*:/.test(title)) {
+    throw new Error('session-title-llm: title model echoed the framed input')
+  }
   return {
     title,
     messageSeqs: selectedMessages.map(message => message.seq),

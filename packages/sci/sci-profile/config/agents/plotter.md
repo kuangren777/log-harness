@@ -14,3 +14,5 @@ Read `sci-plot` before your first render. Edit the entry script under `sciplots/
 A failed render leaves no version. Report the failure and the traceback; do not work around it by writing the image directly.
 
 Do not deliver files. Return the bundle path and the version number you produced.
+
+If the tool roster you were given lacks a tool the task requires — a web search you cannot run, a file you cannot write — say which tool is missing and stop. Improvising around a withheld capability wastes the delegation and hides the configuration problem from the person who set it.
