@@ -114,6 +114,109 @@ Types: [SessionId](core.md)
 
 Source: [`packages/sci/sci-audit/src/index.ts`](../../packages/sci/sci-audit/src/index.ts)
 
+<a id="ctxscicitations--citationsruntime"></a>
+
+### `ctx.sciCitations` — `CitationsRuntime`
+
+One paper project's citation pool. The service reads and writes files inside the project it was asked about and never creates, resumes, or drives an Agent or Session.
+
+```ts cordis-catalog
+/**
+ * Every project directory, with the paper bundles inside each.
+ * @returns the projects in listing order; an absent `projectRoot` yields none.
+ */
+@Remote('projects') async projects(): Promise<CitationProjectsResult>
+
+/**
+ * One project's whole pool as it stands, with no file access.
+ * @param request - the project to read.
+ * @returns the groups, the citations, and the header counters.
+ * @throws CitationsError `CITATIONS_INVALID_REQUEST` for a slug that is not a directory name.
+ */
+@Remote('pool') pool(request: CitationPoolRequest): Promise<CitationPool>
+
+/**
+ * Create a group, or rename and recolor an existing one.
+ * @param request - the project, the optional key, the label, and the optional color.
+ * @returns the stored group.
+ * @throws CitationsError `CITATIONS_INVALID_REQUEST` for a blank label or a reserved key.
+ */
+@Remote('upsertGroup') async upsertGroup(request: CitationGroupUpsertRequest): Promise<CitationGroup>
+
+/**
+ * Drop a group; its citations return to `ungrouped`.
+ * @param request - the project and the group key.
+ * @returns `{ ok: true }` once the group is absent.
+ * @throws CitationsError `CITATIONS_INVALID_REQUEST` for a reserved key.
+ */
+@Remote('removeGroup') async removeGroup(request: CitationGroupRemoveRequest): Promise<CitationOkResult>
+
+/**
+ * File one citation into another group.
+ *
+ * `quarantine` is a group AND a flag, so moving into it raises the flag and
+ * moving out of it lowers one the move itself set; a citation moved between
+ * two ordinary groups keeps whatever flag it had. Moving a citation that
+ * scores below the threshold out of `quarantine` refiles it without releasing
+ * it, because the automatic half of the flag is not the move's to lower.
+ * @param request - the project, the citekey, and the destination group.
+ * @returns `{ ok: true }` once the citation is filed.
+ * @throws CitationsError `CITATIONS_UNKNOWN_CITEKEY` or `CITATIONS_UNKNOWN_GROUP`.
+ */
+@Remote('move') async move(request: CitationMoveRequest): Promise<CitationOkResult>
+
+/**
+ * Put one work in the pool and in the manuscript's bibliography.
+ *
+ * The work is resolved before anything is written, so a DOI no index holds
+ * produces an error rather than a citekey pointing at nothing. The row is
+ * then stored and the first paper bundle's `refs.bib` is updated in place.
+ * @param request - the project plus whatever identifies the work.
+ * @returns the stored citation and whether the citekey was new.
+ * @throws CitationsError `CITATIONS_UNKNOWN_PROJECT`, `CITATIONS_UNRESOLVED`,
+ *   `CITATIONS_UNKNOWN_GROUP`, `CITATIONS_INVALID_REQUEST`, or
+ *   `CITATIONS_POOL_FULL` when the project is already at `maxCitations`.
+ */
+@Remote('add') async add(request: CitationAddRequest): Promise<CitationAddResult>
+
+/**
+ * Change the part of a citation a person owns.
+ *
+ * `quarantined: false` on a row scoring below the threshold refiles nothing:
+ * the flag's automatic half stands, and the returned row shows it still set.
+ * @param request - the project, the citekey, and the fields to change.
+ * @returns the stored citation.
+ * @throws CitationsError `CITATIONS_UNKNOWN_CITEKEY` or `CITATIONS_UNKNOWN_GROUP`.
+ */
+@Remote('update') async update(request: CitationUpdateRequest): Promise<Citation>
+
+/**
+ * Drop one citation from the pool, and optionally from every `refs.bib`.
+ * @param request - the project, the citekey, and whether the bibliography follows.
+ * @returns `{ ok: true }` once the citation is absent.
+ * @throws CitationsError `CITATIONS_UNKNOWN_CITEKEY`.
+ */
+@Remote('removeCitation') async removeCitation(request: CitationRemoveRequest): Promise<CitationOkResult>
+
+/**
+ * Re-read the project from disk: every `refs.bib`, then every `.md` and
+ * `.tex` the citekeys could appear in.
+ * @param request - the project to re-read.
+ * @returns the merged pool and one entry per unreadable `refs.bib` block.
+ * @throws CitationsError `CITATIONS_UNKNOWN_PROJECT` when the project has no directory.
+ */
+@Remote('rescan') async rescan(request: CitationRescanRequest): Promise<CitationRescanResult>
+
+/**
+ * Render the pool, or one group of it, as a BibTeX file.
+ * @param request - the project and the optional group filter.
+ * @returns the file text; empty when the selection is empty.
+ */
+@Remote('exportBibtex') exportBibtex(request: CitationExportRequest): Promise<CitationExportResult>
+```
+
+Source: [`packages/sci/sci-citations/src/runtime.ts`](../../packages/sci/sci-citations/src/runtime.ts)
+
 <a id="ctxscilibrary--libraryruntime"></a>
 
 ### `ctx.sciLibrary` — `LibraryRuntime`

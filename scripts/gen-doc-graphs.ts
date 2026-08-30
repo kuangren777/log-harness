@@ -114,6 +114,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Fans one query out to OpenAlex, Semantic Scholar, arXiv and Crossref, merges the replies by DOI / arXiv id / title, registers literature_search, and serves the 检索 view over sci.literature.',
   },
   {
+    key: 'sciCitations',
+    pkg: 'sci-citations',
+    title: 'Science-research citation pools',
+    mode: 'core',
+    consumers: ['sci-profile'],
+    note: 'One citation pool per paper project: refs.bib parsed and written back, deterministic confidence, real usage counts from the project tree, served as citations_list/citations_add and the sci.citations Remote.',
+  },
+  {
     key: 'sciLibrary',
     pkg: 'sci-library',
     title: 'Science-research knowledge library',

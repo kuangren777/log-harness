@@ -1,4 +1,4 @@
-# 以磁盘上的 `refs.bib` 为权威的按项目引用池
+# Agent Note：以磁盘上的 `refs.bib` 为权威的按项目引用池
 
 Status: proposed
 

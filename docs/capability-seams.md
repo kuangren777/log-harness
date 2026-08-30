@@ -12,6 +12,8 @@ flowchart LR
   pkg_sci_profile["sci-profile"]
   pkg_sci_literature["sci-literature"]
   svc_sciLiterature["ctx.sciLiterature<br/>Science-research literature search"]
+  pkg_sci_citations["sci-citations"]
+  svc_sciCitations["ctx.sciCitations<br/>Science-research citation pools"]
   pkg_sci_library["sci-library"]
   svc_sciLibrary["ctx.sciLibrary<br/>Science-research knowledge library"]
   pkg_sci_memory["sci-memory"]
@@ -273,6 +275,7 @@ flowchart LR
   pkg_sandbox_local --> svc_sandbox
   pkg_sandbox_policy --> svc_sandboxPolicy
   pkg_sci_audit --> svc_sciAudit
+  pkg_sci_citations --> svc_sciCitations
   pkg_sci_library --> svc_sciLibrary
   pkg_sci_literature --> svc_sciLiterature
   pkg_sci_memory --> svc_sciMemory
@@ -376,6 +379,7 @@ flowchart LR
   svc_sandboxPolicy --> pkg_fs_sandbox
   svc_sandboxPolicy --> pkg_terminal_bash
   svc_sciAudit --> pkg_sci_profile
+  svc_sciCitations --> pkg_sci_profile
   svc_sciLibrary --> pkg_sci_profile
   svc_sciLiterature --> pkg_sci_profile
   svc_sciMemory --> pkg_sci_profile
@@ -461,6 +465,7 @@ flowchart LR
 | --- | --- | --- | --- | --- | --- | --- |
 | `ctx.sciAudit` | `core` | [`sci-audit`](../packages/sci/sci-audit) | - | [`sci-profile`](../packages/sci/sci-profile) | - | Folds the session log into three owned tables and reads the tables sci-skills and sci-memory own; rebuildable because the log is the only input. |
 | `ctx.sciLiterature` | `core` | [`sci-literature`](../packages/sci/sci-literature) | - | [`sci-profile`](../packages/sci/sci-profile) | - | Fans one query out to OpenAlex, Semantic Scholar, arXiv and Crossref, merges the replies by DOI / arXiv id / title, registers literature_search, and serves the 检索 view over sci.literature. |
+| `ctx.sciCitations` | `core` | [`sci-citations`](../packages/sci/sci-citations) | - | [`sci-profile`](../packages/sci/sci-profile) | - | One citation pool per paper project: refs.bib parsed and written back, deterministic confidence, real usage counts from the project tree, served as citations_list/citations_add and the sci.citations Remote. |
 | `ctx.sciLibrary` | `core` | [`sci-library`](../packages/sci/sci-library) | - | [`sci-profile`](../packages/sci/sci-profile) | - | One direct-write table of the user's papers, datasets and notes, served to the model as library_search/library_add, to the browser as the sci.library Remote plus the /library-api byte routes. |
 | `ctx.sciMemory` | `core` | [`sci-memory`](../packages/sci/sci-memory) | - | [`sci-profile`](../packages/sci/sci-profile) | - | Observes accepted memory-directory writes, backfills the originating session, and serves recall over the projected log. |
 | `ctx.sciRemoteHosts` | `core` | [`sci-remote-hosts`](../packages/sci/sci-remote-hosts) | - | [`sci-profile`](../packages/sci/sci-profile) | - | Owns one delimited block of the sandbox ssh config; bytes outside the block are preserved and private keys stay in the credential seam. |

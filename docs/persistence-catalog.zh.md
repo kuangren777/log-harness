@@ -628,6 +628,26 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 来源：[`packages/sci/sci-guard/src/types.ts:107`](../packages/sci/sci-guard/src/types.ts)
 
+<a id="scicitations-changed--log-only"></a>
+
+#### `sci/citations-changed` — log-only
+
+```ts persistence-catalog
+/**
+ * One citation-pool change the model made reached the tables.
+ *
+ * The citekey and what happened to it are already in the `tool/result` this
+ * event sits beside, so nothing here is required to rebuild a model
+ * request; the event adds only the project the change landed in, which the
+ * result text states but does not carry as data. A build that does not know
+ * this type may therefore skip it, and it is appended `ignorable: true`.
+ * @param data - the project, the operation, and the citekey when one was named.
+ */
+'sci/citations-changed': SciCitationsChangedData
+```
+
+来源：[`packages/sci/sci-citations/src/events.ts:26`](../packages/sci/sci-citations/src/events.ts)
+
 <a id="scicredit-charged--log-only"></a>
 
 #### `sci/credit-charged` — log-only

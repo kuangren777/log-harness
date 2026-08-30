@@ -62,7 +62,7 @@ describe('the copied citation block', () => {
       '[qin2025] Qin, Bingchao. Grain-boundary engineering of selenide thermoelectrics. 2025.',
     )
     expect(citationLine(BARE)).toBe('[wang] Unreviewed preprint on SnSe single crystals.')
-    expect(citationLine({ ...ZHAO, year: undefined, doi: undefined })).toBe(
+    expect(citationLine((({ year: _year, doi: _doi, ...rest }) => rest)(ZHAO) as typeof ZHAO)).toBe(
       '[zhao2024] Zhao, Li-Dong, Chang, Cheng. Halide doping raises the zT of n-type SnSe above 2.4. Nature.',
     )
   })

@@ -144,6 +144,7 @@ flowchart TD
     pkg_client_ui_primitives["client-ui-primitives"]
     pkg_client_ui_reference["client-ui-reference"]
     pkg_client_ui_renderer["client-ui-renderer"]
+    pkg_client_ui_sci_citations["client-ui-sci-citations"]
     pkg_client_ui_sci_conversation["client-ui-sci-conversation"]
     pkg_client_ui_sci_files["client-ui-sci-files"]
     pkg_client_ui_sci_library["client-ui-sci-library"]
@@ -276,6 +277,7 @@ flowchart TD
   subgraph group_sci["packages/sci"]
     pkg_camel_runtime["camel-runtime"]
     pkg_sci_audit["sci-audit"]
+    pkg_sci_citations["sci-citations"]
     pkg_sci_credit["sci-credit"]
     pkg_sci_deliver["sci-deliver"]
     pkg_sci_guard["sci-guard"]
@@ -973,6 +975,14 @@ flowchart TD
   pkg_camel_runtime --> pkg_invariants
   pkg_camel_runtime --> pkg_session
   pkg_camel_runtime --> pkg_tools
+  pkg_sci_citations --> pkg_fs
+  pkg_sci_citations --> pkg_invariants
+  pkg_sci_citations --> pkg_llm
+  pkg_sci_citations --> pkg_session
+  pkg_sci_citations --> pkg_storage_domain
+  pkg_sci_citations --> pkg_system_prompt
+  pkg_sci_citations --> pkg_tools
+  pkg_sci_citations --> pkg_typert_protocol
   pkg_sci_deliver --> pkg_agent
   pkg_sci_deliver --> pkg_brand
   pkg_sci_deliver --> pkg_fs
@@ -1633,6 +1643,14 @@ flowchart TD
   pkg_client_ui_cordis --> pkg_client_ui_tool
   pkg_client_ui_cordis --> pkg_cordis_client_runner
   pkg_client_ui_cordis --> pkg_invariants
+  pkg_client_ui_sci_citations --> pkg_api_remotes
+  pkg_client_ui_sci_citations --> pkg_client_locale
+  pkg_client_ui_sci_citations --> pkg_client_runtime
+  pkg_client_ui_sci_citations --> pkg_client_ui_layout
+  pkg_client_ui_sci_citations --> pkg_client_ui_sci_shell
+  pkg_client_ui_sci_citations --> pkg_client_ui_tool
+  pkg_client_ui_sci_citations --> pkg_invariants
+  pkg_client_ui_sci_citations --> pkg_sci_citations
   pkg_client_ui_sci_search --> pkg_api_remotes
   pkg_client_ui_sci_search --> pkg_client_locale
   pkg_client_ui_sci_search --> pkg_client_runtime
@@ -1817,6 +1835,7 @@ flowchart TD
 | [`mcp-client`](../packages/mcp/mcp-client) | `mcp` | [`attachment`](../packages/attachment/attachment), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |
 | [`schedule`](../packages/schedule/schedule) | `schedule` | [`agent`](../packages/core/agent), [`brand`](../packages/util/brand), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`tools`](../packages/core/tools) |
 | [`camel-runtime`](../packages/sci/camel-runtime) | `sci` | [`agent`](../packages/core/agent), [`e2b`](../packages/e2b/e2b), [`invariants`](../packages/runtime-diagnostics/invariants), [`session`](../packages/core/session), [`tools`](../packages/core/tools) |
+| [`sci-citations`](../packages/sci/sci-citations) | `sci` | [`fs`](../packages/fs/fs), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`storage-domain`](../packages/storage/storage-domain), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol) |
 | [`sci-deliver`](../packages/sci/sci-deliver) | `sci` | [`agent`](../packages/core/agent), [`brand`](../packages/util/brand), [`fs`](../packages/fs/fs), [`invariants`](../packages/runtime-diagnostics/invariants), [`sci-manifest`](../packages/sci/sci-manifest), [`session`](../packages/core/session), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`sci-literature`](../packages/sci/sci-literature) | `sci` | [`credentials`](../packages/credentials/credentials), [`invariants`](../packages/runtime-diagnostics/invariants), [`launch-environment`](../packages/util/launch-environment), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`storage-domain`](../packages/storage/storage-domain), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol) |
 | [`sci-memory`](../packages/sci/sci-memory) | `sci` | [`compaction`](../packages/compaction/compaction), [`fs`](../packages/fs/fs), [`invariants`](../packages/runtime-diagnostics/invariants), [`session`](../packages/core/session), [`session-query`](../packages/session-query/session-query), [`storage-domain`](../packages/storage/storage-domain), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol) |
@@ -1913,6 +1932,7 @@ flowchart TD
 | [`client-ui-sci-shell`](../packages/client/ui-sci-shell) | `client` | [`client-locale`](../packages/client/locale), [`client-runtime`](../packages/client/runtime), [`client-ui-brand-sci`](../packages/client/ui-brand-sci), [`client-ui-layout`](../packages/client/ui-layout), [`client-ui-theme`](../packages/client/ui-theme), [`invariants`](../packages/runtime-diagnostics/invariants) |
 | [`client-ui-skill`](../packages/client/ui-skill) | `client` | [`api-remotes`](../packages/api/remotes), [`client-connection`](../packages/client/connection), [`client-locale`](../packages/client/locale), [`client-runtime`](../packages/client/runtime), [`client-ui-input-trigger`](../packages/client/ui-input-trigger), [`client-ui-tool`](../packages/client/ui-tool), [`invariants`](../packages/runtime-diagnostics/invariants) |
 | [`client-ui-cordis`](../packages/extensions/ui-cordis) | `extensions` | [`api-remotes`](../packages/api/remotes), [`client-connection`](../packages/client/connection), [`client-locale`](../packages/client/locale), [`client-runtime`](../packages/client/runtime), [`client-ui-input-trigger`](../packages/client/ui-input-trigger), [`client-ui-sidebar`](../packages/client/ui-sidebar), [`client-ui-tool`](../packages/client/ui-tool), [`cordis-client-runner`](../packages/extensions/cordis-client-runner), [`invariants`](../packages/runtime-diagnostics/invariants) |
+| [`client-ui-sci-citations`](../packages/client/ui-sci-citations) | `client` | [`api-remotes`](../packages/api/remotes), [`client-locale`](../packages/client/locale), [`client-runtime`](../packages/client/runtime), [`client-ui-layout`](../packages/client/ui-layout), [`client-ui-sci-shell`](../packages/client/ui-sci-shell), [`client-ui-tool`](../packages/client/ui-tool), [`invariants`](../packages/runtime-diagnostics/invariants), [`sci-citations`](../packages/sci/sci-citations) |
 | [`client-ui-sci-search`](../packages/client/ui-sci-search) | `client` | [`api-remotes`](../packages/api/remotes), [`client-locale`](../packages/client/locale), [`client-runtime`](../packages/client/runtime), [`client-ui-brand-sci`](../packages/client/ui-brand-sci), [`client-ui-conversation`](../packages/client/ui-conversation), [`client-ui-layout`](../packages/client/ui-layout), [`client-ui-sci-shell`](../packages/client/ui-sci-shell), [`client-ui-tool`](../packages/client/ui-tool), [`invariants`](../packages/runtime-diagnostics/invariants), [`sci-literature`](../packages/sci/sci-literature) |
 | [`host-directory-picker-auto`](../packages/host/directory-picker-auto) | `host` | [`client-ui-directory-picker-browse`](../packages/client/ui-directory-picker-browse), [`client-ui-directory-picker-native`](../packages/client/ui-directory-picker-native), [`host-directory-picker-browse`](../packages/host/directory-picker-browse), [`host-directory-picker-native`](../packages/host/directory-picker-native), [`host-webserver`](../packages/host/webserver), [`invariants`](../packages/runtime-diagnostics/invariants) |
 | [`client-ui-sci-library`](../packages/client/ui-sci-library) | `client` | [`api-remotes`](../packages/api/remotes), [`client-locale`](../packages/client/locale), [`client-runtime`](../packages/client/runtime), [`client-ui-layout`](../packages/client/ui-layout), [`client-ui-sci-search`](../packages/client/ui-sci-search), [`client-ui-sci-shell`](../packages/client/ui-sci-shell), [`client-ui-tool`](../packages/client/ui-tool), [`invariants`](../packages/runtime-diagnostics/invariants), [`sci-library`](../packages/sci/sci-library) |

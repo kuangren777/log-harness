@@ -4000,6 +4000,7 @@ export interface Config {
 - `@deepseek-ai/dsh-client-ui-plan`（[`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-reference`（[`packages/client/ui-reference/src/index.ts`](../packages/client/ui-reference/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-renderer`（[`packages/client/ui-renderer/src/index.ts`](../packages/client/ui-renderer/src/index.ts)）
+- `@deepseek-ai/dsh-client-ui-sci-citations`（[`packages/client/ui-sci-citations/src/index.ts`](../packages/client/ui-sci-citations/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-sci-conversation`（[`packages/client/ui-sci-conversation/src/index.ts`](../packages/client/ui-sci-conversation/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-sci-files`（[`packages/client/ui-sci-files/src/index.ts`](../packages/client/ui-sci-files/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-sci-library`（[`packages/client/ui-sci-library/src/index.ts`](../packages/client/ui-sci-library/src/index.ts)）
@@ -4097,6 +4098,7 @@ export interface Config {
 - `@deepseek-ai/dsh-office-univer`（[`packages/office/univer/src/index.ts`](../packages/office/univer/src/index.ts)）
 - `@deepseek-ai/dsh-output-retention`（[`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts)）
 - `@deepseek-ai/dsh-sandbox-windows-acl`（[`packages/sandbox/sandbox-windows-acl/src/index.ts`](../packages/sandbox/sandbox-windows-acl/src/index.ts)）
+- `@deepseek-ai/dsh-sci-citations`（[`packages/sci/sci-citations/src/index.ts`](../packages/sci/sci-citations/src/index.ts)）
 - `@deepseek-ai/dsh-sci-library`（[`packages/sci/sci-library/src/index.ts`](../packages/sci/sci-library/src/index.ts)）
 - `@deepseek-ai/dsh-sci-literature`（[`packages/sci/sci-literature/src/index.ts`](../packages/sci/sci-literature/src/index.ts)）
 - `@deepseek-ai/dsh-sci-manifest`（[`packages/sci/sci-manifest/src/index.ts`](../packages/sci/sci-manifest/src/index.ts)）

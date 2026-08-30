@@ -1249,6 +1249,86 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'sciCitations',
+    summary: 'One paper project\'s citation pool.',
+    description: 'One paper project\'s citation pool. The service reads and writes files inside the project it was asked about and never creates, resumes, or drives an Agent or Session.',
+    methods: [
+      {
+        signature: 'readonly config: Config',
+        description: 'The resolved deployment configuration; the tool reads `projectRoot` from it.',
+        parameters: [],
+      },
+      {
+        signature: '@Remote(\'projects\') async projects(): Promise<CitationProjectsResult>',
+        description: 'Every project directory, with the paper bundles inside each.',
+        parameters: [],
+        returns: 'the projects in listing order; an absent `projectRoot` yields none.',
+      },
+      {
+        signature: '@Remote(\'pool\') pool(request: CitationPoolRequest): Promise<CitationPool>',
+        description: 'One project\'s whole pool as it stands, with no file access.',
+        parameters: [{ name: 'request', description: 'the project to read.' }],
+        returns: 'the groups, the citations, and the header counters.',
+        throws: ['CitationsError `CITATIONS_INVALID_REQUEST` for a slug that is not a directory name.'],
+      },
+      {
+        signature: '@Remote(\'upsertGroup\') async upsertGroup(request: CitationGroupUpsertRequest): Promise<CitationGroup>',
+        description: 'Create a group, or rename and recolor an existing one.',
+        parameters: [{ name: 'request', description: 'the project, the optional key, the label, and the optional color.' }],
+        returns: 'the stored group.',
+        throws: ['CitationsError `CITATIONS_INVALID_REQUEST` for a blank label or a reserved key.'],
+      },
+      {
+        signature: '@Remote(\'removeGroup\') async removeGroup(request: CitationGroupRemoveRequest): Promise<CitationOkResult>',
+        description: 'Drop a group; its citations return to `ungrouped`.',
+        parameters: [{ name: 'request', description: 'the project and the group key.' }],
+        returns: '`{ ok: true }` once the group is absent.',
+        throws: ['CitationsError `CITATIONS_INVALID_REQUEST` for a reserved key.'],
+      },
+      {
+        signature: '@Remote(\'move\') async move(request: CitationMoveRequest): Promise<CitationOkResult>',
+        description: 'File one citation into another group.\n\n`quarantine` is a group AND a flag, so moving into it raises the flag and moving out of it lowers one the move itself set; a citation moved between two ordinary groups keeps whatever flag it had. Moving a citation that scores below the threshold out of `quarantine` refiles it without releasing it, because the automatic half of the flag is not the move\'s to lower.',
+        parameters: [{ name: 'request', description: 'the project, the citekey, and the destination group.' }],
+        returns: '`{ ok: true }` once the citation is filed.',
+        throws: ['CitationsError `CITATIONS_UNKNOWN_CITEKEY` or `CITATIONS_UNKNOWN_GROUP`.'],
+      },
+      {
+        signature: '@Remote(\'add\') async add(request: CitationAddRequest): Promise<CitationAddResult>',
+        description: 'Put one work in the pool and in the manuscript\'s bibliography.\n\nThe work is resolved before anything is written, so a DOI no index holds produces an error rather than a citekey pointing at nothing. The row is then stored and the first paper bundle\'s `refs.bib` is updated in place.',
+        parameters: [{ name: 'request', description: 'the project plus whatever identifies the work.' }],
+        returns: 'the stored citation and whether the citekey was new.',
+        throws: ['CitationsError `CITATIONS_UNKNOWN_PROJECT`, `CITATIONS_UNRESOLVED`, `CITATIONS_UNKNOWN_GROUP`, `CITATIONS_INVALID_REQUEST`, or `CITATIONS_POOL_FULL` when the project is already at `maxCitations`.'],
+      },
+      {
+        signature: '@Remote(\'update\') async update(request: CitationUpdateRequest): Promise<Citation>',
+        description: 'Change the part of a citation a person owns.\n\n`quarantined: false` on a row scoring below the threshold refiles nothing: the flag\'s automatic half stands, and the returned row shows it still set.',
+        parameters: [{ name: 'request', description: 'the project, the citekey, and the fields to change.' }],
+        returns: 'the stored citation.',
+        throws: ['CitationsError `CITATIONS_UNKNOWN_CITEKEY` or `CITATIONS_UNKNOWN_GROUP`.'],
+      },
+      {
+        signature: '@Remote(\'removeCitation\') async removeCitation(request: CitationRemoveRequest): Promise<CitationOkResult>',
+        description: 'Drop one citation from the pool, and optionally from every `refs.bib`.',
+        parameters: [{ name: 'request', description: 'the project, the citekey, and whether the bibliography follows.' }],
+        returns: '`{ ok: true }` once the citation is absent.',
+        throws: ['CitationsError `CITATIONS_UNKNOWN_CITEKEY`.'],
+      },
+      {
+        signature: '@Remote(\'rescan\') async rescan(request: CitationRescanRequest): Promise<CitationRescanResult>',
+        description: 'Re-read the project from disk: every `refs.bib`, then every `.md` and `.tex` the citekeys could appear in.',
+        parameters: [{ name: 'request', description: 'the project to re-read.' }],
+        returns: 'the merged pool and one entry per unreadable `refs.bib` block.',
+        throws: ['CitationsError `CITATIONS_UNKNOWN_PROJECT` when the project has no directory.'],
+      },
+      {
+        signature: '@Remote(\'exportBibtex\') exportBibtex(request: CitationExportRequest): Promise<CitationExportResult>',
+        description: 'Render the pool, or one group of it, as a BibTeX file.',
+        parameters: [{ name: 'request', description: 'the project and the optional group filter.' }],
+        returns: 'the file text; empty when the selection is empty.',
+      },
+    ],
+  },
+  {
     key: 'sciLibrary',
     summary: 'The user\'s knowledge base: papers, datasets, and notes they chose to keep, plus the sandbox files that belong to them.',
     description: 'The user\'s knowledge base: papers, datasets, and notes they chose to keep, plus the sandbox files that belong to them. The service performs reads and table writes only: it never creates, resumes, or drives an Agent or Session.',
@@ -3285,6 +3365,74 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CancelOptions',
     declaration: 'export interface CancelOptions {\n    keepInbox?: boolean | undefined;\n}',
+  },
+  {
+    name: 'CitationAddRequest',
+    declaration: 'export interface CitationAddRequest {\n    project: string;\n    citekey?: string;\n    doi?: string;\n    arxivId?: string;\n    libraryId?: string;\n    record?: CitationRecordInput;\n    group?: string;\n}',
+  },
+  {
+    name: 'CitationAddResult',
+    declaration: 'export interface CitationAddResult {\n    citation: Citation;\n    created: boolean;\n}',
+  },
+  {
+    name: 'CitationExportRequest',
+    declaration: 'export interface CitationExportRequest {\n    project: string;\n    group?: string;\n}',
+  },
+  {
+    name: 'CitationExportResult',
+    declaration: 'export interface CitationExportResult {\n    bibtex: string;\n}',
+  },
+  {
+    name: 'CitationGroupRemoveRequest',
+    declaration: 'export interface CitationGroupRemoveRequest {\n    project: string;\n    key: string;\n}',
+  },
+  {
+    name: 'CitationGroupUpsertRequest',
+    declaration: 'export interface CitationGroupUpsertRequest {\n    project: string;\n    key?: string;\n    label: string;\n    color?: string;\n}',
+  },
+  {
+    name: 'CitationMoveRequest',
+    declaration: 'export interface CitationMoveRequest {\n    project: string;\n    citekey: string;\n    group: string;\n}',
+  },
+  {
+    name: 'CitationOkResult',
+    declaration: 'export interface CitationOkResult {\n    ok: true;\n}',
+  },
+  {
+    name: 'CitationParseError',
+    declaration: 'export interface CitationParseError {\n    path: string;\n    line: number;\n    message: string;\n}',
+  },
+  {
+    name: 'CitationPatch',
+    declaration: 'export interface CitationPatch {\n    note?: string;\n    quarantined?: boolean;\n    group?: string;\n}',
+  },
+  {
+    name: 'CitationPoolRequest',
+    declaration: 'export interface CitationPoolRequest {\n    project: string;\n}',
+  },
+  {
+    name: 'CitationProjectsResult',
+    declaration: 'export interface CitationProjectsResult {\n    projects: CitationProject[];\n}',
+  },
+  {
+    name: 'CitationRecordInput',
+    declaration: 'export interface CitationRecordInput {\n    title: string;\n    authors?: readonly string[];\n    year?: number;\n    venue?: string;\n    doi?: string;\n    arxivId?: string;\n    url?: string;\n    citedBy?: number;\n    sources?: readonly string[];\n}',
+  },
+  {
+    name: 'CitationRemoveRequest',
+    declaration: 'export interface CitationRemoveRequest {\n    project: string;\n    citekey: string;\n    alsoBib?: boolean;\n}',
+  },
+  {
+    name: 'CitationRescanRequest',
+    declaration: 'export interface CitationRescanRequest {\n    project: string;\n}',
+  },
+  {
+    name: 'CitationRescanResult',
+    declaration: 'export interface CitationRescanResult {\n    pool: CitationPool;\n    parseErrors: readonly CitationParseError[];\n}',
+  },
+  {
+    name: 'CitationUpdateRequest',
+    declaration: 'export interface CitationUpdateRequest {\n    project: string;\n    citekey: string;\n    patch: CitationPatch;\n}',
   },
   {
     name: 'ClientResponse',

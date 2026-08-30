@@ -123,6 +123,9 @@
     # The 知识库 full-screen view, the entry detail page, and the 加入知识库 action.
     - id: ui-sci-library
       name: '@deepseek-ai/dsh-client-ui-sci-library'
+    # The 引用池 full-screen view and the citations tool rows.
+    - id: ui-sci-citations
+      name: '@deepseek-ai/dsh-client-ui-sci-citations'
 
 # ── persistence the science layer reads back ───────────────────────────────
 
@@ -253,6 +256,13 @@
       name: '@deepseek-ai/dsh-sci-library'
       config:
         libraryRoot: /home/user/sci/library
+
+    # Per-project citation pools: refs.bib parse/write, usage scan,
+    # citations_list / citations_add, and the sci.citations Remote.
+    - id: sci-citations
+      name: '@deepseek-ai/dsh-sci-citations'
+      config:
+        projectRoot: /home/user/sci/projects
 
     - id: sci-literature
       name: '@deepseek-ai/dsh-sci-literature'

@@ -26,7 +26,7 @@ afterEach(() => {
 
 /** The injected face, with every member stubbed and overridable per case. */
 function faceOf(overrides: Partial<SciCitationsInjected> = {}) {
-  const settled = async (): Promise<PoolOutcome> => ({ ok: true, pool: poolOf() })
+  const settled = async (): Promise<PoolOutcome> => ({ ok: true as const, pool: poolOf() })
   return {
     projects: vi.fn(async () => PROJECTS),
     pool: vi.fn(settled),
@@ -92,7 +92,7 @@ describe('the pool header', () => {
   })
 
   it('says nothing about a scan that has not run', async () => {
-    await mount({ pool: vi.fn(async () => ({ ok: true, pool: poolOf([ZHAO], GROUPS, 0) })) })
+    await mount({ pool: vi.fn(async () => ({ ok: true as const, pool: poolOf([ZHAO], GROUPS, 0) })) })
     expect(screen.queryByText(/上次扫描/u)).toBeNull()
   })
 
@@ -110,7 +110,7 @@ describe('the pool header', () => {
   })
 
   it('states an unreadable pool and draws no list', async () => {
-    await mount({ pool: vi.fn(async () => ({ ok: false, code: 'CITATIONS_STORAGE_UNAVAILABLE' })) })
+    await mount({ pool: vi.fn(async () => ({ ok: false as const, code: 'CITATIONS_STORAGE_UNAVAILABLE' })) })
 
     expect(screen.getByRole('alert').textContent)
       .toBe('读不出这个项目的引用池（CITATIONS_STORAGE_UNAVAILABLE）。')
@@ -149,12 +149,12 @@ describe('the group column', () => {
   })
 
   it('states an empty group and an empty pool differently', async () => {
-    await mount({ pool: vi.fn(async () => ({ ok: true, pool: poolOf([ZHAO]) })) })
+    await mount({ pool: vi.fn(async () => ({ ok: true as const, pool: poolOf([ZHAO]) })) })
     await click(bucket('缺陷工程'))
     expect(screen.getByText('该分组暂无引用 · 用条目上的分组标签把引用移进来')).toBeTruthy()
 
     cleanup()
-    await mount({ pool: vi.fn(async () => ({ ok: true, pool: poolOf([]) })) })
+    await mount({ pool: vi.fn(async () => ({ ok: true as const, pool: poolOf([]) })) })
     expect(screen.getByText(
       '这个项目还没有引用。让智能体用 citations_add 添加，或点「重新扫描」读入 refs.bib。',
     )).toBeTruthy()
@@ -228,9 +228,9 @@ describe('one citation row', () => {
 
   it('states a partial origin line rather than an invented one', async () => {
     await mount({
-      pool: vi.fn(async () => ({ ok: true, pool: poolOf([
+      pool: vi.fn(async () => ({ ok: true as const, pool: poolOf([
         { ...QIN, sources: [] },
-        { ...ZHAO, year: undefined },
+        (({ year: _year, ...rest }) => rest)(ZHAO) as typeof ZHAO,
       ]) })),
     })
 
@@ -239,7 +239,7 @@ describe('one citation row', () => {
   })
 
   it('names a group the project no longer declares by its bare key', async () => {
-    await mount({ pool: vi.fn(async () => ({ ok: true, pool: poolOf([{ ...QIN, group: 'device' }]) })) })
+    await mount({ pool: vi.fn(async () => ({ ok: true as const, pool: poolOf([{ ...QIN, group: 'device' }]) })) })
     expect(screen.getByText('分组：device')).toBeTruthy()
   })
 
@@ -300,7 +300,7 @@ describe('one citation row', () => {
   })
 
   it('keeps the list on screen when a write fails, and says so', async () => {
-    await mount({ move: vi.fn(async () => ({ ok: false, code: 'CITATIONS_UNKNOWN_GROUP' })) })
+    await mount({ move: vi.fn(async () => ({ ok: false as const, code: 'CITATIONS_UNKNOWN_GROUP' })) })
     await act(async () => { fireEvent.click(tagOf('zhao2024')) })
     await click(screen.getByRole('menuitem', { name: '缺陷工程' }))
 
@@ -318,7 +318,7 @@ describe('rescan, export, and copy', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '重新扫描' })) })
     expect(screen.getByRole('button', { name: '扫描中…' }).hasAttribute('disabled')).toBe(true)
 
-    await act(async () => { release?.({ ok: true, pool: poolOf([{ ...ZHAO, uses: 11 }]) }) })
+    await act(async () => { release?.({ ok: true as const, pool: poolOf([{ ...ZHAO, uses: 11 }]) }) })
     await flush()
     expect(rescan).toHaveBeenCalledWith(PROJECT)
     expect(screen.getByText('正文引用 11 处')).toBeTruthy()
@@ -361,7 +361,7 @@ describe('rescan, export, and copy', () => {
   })
 
   it('states a refused export and a browser that cannot download at all', async () => {
-    await mount({ exportBibtex: vi.fn(async () => ({ ok: false, code: 'CITATIONS_EMPTY_EXPORT' })) })
+    await mount({ exportBibtex: vi.fn(async () => ({ ok: false as const, code: 'CITATIONS_EMPTY_EXPORT' })) })
     await click(screen.getByRole('button', { name: '导出 BibTeX' }))
     expect(screen.getByRole('status').textContent).toBe('导出失败（CITATIONS_EMPTY_EXPORT）。')
 
@@ -379,7 +379,7 @@ describe('rescan, export, and copy', () => {
 
     await click(screen.getByRole('button', { name: '复制引用块' }))
     expect(screen.getByRole('status').textContent).toBe('已复制 3 条引用')
-    const written = writeText.mock.calls[0]?.[0] as unknown as string
+    const written = (writeText.mock.calls[0] as unknown as [string])[0]
     expect(written.split('\n')).toHaveLength(3)
     expect(written.startsWith('[zhao2024] Zhao, Li-Dong, Chang, Cheng.')).toBe(true)
 
@@ -391,7 +391,7 @@ describe('rescan, export, and copy', () => {
   })
 
   it('states a clipboard that refused, and offers no copy of an empty list', async () => {
-    await mount({ pool: vi.fn(async () => ({ ok: true, pool: poolOf([BARE]) })) })
+    await mount({ pool: vi.fn(async () => ({ ok: true as const, pool: poolOf([BARE]) })) })
     await click(screen.getByRole('button', { name: '复制引用块' }))
     expect(screen.getByRole('status').textContent).toBe('复制失败，请手动选取。')
 

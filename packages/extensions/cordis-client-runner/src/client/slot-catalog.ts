@@ -1345,6 +1345,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'rail\' (client-ui-sci-shell), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-sci-citations CitationsRailItem',
       'client-ui-sci-library LibraryRailItem',
       'client-ui-sci-search SearchRailItem',
       'client-ui-sci-shell ConversationRailItem id \'conversation\'',
@@ -2083,6 +2084,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'conversation.chat.node\' (client-ui-tool), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-sci-citations CitationsTable',
+      'client-ui-sci-citations CitationAdded',
       'client-ui-sci-library LibraryHits',
       'client-ui-sci-library LibraryAdded',
       'client-ui-sci-search LiteratureHits',
@@ -2173,6 +2176,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'root\' (client-ui-layout), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-sci-citations CitationsView',
       'client-ui-sci-library LibraryView',
       'client-ui-sci-search SearchView',
     ],

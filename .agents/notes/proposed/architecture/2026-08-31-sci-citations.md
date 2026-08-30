@@ -1,4 +1,4 @@
-# Per-project citation pools over an authoritative `refs.bib`
+# Agent Note: per-project citation pools over an authoritative `refs.bib`
 
 Status: proposed
 
