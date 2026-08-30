@@ -96,9 +96,11 @@ describe('one roster card', () => {
 })
 
 describe('the roster states', () => {
-  it('says it is reading before the first roster lands', () => {
+  it('says it is reading before the first roster lands, with no invented subtitle counts', () => {
     render(<RosterPage {...pageProps({ agents: [], status: 'loading' }).props} />)
     expect(screen.getByText('正在读取名册…')).toBeTruthy()
+    // Before the host answers there is nothing truthful to count.
+    expect(screen.queryByText(/个在编/)).toBeNull()
   })
 
   it('states an empty roster rather than drawing an empty grid', () => {

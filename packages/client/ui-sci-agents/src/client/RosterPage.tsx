@@ -123,9 +123,13 @@ export function RosterPage({ agents, logs, status, error, onConfigure, onLog, t 
     <div className={css.root}>
       <div className={css.header}>
         <h1 className={css.title}>{t('roster.title')}</h1>
-        <div className={css.subtitle}>
-          {t('roster.subtitle', { enabled, calls: formatCount(delegations) })}
-        </div>
+        {/* The subtitle's numbers are the host's; before the roster lands there
+            is nothing truthful to count, so the line waits with the grid. */}
+        {agents.length > 0 && (
+          <div className={css.subtitle}>
+            {t('roster.subtitle', { enabled, calls: formatCount(delegations) })}
+          </div>
+        )}
       </div>
       {status === 'error' && (
         <div className={css.error} role="alert">{t('roster.error', { code: error })}</div>
