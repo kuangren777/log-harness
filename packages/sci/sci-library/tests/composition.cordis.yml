@@ -1,0 +1,32 @@
+# The smallest real composition that mounts the knowledge base: the session
+# store the tool records into, the tool registry and prompt assembly it joins,
+# the JSON-backed storage domain its rows live in, the local filesystem its
+# files are written to, and the webserver plus browser-trust fence its upload
+# route is registered on. The literature layer is here too, so `library_add`
+# resolving a DOI is exercised through the real soft dependency rather than a
+# stub. Both roots are per-run, so they come from the environment the suite
+# sets before boot.
+- name: '@deepseek-ai/dsh-session'
+- name: '@deepseek-ai/dsh-system-prompt'
+- name: '@deepseek-ai/dsh-tools'
+- name: '@deepseek-ai/dsh-storage'
+- name: '@deepseek-ai/dsh-storage-json'
+  config:
+    root: !!js process.env.DSH_SCI_LIBRARY_TEST_ROOT
+- name: '@deepseek-ai/dsh-storage-domain'
+  config:
+    backend: json
+- name: '@deepseek-ai/dsh-fs-local'
+  config:
+    cwd: !!js process.env.DSH_SCI_LIBRARY_TEST_SANDBOX
+- name: '@deepseek-ai/dsh-host-webserver'
+  config:
+    host: 127.0.0.1
+    port: 0
+- name: '@deepseek-ai/dsh-client-connection'
+- name: '@deepseek-ai/dsh-sci-literature'
+- name: '@deepseek-ai/dsh-sci-library'
+  config:
+    libraryRoot: !!js process.env.DSH_SCI_LIBRARY_TEST_SANDBOX + '/library'
+    maxEntries: 3
+    maxFileBytes: 4096
