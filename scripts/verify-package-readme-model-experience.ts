@@ -50,6 +50,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/ui-sci-files': { kind: 'none', reason: 'A browser-side details-column mode over the workspace RPCs; it registers no tool, prompt section, or session event, and reads files only on the user\'s gesture.' },
   'packages/client/ui-sci-library': { kind: 'none', reason: 'Browser-side 知识库 view over the sci.library Remote; registers nothing model-facing.' },
   'packages/client/ui-sci-citations': { kind: 'none', reason: 'Browser-side 引用池 view over the sci.citations Remote; registers nothing model-facing.' },
+  'packages/client/ui-sci-agents': { kind: 'none', reason: 'Browser-side 智能体 roster/config/log views over the sci.agents Remote; registers nothing model-facing.' },
   'packages/client/ui-sci-search': { kind: 'none', reason: 'Browser-side 检索 view and literature_search hit cards over the sci.literature Remote; registers nothing model-facing.' },
   'packages/client/ui-sci-shell': { kind: 'none', reason: 'Browser-side icon rail, theme toggle and profile popover; registers nothing model-facing.' },
   'packages/client/ui-sci-conversation': { kind: 'none', reason: 'Browser-side conversation skin (tool cards, agent galaxy, artifact chips); registers nothing model-facing.' },

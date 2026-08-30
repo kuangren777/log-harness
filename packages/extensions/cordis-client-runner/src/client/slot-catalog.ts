@@ -1345,6 +1345,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'rail\' (client-ui-sci-shell), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-sci-agents AgentsRailItem',
       'client-ui-sci-citations CitationsRailItem',
       'client-ui-sci-library LibraryRailItem',
       'client-ui-sci-search SearchRailItem',
@@ -2176,6 +2177,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'root\' (client-ui-layout), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-sci-agents AgentsView',
       'client-ui-sci-citations CitationsView',
       'client-ui-sci-library LibraryView',
       'client-ui-sci-search SearchView',

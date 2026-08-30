@@ -126,6 +126,9 @@
     # The 引用池 full-screen view and the citations tool rows.
     - id: ui-sci-citations
       name: '@deepseek-ai/dsh-client-ui-sci-citations'
+    # The 智能体 roster / config / call-log views.
+    - id: ui-sci-agents
+      name: '@deepseek-ai/dsh-client-ui-sci-agents'
 
 # ── persistence the science layer reads back ───────────────────────────────
 
@@ -263,6 +266,11 @@
       name: '@deepseek-ai/dsh-sci-citations'
       config:
         projectRoot: /home/user/sci/projects
+
+    # The persona roster the 智能体 views read: live subagent_* configuration,
+    # base-model catalog, and real delegation stats over the sci.agents Remote.
+    - id: sci-agents
+      name: '@deepseek-ai/dsh-sci-agents'
 
     - id: sci-literature
       name: '@deepseek-ai/dsh-sci-literature'

@@ -39,3 +39,8 @@ apps/web/dist/
 worktrees/
 .agents/worktrees/
 .typert-*/
+
+# build.sh copies these into the checkout root for the docker build and removes them after
+Dockerfile.dsh-sci
+Dockerfile.dsh-sci.dockerignore
+complete-deploy-tree.mjs

@@ -561,6 +561,12 @@
   name: '@deepseek-ai/dsh-client-ui-sci-conversation'
 - id: ui-sci-search
   name: '@deepseek-ai/dsh-client-ui-sci-search'
+- id: ui-sci-library
+  name: '@deepseek-ai/dsh-client-ui-sci-library'
+- id: ui-sci-citations
+  name: '@deepseek-ai/dsh-client-ui-sci-citations'
+- id: ui-sci-agents
+  name: '@deepseek-ai/dsh-client-ui-sci-agents'
 - id: web-fetch-http
   name: '@deepseek-ai/dsh-web-fetch-http'
 - id: office-univer
@@ -597,6 +603,16 @@
   name: '@deepseek-ai/dsh-sci-memory'
   config:
     memoryDir: /home/user/sci/memory
+- id: sci-library
+  name: '@deepseek-ai/dsh-sci-library'
+  config:
+    libraryRoot: /home/user/sci/library
+- id: sci-citations
+  name: '@deepseek-ai/dsh-sci-citations'
+  config:
+    projectRoot: /home/user/sci/projects
+- id: sci-agents
+  name: '@deepseek-ai/dsh-sci-agents'
 - id: sci-literature
   name: '@deepseek-ai/dsh-sci-literature'
   config:

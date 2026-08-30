@@ -7276,6 +7276,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-directory-picker-browse':
         specifier: workspace:^
         version: link:../../client/ui-directory-picker-browse
+      '@deepseek-ai/dsh-client-ui-sci-agents':
+        specifier: workspace:^
+        version: link:../../client/ui-sci-agents
       '@deepseek-ai/dsh-client-ui-sci-citations':
         specifier: workspace:^
         version: link:../../client/ui-sci-citations
@@ -7309,6 +7312,9 @@ importers:
       '@deepseek-ai/dsh-persona':
         specifier: workspace:^
         version: link:../../preset/persona
+      '@deepseek-ai/dsh-sci-agents':
+        specifier: workspace:^
+        version: link:../sci-agents
       '@deepseek-ai/dsh-sci-audit':
         specifier: workspace:^
         version: link:../sci-audit
