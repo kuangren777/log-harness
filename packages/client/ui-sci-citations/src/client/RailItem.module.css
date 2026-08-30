@@ -1,0 +1,27 @@
+/* One rail tile: a square icon button whose pressed state is the active view. */
+
+.tile {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: none;
+  border-radius: 13px;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  transition: background var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.tile:hover {
+  background: var(--dsw-sci-hover-bg);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.tileActive {
+  background: var(--dsw-sci-chip-bg);
+  color: var(--dsw-alias-brand-text);
+}
