@@ -133,6 +133,11 @@ class TestFileSystem extends FileSystem {
     return { operation: 'create', version: FsVersion('test'), before: null, after: content }
   }
 
+  override async writeBytes(target: FsTarget, data: Uint8Array, _signal: AbortSignal | undefined): Promise<void> {
+    await mkdir(dirname(target.displayPath), { recursive: true })
+    await writeFile(target.displayPath, data)
+  }
+
   override async editText(_target: FsTarget, _request: FsEditRequest): Promise<FsEditOutcome> {
     throw new Error('not needed in skill tests')
   }

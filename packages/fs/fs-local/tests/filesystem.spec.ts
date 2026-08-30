@@ -8,6 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { constants as bufferConstants } from 'node:buffer'
+import { randomBytes } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, unlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -50,13 +51,35 @@ async function remountWithDiffLimit(diffBasisMaxBytes: number): Promise<void> {
   fs = ctx.fs as LocalFileSystem
 }
 
+async function remountWithWriteLimit(maxWriteBytes: number): Promise<void> {
+  await fiber.dispose()
+  fiber = await ctx.plugin(LocalFileSystem, { cwd: dir, maxWriteBytes })
+  fs = ctx.fs as LocalFileSystem
+}
+
 describe('registration', () => {
   it('registers LocalFileSystem as ctx.fs with a default cwd', async () => {
     const bare = new Context()
     const bareFiber = await bare.plugin(LocalFileSystem)
     expect((bare.fs as LocalFileSystem).config.cwd).toBe(process.cwd())
     expect((bare.fs as LocalFileSystem).config.diffBasisMaxBytes).toBe(10 * 1024 * 1024)
+    expect((bare.fs as LocalFileSystem).config.maxWriteBytes).toBe(64 * 1024 * 1024)
     await bareFiber.dispose()
+  })
+
+  it('rejects non-positive, fractional, unsafe, or unallocatable raw-write limits', async () => {
+    const valid = new Context()
+    const validFiber = await valid.plugin(LocalFileSystem, { maxWriteBytes: bufferConstants.MAX_LENGTH })
+    expect((valid.fs as LocalFileSystem).config.maxWriteBytes).toBe(bufferConstants.MAX_LENGTH)
+    await validFiber.dispose()
+
+    for (const maxWriteBytes of [0, -1, 1.5, bufferConstants.MAX_LENGTH + 1, Number.MAX_SAFE_INTEGER + 1]) {
+      const invalid = new Context()
+      await expect(invalid.plugin(LocalFileSystem, { maxWriteBytes })).rejects.toThrow(
+        `fs-local: maxWriteBytes must be a positive safe integer no greater than ${bufferConstants.MAX_LENGTH}`,
+      )
+      await invalid.fiber.dispose()
+    }
   })
 
   it('rejects non-positive, fractional, unsafe, or unallocatable diff-basis limits', async () => {
@@ -595,6 +618,90 @@ describe('writeText', () => {
     expect(rejected).toHaveLength(1)
     expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ code: 'FS_STALE_VERSION' })
     expect(lockCount(fs)).toBe(0)
+  })
+})
+
+describe('writeBytes', () => {
+  it('round-trips a megabyte of random bytes through readBytes', async () => {
+    const payload = randomBytes(1024 * 1024)
+    const target = await fs.resolve('payload.bin')
+
+    await fs.writeBytes(target, payload, undefined)
+
+    const read = await fs.readBytes(await fs.resolve('payload.bin'), undefined, payload.length)
+    expect(Buffer.from(read).equals(payload)).toBe(true)
+    expect(Buffer.from(await readFile(join(dir, 'payload.bin'))).equals(payload)).toBe(true)
+  })
+
+  it('writes bytes verbatim: no UTF-8 decoding, NUL rejection, or line-ending normalization', async () => {
+    const payload = Uint8Array.from([0x00, 0xff, 0xfe, 0x0d, 0x0a, 0x0d])
+    await fs.writeBytes(await fs.resolve('raw.bin'), payload, undefined)
+
+    expect([...await readFile(join(dir, 'raw.bin'))]).toEqual([...payload])
+  })
+
+  it('creates missing parent directories, like writeText', async () => {
+    await fs.writeBytes(await fs.resolve('nested/deeper/leaf.bin'), Uint8Array.from([1, 2, 3]), undefined)
+
+    expect([...await readFile(join(dir, 'nested', 'deeper', 'leaf.bin'))]).toEqual([1, 2, 3])
+  })
+
+  it('replaces an existing file and preserves its POSIX mode', async () => {
+    await writeFile(join(dir, 'kept.bin'), Buffer.from([9]), { mode: 0o640 })
+    const target = await fs.resolve('kept.bin')
+
+    await fs.writeBytes(target, Uint8Array.from([7, 7]), undefined)
+
+    expect([...await readFile(join(dir, 'kept.bin'))]).toEqual([7, 7])
+    if (process.platform !== 'win32') {
+      expect((await stat(join(dir, 'kept.bin'))).mode & 0o777).toBe(0o640)
+    }
+  })
+
+  it('accepts a payload exactly at maxWriteBytes and rejects one past it', async () => {
+    await remountWithWriteLimit(4)
+    const target = await fs.resolve('capped.bin')
+
+    await fs.writeBytes(target, Uint8Array.from([1, 2, 3, 4]), undefined)
+    expect([...await readFile(join(dir, 'capped.bin'))]).toEqual([1, 2, 3, 4])
+
+    await expect(fs.writeBytes(target, Uint8Array.from([1, 2, 3, 4, 5]), undefined))
+      .rejects.toMatchObject({ code: 'FS_TOO_LARGE' })
+    expect([...await readFile(join(dir, 'capped.bin'))]).toEqual([1, 2, 3, 4])
+  })
+
+  it('refuses a directory target without touching it', async () => {
+    await mkdir(join(dir, 'adir'))
+
+    await expect(fs.writeBytes(await fs.resolve('adir'), Uint8Array.from([1]), undefined))
+      .rejects.toMatchObject({ code: 'FS_NOT_REGULAR_FILE' })
+    expect((await stat(join(dir, 'adir'))).isDirectory()).toBe(true)
+  })
+
+  it('rejects an already-aborted signal with FS_ABORTED, leaving no file behind', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(fs.writeBytes(await fs.resolve('aborted.bin'), Uint8Array.from([1]), controller.signal))
+      .rejects.toMatchObject({ code: 'FS_ABORTED' })
+    await expect(stat(join(dir, 'aborted.bin'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('serializes with a concurrent text write of the same target', async () => {
+    const target = await fs.resolve('shared.bin')
+    await fs.writeText(target, 'first')
+    const version = await versionOf(target)
+
+    const [bytesResult, textResult] = await Promise.allSettled([
+      fs.writeBytes(target, Uint8Array.from([0, 1, 2]), undefined),
+      fs.writeText(target, 'second', { kind: 'replaceIfVersion', version }),
+    ])
+
+    expect(bytesResult.status).toBe('fulfilled')
+    // The byte write took the lock first and published a new version, so the
+    // version-guarded text write behind it sees the change and refuses.
+    expect(textResult).toMatchObject({ status: 'rejected', reason: { code: 'FS_STALE_VERSION' } })
+    expect([...await readFile(join(dir, 'shared.bin'))]).toEqual([0, 1, 2])
   })
 })
 

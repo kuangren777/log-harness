@@ -228,6 +228,38 @@ export abstract class FileSystem extends Service {
   ): Promise<FsWriteOutcome>
 
   /**
+   * Atomically create or replace a file with raw bytes, with no decoding,
+   * no text normalization, and no diff basis. This is the write counterpart of
+   * {@link readBytes}, for host plugins that own binary payloads (a downloaded
+   * PDF, an uploaded dataset); model-facing text writes stay on
+   * {@link writeText}.
+   *
+   * Contract every backend owes callers:
+   * - Missing parent directories are created, exactly as {@link writeText} does.
+   * - Publication is atomic where the backend has an atomic replace: a reader
+   *   observes either the previous file or the complete new one, never a
+   *   partially written file.
+   * - The write is unconditional. There is no {@link FsWriteIntent} and no
+   *   version guard, so no `fs/write-intent` decision applies: the caller is
+   *   trusted host code that already owns the destination path, not a model
+   *   choosing an arbitrary file.
+   * - A payload larger than the backend's configured `maxWriteBytes` is refused
+   *   with `FS_TOO_LARGE` before any content leaves the host, so an oversized
+   *   buffer never reaches remote transport or disk.
+   * - An existing non-regular-file target is refused with
+   *   `FS_NOT_REGULAR_FILE`; a backend that confines mutations fences this call
+   *   by the calling session's resolved sandbox policy and refuses with
+   *   `FS_SANDBOX_DENIED`. There is no per-call policy parameter because these
+   *   callers are host plugins with no escalation path, unlike the tool layer.
+   *
+   * @param target - the resolved target to write.
+   * @param data - the full new file content as raw bytes.
+   * @param signal - aborts before atomic publication takes effect.
+   * @returns nothing; bytes carry no text diff basis or version the callers use.
+   */
+  abstract writeBytes(target: FsTarget, data: Uint8Array, signal: AbortSignal | undefined): Promise<void>
+
+  /**
    * Atomically edit literal text. When supplied, the version guard is checked
    * before matching so stale content reports `FS_STALE_VERSION`; omission edits
    * the current content without a freshness precondition.

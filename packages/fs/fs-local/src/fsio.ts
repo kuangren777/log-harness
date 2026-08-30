@@ -521,7 +521,7 @@ async function throwGuardedCreateFailure(
  * inherits the destination directory's DACL; a replacement copies the existing target's DACL
  * onto the empty temp before writing and preserves the target descriptor at publication.
  * @param absolutePath - destination; missing parent directories are created.
- * @param content - the full UTF-8 text to write.
+ * @param content - the full file content: UTF-8 text, or raw bytes written verbatim.
  * @param mode - existing destination's POSIX mode to preserve, or `undefined` for a new file;
  * inert as a mode on Windows but identifies replacement security semantics.
  * @param signal - cancellation checked before final publication.
@@ -532,7 +532,7 @@ async function throwGuardedCreateFailure(
  */
 export async function writeFileAtomic(
   absolutePath: string,
-  content: string,
+  content: string | Uint8Array,
   mode: number | undefined,
   signal: AbortSignal | undefined,
   internals: FsIoInternals = {},
@@ -567,6 +567,7 @@ export async function writeFileAtomic(
     if (platform === 'win32' && mode !== undefined) {
       await copyFileDacl(absolutePath, tempPath)
     }
+    // `encoding` applies only to the text form; a Uint8Array is written verbatim.
     await handle.writeFile(content, { encoding: 'utf8', ...signal ? { signal } : {} })
     await handle.sync()
     await internals.inspectTemp?.({ stagingDir, tempPath })

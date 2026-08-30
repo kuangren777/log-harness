@@ -1,4 +1,5 @@
-import { Buffer } from 'node:buffer'
+import { Buffer, constants as bufferConstants } from 'node:buffer'
+import { randomBytes } from 'node:crypto'
 import { dirname, posix } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import {
@@ -34,7 +35,7 @@ function commandError(exitCode: number, stderr = ''): CommandExitError {
 
 class FakeRemote {
   readonly nodes = new Map<string, RemoteNode>()
-  readonly writes: Array<{ path: string; data: string; metadata?: Record<string, string> }> = []
+  readonly writes: Array<{ path: string; data: string | ArrayBuffer; metadata?: Record<string, string> }> = []
 
   /** Refuse the metadata option the way an envd below 0.6.2 does. */
   refuseMetadata = false
@@ -203,7 +204,11 @@ class FakeRemote {
           .filter(candidate => candidate !== path && dirname(candidate) === path)
           .map(candidate => this.rawInfo(candidate))
       },
-      write: async (path: string, data: string, options?: { metadata?: Record<string, string>; signal?: AbortSignal }): Promise<object> => {
+      write: async (
+        path: string,
+        data: string | ArrayBuffer,
+        options?: { metadata?: Record<string, string>; signal?: AbortSignal },
+      ): Promise<object> => {
         this.checkAbort(options)
         if (this.refuseMetadata && options?.metadata !== undefined) {
           throw new Error('File metadata requires envd 0.6.2 or later.')
@@ -219,7 +224,7 @@ class FakeRemote {
         this.inodes.set(path, this.nextInode++)
         this.nodes.set(path, {
           type: FileType.FILE,
-          data: bytes(data),
+          data: typeof data === 'string' ? bytes(data) : new Uint8Array(data),
           mode: 0o644,
           modified: this.clock++,
           ...(options?.metadata !== undefined ? { metadata: { ...options.metadata } } : {}),
@@ -342,7 +347,10 @@ class FakeRemote {
   } as unknown as Sandbox
 }
 
-async function setup(remote = new FakeRemote()): Promise<{ ctx: Context; fs: E2BFileSystem; remote: FakeRemote }> {
+async function setup(
+  remote = new FakeRemote(),
+  config?: { maxWriteBytes?: number },
+): Promise<{ ctx: Context; fs: E2BFileSystem; remote: FakeRemote }> {
   const ctx = new Context()
   const runtime = {
     cwd: '/workspace',
@@ -350,7 +358,7 @@ async function setup(remote = new FakeRemote()): Promise<{ ctx: Context; fs: E2B
     getSandbox: async () => remote.sandbox,
   } as unknown as E2BRuntime
   ctx.provide('e2b', runtime)
-  await ctx.plugin(E2BFileSystem)
+  await ctx.plugin(E2BFileSystem, config)
   return { ctx, fs: ctx.fs as E2BFileSystem, remote }
 }
 
@@ -795,6 +803,122 @@ describe('E2BFileSystem atomic writes and edits', () => {
     ])
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
     expect(results.filter(result => result.status === 'rejected')).toHaveLength(1)
+  })
+})
+
+describe('E2BFileSystem raw-byte writes', () => {
+  it('defaults maxWriteBytes to 64 MiB and rejects an unusable configured cap', async () => {
+    const { fs } = await setup()
+    expect(fs.config.maxWriteBytes).toBe(64 * 1024 * 1024)
+
+    for (const maxWriteBytes of [0, -1, 1.5, bufferConstants.MAX_LENGTH + 1, Number.MAX_SAFE_INTEGER + 1]) {
+      await expect(setup(new FakeRemote(), { maxWriteBytes })).rejects.toThrow(
+        `fs-e2b: maxWriteBytes must be a positive safe integer no greater than ${bufferConstants.MAX_LENGTH}`,
+      )
+    }
+  })
+
+  it('round-trips a megabyte of random bytes through readBytes', async () => {
+    const payload = randomBytes(1024 * 1024)
+    const { fs, remote } = await setup()
+    const target = await fs.resolve('payload.bin')
+
+    await fs.writeBytes(target, payload, undefined)
+
+    const read = await fs.readBytes(await fs.resolve('payload.bin'), undefined, payload.length)
+    expect(Buffer.from(read).equals(payload)).toBe(true)
+    expect(remote.nodes.get('/workspace/payload.bin')?.mode).toBe(0o600)
+  })
+
+  it('uploads a binary body through envd\'s file API, spending no command slot on the content', async () => {
+    const { fs, remote } = await setup()
+    const payload = Uint8Array.from([0x25, 0x50, 0x44, 0x46, 0x00, 0xff])
+
+    await fs.writeBytes(await fs.resolve('doc.pdf'), payload, undefined)
+
+    // The staged upload is one binary file-API write, not a base64 shell round trip.
+    expect(remote.writes).toHaveLength(1)
+    expect(remote.writes[0]!.data).toBeInstanceOf(ArrayBuffer)
+    expect([...new Uint8Array(remote.writes[0]!.data as ArrayBuffer)]).toEqual([...payload])
+    expect(remote.commands.some(command => command.includes('base64 -d'))).toBe(false)
+    expect([...remote.nodes.get('/workspace/doc.pdf')!.data]).toEqual([...payload])
+  })
+
+  it('publishes through the staging directory and preserves an existing file mode', async () => {
+    const remote = new FakeRemote()
+    remote.file('/workspace/kept.bin', 'old', 0o640)
+    const { fs } = await setup(remote)
+
+    await fs.writeBytes(await fs.resolve('kept.bin'), Uint8Array.from([1, 2]), undefined)
+
+    expect([...remote.nodes.get('/workspace/kept.bin')!.data]).toEqual([1, 2])
+    expect(remote.nodes.get('/workspace/kept.bin')?.mode).toBe(0o640)
+    expect(remote.renames).toHaveLength(1)
+    expect(remote.removals).toContain(posix.dirname(remote.renames[0]!.from))
+  })
+
+  it('accepts a payload exactly at the cap and rejects one past it before any transport', async () => {
+    const { fs, remote } = await setup(new FakeRemote(), { maxWriteBytes: 4 })
+    const target = await fs.resolve('capped.bin')
+
+    await fs.writeBytes(target, Uint8Array.from([1, 2, 3, 4]), undefined)
+    expect(remote.writes).toHaveLength(1)
+
+    await expectCode(fs.writeBytes(target, Uint8Array.from([1, 2, 3, 4, 5]), undefined), 'FS_TOO_LARGE')
+    expect(remote.writes).toHaveLength(1)
+    expect([...remote.nodes.get('/workspace/capped.bin')!.data]).toEqual([1, 2, 3, 4])
+  })
+
+  it('refuses a directory target and maps transport failure to FS_IO_ERROR', async () => {
+    const remote = new FakeRemote()
+    remote.dir('/workspace/adir')
+    const { fs } = await setup(remote)
+
+    await expectCode(fs.writeBytes(await fs.resolve('adir'), Uint8Array.from([1]), undefined), 'FS_NOT_REGULAR_FILE')
+
+    remote.nextWriteError = new Error('upload transport failed')
+    await expectCode(fs.writeBytes(await fs.resolve('broken.bin'), Uint8Array.from([1]), undefined), 'FS_IO_ERROR')
+  })
+
+  it('rejects an already-aborted signal with FS_ABORTED', async () => {
+    const { fs, remote } = await setup()
+    const controller = new AbortController()
+    controller.abort()
+
+    await expectCode(fs.writeBytes(await fs.resolve('aborted.bin'), Uint8Array.from([1]), controller.signal), 'FS_ABORTED')
+    expect(remote.writes).toHaveLength(0)
+  })
+
+  it('serializes with a concurrent text write of the same target', async () => {
+    const remote = new FakeRemote()
+    remote.file('/workspace/shared.bin', 'first')
+    const { fs } = await setup(remote)
+    const target = await fs.resolve('shared.bin')
+    const version = (await fs.stat(target))!.version
+
+    const [bytesResult, textResult] = await Promise.allSettled([
+      fs.writeBytes(target, Uint8Array.from([0, 1, 2]), undefined),
+      fs.writeText(target, 'second', { kind: 'replaceIfVersion', version }),
+    ])
+
+    expect(bytesResult.status).toBe('fulfilled')
+    expect(textResult).toMatchObject({ status: 'rejected', reason: { code: 'FS_STALE_VERSION' } })
+    expect([...remote.nodes.get('/workspace/shared.bin')!.data]).toEqual([0, 1, 2])
+  })
+
+  it('writes bytes on a backend that refuses the version attribute', async () => {
+    const remote = new FakeRemote()
+    remote.refuseMetadata = true
+    const { fs } = await setup(remote)
+
+    await fs.writeBytes(await fs.resolve('noattr.bin'), Uint8Array.from([3, 4]), undefined)
+
+    expect([...remote.nodes.get('/workspace/noattr.bin')!.data]).toEqual([3, 4])
+    // The metadata attempt was refused before it recorded a write; the retry
+    // re-sends the SAME binary body, not a stringified one.
+    expect(remote.writes).toHaveLength(1)
+    expect(remote.writes[0]!.metadata).toBeUndefined()
+    expect([...new Uint8Array(remote.writes[0]!.data as ArrayBuffer)]).toEqual([3, 4])
   })
 })
 

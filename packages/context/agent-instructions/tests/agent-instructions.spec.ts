@@ -144,6 +144,10 @@ class RecordingFileSystem extends FileSystem {
     return { operation: 'update', version: FsVersion('unused'), before: '', after: _content }
   }
 
+  override async writeBytes(_target: FsTarget, _data: Uint8Array, _signal: AbortSignal | undefined): Promise<void> {
+    // agent-instructions never writes; the seam member exists so the fake is concrete.
+  }
+
   override async editText(_target: FsTarget, _edit: FsEditRequest): Promise<FsEditOutcome> {
     return { version: FsVersion('unused'), before: '', after: '' }
   }

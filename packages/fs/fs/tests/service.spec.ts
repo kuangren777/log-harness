@@ -74,6 +74,9 @@ class FakeFileSystem extends FileSystem {
     this.files.set(target.targetKey, content)
     return { operation: before !== null ? 'update' : 'create', version: FsVersion('v2'), before, after: content }
   }
+  override async writeBytes(target: FsTarget, data: Uint8Array, _signal: AbortSignal | undefined): Promise<void> {
+    this.files.set(target.targetKey, new TextDecoder().decode(data))
+  }
   override async editText(target: FsTarget, edit: FsEditRequest): Promise<FsEditOutcome> {
     const content = this.files.get(target.targetKey) ?? ''
     const after = content.split(edit.oldString).join(edit.newString)
@@ -117,6 +120,17 @@ describe('FileSystem provider seam', () => {
     let streamed = ''
     for await (const chunk of await fs.streamText(target)) streamed += chunk
     expect(streamed).toBe(await fs.readText(target))
+  })
+
+  it('writeBytes publishes raw bytes readBytes reads back', async () => {
+    const ctx = new Context()
+    await ctx.plugin(FakeFileSystem)
+    const fs = ctx.fs as FakeFileSystem
+    const target = await fs.resolve('a.bin')
+
+    await fs.writeBytes(target, new TextEncoder().encode('raw'), undefined)
+
+    expect(await fs.readBytes(target, undefined, 16)).toEqual(new TextEncoder().encode('raw'))
   })
 
   it('readBytes returns raw content and enforces the byte cap with FS_TOO_LARGE', async () => {

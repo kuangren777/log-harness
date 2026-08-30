@@ -92,6 +92,20 @@ export class SandboxedFileSystem extends LocalFileSystem {
   }
 
   /**
+   * Fence the raw-byte write by the session's resolved policy, then delegate to
+   * the inherited atomic write. Classified exactly like {@link writeText} — the
+   * same `read-only` denial and the same `workspace-write` containment on the
+   * freshly canonicalized target — with no per-call policy parameter, because
+   * `writeBytes` has no tool-layer escalation path. See {@link checkedTarget}.
+   * @param target - the resolved target to write.
+   * @param data - the full new file content as raw bytes.
+   * @param signal - aborts before atomic publication takes effect.
+   */
+  override async writeBytes(target: FsTarget, data: Uint8Array, signal: AbortSignal | undefined): Promise<void> {
+    return super.writeBytes(await this.checkedTarget(target), data, signal)
+  }
+
+  /**
    * Fence the edit by the per-call policy, then delegate to the inherited
    * atomic edit. See {@link checkedTarget}.
    * @param target - the resolved target to edit.

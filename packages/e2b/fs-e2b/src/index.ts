@@ -5,8 +5,10 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto'
-import { Buffer } from 'node:buffer'
+import { Buffer, constants as bufferConstants } from 'node:buffer'
 import { posix } from 'node:path'
+import { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import { FileSystem, FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type {
   FsDirEntry,
@@ -29,6 +31,7 @@ import type { EntryInfo, Sandbox } from '@deepseek-ai/dsh-e2b'
 
 const VERSION_METADATA_KEY = 'dsh-version'
 const BINARY_SAMPLE_BYTES = 8192
+const DEFAULT_MAX_WRITE_BYTES = 64 * 1024 * 1024
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 
 function assertNotAborted(signal: AbortSignal | undefined, operation: string): void {
@@ -192,9 +195,40 @@ function literalEdit(content: string, request: FsEditRequest, displayPath: strin
   return request.replaceAll ? content.split(oldString).join(newString) : content.replace(oldString, newString)
 }
 
+/** Configuration for the E2B filesystem backend. */
+export interface Config {
+  /**
+   * Inclusive byte cap on one `writeBytes` payload, capped by the host
+   * runtime's safe allocation maximum. The payload is buffered in host memory
+   * and uploaded in one envd file request, so the cap bounds both. Defaults to
+   * 64 MiB.
+   */
+  maxWriteBytes?: number
+}
+
+type ResolvedConfig = Required<Config>
+
 /** Remote filesystem backend sharing the sandbox owned by `ctx.e2b`. */
 export class E2BFileSystem extends FileSystem {
   static inject = ['e2b']
+
+  static Config: z<Config> = z.object({
+    maxWriteBytes: z.number().default(DEFAULT_MAX_WRITE_BYTES),
+  })
+
+  /** Validated config (schemastery applied the defaults before construction). */
+  readonly config: ResolvedConfig
+
+  constructor(ctx: Context, config: Config) {
+    super(ctx)
+    const resolved = config as ResolvedConfig
+    if (!Number.isSafeInteger(resolved.maxWriteBytes)
+      || resolved.maxWriteBytes <= 0
+      || resolved.maxWriteBytes > bufferConstants.MAX_LENGTH) {
+      throw new Error(`fs-e2b: maxWriteBytes must be a positive safe integer no greater than ${bufferConstants.MAX_LENGTH}`)
+    }
+    this.config = resolved
+  }
 
   private readonly locks = new Map<string, Promise<unknown>>()
 
@@ -468,6 +502,33 @@ export class E2BFileSystem extends FileSystem {
     })
   }
 
+  /**
+   * Write raw bytes through the same staging-directory publication as
+   * {@link writeText}: the payload is uploaded with envd's file API — which
+   * takes binary bodies directly, so no base64 shell round trip and no
+   * `commands.run` slot is spent on the content itself — and the existing
+   * `chmod`/rename steps commit it. Shares the per-target lock, so a byte write
+   * and a text write of one path cannot interleave.
+   * @param target - the resolved target to write.
+   * @param data - the full new file content as raw bytes.
+   * @param signal - aborts before atomic publication takes effect.
+   */
+  override async writeBytes(target: FsTarget, data: Uint8Array, signal: AbortSignal | undefined): Promise<void> {
+    if (data.byteLength > this.config.maxWriteBytes) {
+      throw new FsError(
+        `cannot write "${target.displayPath}": ${data.byteLength} bytes exceeds the ${this.config.maxWriteBytes}-byte limit`,
+        'FS_TOO_LARGE',
+      )
+    }
+    await this.withLock(String(target.targetKey), async () => {
+      const existing = await this.probe(String(target.targetKey), target.displayPath, signal)
+      if (existing !== undefined && entryType(existing) !== 'file') {
+        throw new FsError(`cannot write "${target.displayPath}": not a regular file`, 'FS_NOT_REGULAR_FILE')
+      }
+      await this.writeAtomic(target, data, existing, false, signal)
+    })
+  }
+
   override async editText(
     target: FsTarget,
     edit: FsEditRequest,
@@ -544,23 +605,27 @@ export class E2BFileSystem extends FileSystem {
    * remembered for the runtime's life.
    * @param sandbox - the connected sandbox.
    * @param path - staging path to write.
-   * @param content - full file content.
+   * @param content - full file content: UTF-8 text, or raw bytes uploaded verbatim.
    * @param versionId - value for the version attribute, when it can be stored.
    * @param signal - abort signal.
    */
   private async writeStaged(
     sandbox: Sandbox,
     path: string,
-    content: string,
+    content: string | Uint8Array,
     versionId: string,
     signal?: AbortSignal,
   ): Promise<void> {
+    // The SDK's binary body is an ArrayBuffer, and a Uint8Array may be a view
+    // over a larger pool (every Node Buffer is), so the bytes are copied into
+    // an exactly sized buffer rather than handing over `data.buffer`.
+    const body = typeof content === 'string' ? content : new Uint8Array(content).buffer
     if (this.attributesSupported === false) {
-      await sandbox.files.write(path, content, signalOpts(signal))
+      await sandbox.files.write(path, body, signalOpts(signal))
       return
     }
     try {
-      await sandbox.files.write(path, content, {
+      await sandbox.files.write(path, body, {
         metadata: { [VERSION_METADATA_KEY]: versionId },
         ...signalOpts(signal),
       })
@@ -568,7 +633,7 @@ export class E2BFileSystem extends FileSystem {
     } catch (error: unknown) {
       if (!isMetadataUnsupported(error)) throw error
       this.attributesSupported = false
-      await sandbox.files.write(path, content, signalOpts(signal))
+      await sandbox.files.write(path, body, signalOpts(signal))
     }
   }
 
@@ -638,7 +703,7 @@ export class E2BFileSystem extends FileSystem {
 
   private async writeAtomic(
     target: FsTarget,
-    content: string,
+    content: string | Uint8Array,
     existing: EntryInfo | undefined,
     createIfAbsent: boolean,
     signal?: AbortSignal,

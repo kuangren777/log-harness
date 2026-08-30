@@ -80,6 +80,13 @@ describe('read-only', () => {
     expect(await readFile(path, 'utf8')).toBe('original')
   })
 
+  it('denies a raw-byte write, leaving no file on disk', async () => {
+    const path = join(workspace, 'denied.bin')
+    await expect(fs.writeBytes(await target(path), Uint8Array.from([1, 2, 3]), undefined))
+      .rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+    expect(existsSync(path)).toBe(false)
+  })
+
   it('allows reads (every mode permits reading)', async () => {
     const path = join(workspace, 'readable.txt')
     await writeFile(path, 'hello')
@@ -101,6 +108,24 @@ describe('workspace-write containment', () => {
     const path = join(await mkdtemp(join(tmpdir(), 'dsh-fssbx-tmp-')), 'temp.txt')
     await fs.writeText(await target(path), 'temp')
     expect(await readFile(path, 'utf8')).toBe('temp')
+  })
+
+  it('a raw-byte write under the workspace lands and one outside is denied', async () => {
+    const inside = join(workspace, 'nested', 'ok.bin')
+    await fs.writeBytes(await target(inside), Uint8Array.from([0, 255, 0]), undefined)
+    expect([...await readFile(inside)]).toEqual([0, 255, 0])
+
+    const escape = join(outside, 'escape.bin')
+    await expect(fs.writeBytes(await target(escape), Uint8Array.from([1]), undefined))
+      .rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+    expect(existsSync(escape)).toBe(false)
+  })
+
+  it('a raw-byte write through a symlinked-out directory is denied (canonicalized before containment)', async () => {
+    await symlink(outside, join(workspace, 'link'))
+    await expect(fs.writeBytes(await target(join(workspace, 'link', 'f.bin')), Uint8Array.from([1]), undefined))
+      .rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+    expect(existsSync(join(outside, 'f.bin'))).toBe(false)
   })
 
   it('an absolute path outside the workspace is denied, no file created', async () => {
@@ -191,6 +216,12 @@ describe('danger-full-access', () => {
     const path = join(outside, 'free.txt')
     await fs.writeText(await target(path), 'free')
     expect(await readFile(path, 'utf8')).toBe('free')
+  })
+
+  it('writes raw bytes anywhere, unfenced', async () => {
+    const path = join(outside, 'free.bin')
+    await fs.writeBytes(await target(path), Uint8Array.from([7, 8]), undefined)
+    expect([...await readFile(path)]).toEqual([7, 8])
   })
 })
 

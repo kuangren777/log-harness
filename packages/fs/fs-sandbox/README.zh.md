@@ -2,9 +2,9 @@
 
 [English](README.md) | 中文
 
-`SandboxedFileSystem` 扩展 [`LocalFileSystem`](../fs-local/README.zh.md) 并注册为 `ctx.fs`。它逐字继承全部文本存储机制（解析、stat、读取／流式读取、列出、原子写入、按读取、匹配、写入顺序执行的编辑临界区），只为 `writeText`/`editText` 增加按调用的模式围栏。读取始终直接通过：所有模式都允许读取。
+`SandboxedFileSystem` 扩展 [`LocalFileSystem`](../fs-local/README.zh.md) 并注册为 `ctx.fs`。它逐字继承全部文本存储机制（解析、stat、读取／流式读取、列出、原子写入、按读取、匹配、写入顺序执行的编辑临界区），只为三个变更操作增加模式围栏。`writeText`/`editText` 由各自按调用传入的策略加围栏；`writeBytes` 不携带按调用的策略参数，因此由调用会话解析出的策略加围栏。读取始终直接通过：所有模式都允许读取。
 
-它原样复用本地后端配置：`cwd` 仍是相对路径的解析默认值，`diffBasisMaxBytes` 则限制可选的覆写上下文 diff 基础。
+它原样复用本地后端配置：`cwd` 仍是相对路径的解析默认值，`diffBasisMaxBytes` 限制可选的覆写上下文 diff 基础，`maxWriteBytes` 则限制单次 `writeBytes` 的载荷。
 
 只需加载它来替代 `dsh-fs-local`，并同时加载 [`ctx.sandboxPolicy`](../../sandbox/sandbox-policy/README.zh.md)，即可完成替换；面向模型的工具（`dsh-tool-fs`）无需改动。工具层把调用会话的模式和 cwd 解析为与 bash 相同的按调用策略，因此两个能力族绝不会约束到不同根目录。
 
@@ -12,7 +12,7 @@
 
 按调用策略携带有效模式（会话覆盖值或升级授权）和调用会话不可变的 cwd 根目录；只有没有会话的调用才回退到部署策略：
 
-- `read-only`：以结构化 `FS_SANDBOX_DENIED` 拒绝所有变更；
+- `read-only`：以结构化 `FS_SANDBOX_DENIED` 拒绝所有变更，包括原始字节写入；
 - `workspace-write`：只有目标规范化后位于可写根目录下，才允许变更。可写根包括工作区根目录和平台临时区域（`/tmp`、`os.tmpdir()`），与 Seatbelt profile 授权的集合相同；该集合由唯一的 [`writableRoots`](../../sandbox/README.zh.md) 函数派生，使 fs 围栏与 bash runner 不会漂移。规范拼写使用词法快速路径；基于身份的祖先回退可以识别 Windows 长名称和 8.3 名称等别名等价根目录，而不会把无关前缀视为包含关系。委托前会立即重新规范化目标，因此工具解析后被替换的祖先符号链接也会被发现；
 - `danger-full-access`：不加围栏直接委托。
 

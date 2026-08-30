@@ -46,10 +46,16 @@ export interface Config {
    * runtime's safe allocation/decode maximum. Defaults to 10 MiB.
    */
   diffBasisMaxBytes?: number
+  /**
+   * Inclusive byte cap on one `writeBytes` payload, capped by the runtime's
+   * safe allocation maximum. Defaults to 64 MiB.
+   */
+  maxWriteBytes?: number
 }
 
 type ResolvedConfig = Required<Config>
 const DEFAULT_DIFF_BASIS_MAX_BYTES = 10 * 1024 * 1024
+const DEFAULT_MAX_WRITE_BYTES = 64 * 1024 * 1024
 const MAX_DIFF_BASIS_BYTES = Math.min(
   bufferConstants.MAX_LENGTH,
   bufferConstants.MAX_STRING_LENGTH,
@@ -65,6 +71,7 @@ export class LocalFileSystem extends FileSystem {
   static Config: z<Config> = z.object({
     cwd: z.string().default(process.cwd()),
     diffBasisMaxBytes: z.number().default(DEFAULT_DIFF_BASIS_MAX_BYTES),
+    maxWriteBytes: z.number().default(DEFAULT_MAX_WRITE_BYTES),
   })
 
   /** Validated config (schemastery applied the defaults before construction). */
@@ -83,6 +90,11 @@ export class LocalFileSystem extends FileSystem {
       || resolved.diffBasisMaxBytes <= 0
       || resolved.diffBasisMaxBytes > MAX_DIFF_BASIS_BYTES) {
       throw new Error(`fs-local: diffBasisMaxBytes must be a positive safe integer no greater than ${MAX_DIFF_BASIS_BYTES}`)
+    }
+    if (!Number.isSafeInteger(resolved.maxWriteBytes)
+      || resolved.maxWriteBytes <= 0
+      || resolved.maxWriteBytes > bufferConstants.MAX_LENGTH) {
+      throw new Error(`fs-local: maxWriteBytes must be a positive safe integer no greater than ${bufferConstants.MAX_LENGTH}`)
     }
     this.config = resolved
   }
@@ -215,6 +227,32 @@ export class LocalFileSystem extends FileSystem {
         // is a storage detail the applied-hunk diff ignores.
         after: normalizeLineEndings(content),
       }
+    })
+  }
+
+  /**
+   * Write raw bytes through the same staging-file publication as
+   * {@link writeText}: parent directories are created, the payload lands in a
+   * private owner-only sibling directory, and a rename publishes it. Shares the
+   * per-target lock so a byte write and a text write of one path cannot
+   * interleave.
+   * @param target - the resolved target to write.
+   * @param data - the full new file content as raw bytes.
+   * @param signal - aborts before atomic publication takes effect.
+   */
+  override async writeBytes(target: FsTarget, data: Uint8Array, signal: AbortSignal | undefined): Promise<void> {
+    if (data.byteLength > this.config.maxWriteBytes) {
+      throw new FsError(
+        `cannot write "${target.displayPath}": ${data.byteLength} bytes exceeds the ${this.config.maxWriteBytes}-byte limit`,
+        'FS_TOO_LARGE',
+      )
+    }
+    return this.withLock(target.targetKey, async () => {
+      const existing = await probe(target.targetKey)
+      if (existing && existing.type !== 'file') {
+        throw new FsError(`cannot write "${target.displayPath}": not a regular file`, 'FS_NOT_REGULAR_FILE')
+      }
+      await writeFileAtomic(target.targetKey, data, existing?.mode, signal, this.internals)
     })
   }
 
