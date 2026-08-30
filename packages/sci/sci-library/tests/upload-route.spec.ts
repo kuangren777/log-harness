@@ -173,7 +173,7 @@ describe('POST /library-api/upload', () => {
     })
 
     expect(response.status).toBe(413)
-    expect(JSON.parse(response.text).code).toBe('LIBRARY_TOO_LARGE')
+    expect((JSON.parse(response.text) as { code: string }).code).toBe('LIBRARY_TOO_LARGE')
   })
 
   it('answers 415 for an extension that is not allowlisted', async () => {
@@ -187,7 +187,7 @@ describe('POST /library-api/upload', () => {
     })
 
     expect(response.status).toBe(415)
-    expect(JSON.parse(response.text).code).toBe('LIBRARY_UNSUPPORTED_TYPE')
+    expect((JSON.parse(response.text) as { code: string }).code).toBe('LIBRARY_UNSUPPORTED_TYPE')
   })
 
   it('answers 400 for a missing entryId and for an unknown kind', async () => {
@@ -231,10 +231,11 @@ describe('POST /library-api/upload', () => {
     })
 
     expect(response.status).toBe(500)
-    expect(JSON.parse(response.text).code).toBe('INTERNAL_ERROR')
+    expect((JSON.parse(response.text) as { code: string }).code).toBe('INTERNAL_ERROR')
   })
 
   it('answers 500 with a stringified reason for a non-Error rejection', async () => {
+    // eslint-disable-next-line prefer-promise-reject-errors -- the stringified-reason arm needs a non-Error
     const base = await serve(host({ upload: () => Promise.reject('nope') }))
 
     const response = await call(base, {

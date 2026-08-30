@@ -16,7 +16,7 @@ The knowledge-library work makes the gap blocking rather than annoying. `dsh-sci
 
 `FileSystem` gains a thirteenth primitive:
 
-```ts
+```ts ignore-check
 abstract writeBytes(target: FsTarget, data: Uint8Array, signal: AbortSignal | undefined): Promise<void>
 ```
 

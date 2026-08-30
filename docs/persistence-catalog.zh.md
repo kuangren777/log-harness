@@ -728,6 +728,26 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 来源：[`packages/sci/sci-workspace/src/types.ts:126`](../packages/sci/sci-workspace/src/types.ts)
 
+<a id="scilibrary-changed--log-only"></a>
+
+#### `sci/library-changed` — log-only
+
+```ts persistence-catalog
+/**
+ * One tool call changed the knowledge base.
+ *
+ * The entry's own text is already in the `tool/result` this event sits
+ * beside, so nothing here is required to rebuild a model request; the event
+ * adds only which row changed and how, which the result text states but does
+ * not carry as data. A build that does not know this type may therefore skip
+ * it, and it is appended `ignorable: true`.
+ * @param data - what happened, the entry id it happened to, and that entry's kind.
+ */
+'sci/library-changed': SciLibraryChangedData
+```
+
+来源：[`packages/sci/sci-library/src/events.ts:27`](../packages/sci/sci-library/src/events.ts)
+
 <a id="sciliterature-searched--log-only"></a>
 
 #### `sci/literature-searched` — log-only

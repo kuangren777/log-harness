@@ -86,7 +86,7 @@ describe('LibraryView cards', () => {
   })
 
   it('draws no element for a fact the entry does not carry', async () => {
-    await mount({ list: vi.fn(async () => ({ ok: true as const, value: pageOf([BARE]) })) as never })
+    await mount({ list: vi.fn(async () => ({ ok: true as const, value: pageOf([BARE]) })) })
     expect(screen.queryByText(/被引/u)).toBeNull()
     expect(screen.queryByText(/个文件/u)).toBeNull()
     expect(screen.getByText('未读')).toBeTruthy()
@@ -133,7 +133,7 @@ describe('LibraryView filters', () => {
 
   it('draws no cloud when the host reported no tag', async () => {
     await mount({
-      list: vi.fn(async () => ({ ok: true as const, value: pageOf([FULL], { tags: [] }) })) as never,
+      list: vi.fn(async () => ({ ok: true as const, value: pageOf([FULL], { tags: [] }) })),
     })
     expect(screen.queryByRole('group', { name: '标签' })).toBeNull()
   })
@@ -175,18 +175,18 @@ describe('LibraryView search box', () => {
 describe('LibraryView empty and failed states', () => {
   it('tells an empty library apart from a query that matched nothing', async () => {
     const empty = pageOf([], { counts: { all: 0, paper: 0, dataset: 0, note: 0, lowConfidence: 0 } })
-    const view = await mount({ list: vi.fn(async () => ({ ok: true as const, value: empty })) as never })
+    const view = await mount({ list: vi.fn(async () => ({ ok: true as const, value: empty })) })
     expect(screen.getByText('知识库还是空的。从检索结果里「加入知识库」，或上传一份 PDF、数据文件。')).toBeTruthy()
     cleanup()
     void view
 
-    await mount({ list: vi.fn(async () => ({ ok: true as const, value: pageOf([]) })) as never })
+    await mount({ list: vi.fn(async () => ({ ok: true as const, value: pageOf([]) })) })
     expect(screen.getByText('没有匹配的条目。换个说法，或清掉筛选条件。')).toBeTruthy()
   })
 
   it('states the host code when the library cannot be read', async () => {
     await mount({
-      list: vi.fn(async () => ({ ok: false as const, code: 'LIBRARY_REMOTE_UNAVAILABLE' })) as never,
+      list: vi.fn(async () => ({ ok: false as const, code: 'LIBRARY_REMOTE_UNAVAILABLE' })),
     })
     expect(screen.getByRole('alert').textContent).toBe('读取知识库失败（LIBRARY_REMOTE_UNAVAILABLE）。')
   })
@@ -227,7 +227,7 @@ describe('LibraryView upload', () => {
       ['failed', '上传失败，未保存。'],
     ] as const
     for (const [code, copy] of refusals) {
-      await mount({ upload: vi.fn(async () => ({ ok: false as const, code })) as never })
+      await mount({ upload: vi.fn(async () => ({ ok: false as const, code })) })
       await act(async () => { pick('a.bin', 'application/octet-stream') })
       expect(screen.getByRole('alert').textContent).toBe(copy)
       cleanup()
@@ -260,7 +260,7 @@ describe('LibraryView detail route', () => {
 
   it('states a detail read the host refused, and still offers the way back', async () => {
     const b = await open({
-      get: vi.fn(async () => ({ ok: false as const, code: 'LIBRARY_NOT_FOUND' })) as never,
+      get: vi.fn(async () => ({ ok: false as const, code: 'LIBRARY_NOT_FOUND' })),
     })
     expect(screen.getByRole('alert').textContent).toBe('读取条目失败（LIBRARY_NOT_FOUND）。')
 
@@ -285,7 +285,7 @@ describe('LibraryView detail route', () => {
 
   it('writes a saved patch through to the shared page', async () => {
     const read = { ...FULL, status: 'verified' as const }
-    const b = await open({ update: vi.fn(async () => ({ ok: true as const, value: read })) as never })
+    const b = await open({ update: vi.fn(async () => ({ ok: true as const, value: read })) })
     await act(async () => {
       fireEvent.change(screen.getByLabelText('状态'), { target: { value: 'verified' } })
     })

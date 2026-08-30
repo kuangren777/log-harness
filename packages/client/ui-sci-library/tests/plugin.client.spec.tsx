@@ -94,7 +94,7 @@ async function installed(options: BenchOptions = {}) {
   const view = (b.slots.entries(VIEW)[0]?.inject as unknown as () => SciLibraryInjected)()
   const setStored = vi.fn()
   const actionFace = (): SciLibraryAddInjected =>
-    (b.slots.entries(ACTIONS as never)[0]?.inject as unknown as (
+    (b.slots.entries(ACTIONS)[0]?.inject as unknown as (
       actions: { setStored: (ids: readonly string[]) => void },
     ) => SciLibraryAddInjected)({ setStored })
   return { ...b, view, actionFace, setStored }

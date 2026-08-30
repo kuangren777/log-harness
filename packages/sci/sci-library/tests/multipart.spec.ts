@@ -51,7 +51,7 @@ export function multipartBody(parts: readonly PartSpec[], boundary = BOUNDARY): 
  * @returns a one-chunk async iterable of it.
  */
 function stream(body: Buffer): AsyncIterable<Buffer> {
-  return Readable.from([body]) as unknown as AsyncIterable<Buffer>
+  return Readable.from([body])
 }
 
 describe('boundaryOf', () => {

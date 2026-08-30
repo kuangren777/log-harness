@@ -21,6 +21,7 @@
 | --- | --- | --- | --- | --- | --- |
 | `@deepseek-ai/dsh-sci-tier` | `suggest_tier_upgrade` | `ctx.tools` | `tool/call`、`sci/tier-upgrade-suggested`、`tool/result` | - | suggest_tier_upgrade 是均衡档位唯一与扇出相关的工具：它记录任务已超出单次处理的范围，把选择权留给用户，而不是让 agent 悄悄启动蜂群。 |
 | `@deepseek-ai/dsh-sci-plan` | `declare_research_plan` | `ctx.tools` | `tool/call`、`sci/plan-declared`、`tool/result` | - | declare_research_plan 在扇出前点名各条并行工作线；档位门禁消费其 sci/plan-declared 事件，在声明之前拒绝扇出工具。 |
+| `@deepseek-ai/dsh-sci-library` | `library_add`、`library_search` | `ctx.tools`、`ctx.systemPrompt`、`ctx.storageDomain`、`ctx.fs`、`ctx.webServer`、`ctx.connection` | `tool/call`、`sci/library-changed`、`tool/result` | - | library_search 先读用户自己的收藏，再考虑公开索引；library_add 在挂载了 sci-literature 时经它解析 DOI / arXiv id，否则按手工条目保存。prompt 章节点名已存文件在沙箱里的打开路径。 |
 | `@deepseek-ai/dsh-sci-literature` | `literature_search` | `ctx.tools`、`ctx.systemPrompt`、`ctx.storageDomain` | `tool/call`、`sci/literature-searched`、`tool/result` | - | literature_search 一次调用扇出到 OpenAlex、Semantic Scholar、arXiv 与 Crossref 并合并结果，因此从 `sources` 里去掉某个来源不会改变模型可见的 schema。 |
 | `@deepseek-ai/dsh-sci-deliver` | `deliver_files` | `ctx.tools`、`ctx.fs`、`ctx.systemPrompt` | `tool/call`、`sci/delivered`、`sci/delivery-failed`、`tool/result` | - | deliver_files 是文件送达用户的唯一途径；沙箱内的 `sci deliver` CLI 把同一份请求写进 spool，插件在轮次开始时拾取，走同一条校验链。 |
 | `@deepseek-ai/dsh-camel-runtime` | `fork_workspace` | `ctx.tools`、`ctx.e2b` | `tool/call`、`sci/fork-completed`、`tool/result` | - | fork_workspace 是集群档在隔离环境里跑竞争变体的唯一途径：每个变体都从 Dormice 工作区的同一份 AgentENV 快照恢复，只有 stdout、stderr、退出码与收集目录回流。 |
@@ -189,6 +190,99 @@ declare_research_plan 在扇出前点名各条并行工作线；档位门禁消�
 源码：[`packages/sci/sci-literature/src/index.ts`](../packages/sci/sci-literature/src/index.ts)
 
 literature_search 一次调用扇出到 OpenAlex、Semantic Scholar、arXiv 与 Crossref 并合并结果，因此从 `sources` 里去掉某个来源不会改变模型可见的 schema。
+
+<a id="deepseek-aidsh-sci-library"></a>
+
+## `@deepseek-ai/dsh-sci-library`
+
+### `library_add`
+
+把一个工作存入用户的知识库。给了 doi 或 arxiv_id 时经文献层解析书目元数据；否则按标题建手工条目。添加库里已有的 id 合并标签而不重复建条。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "doi": {
+      "type": "string",
+      "description": "DOI of the work, with or without the https://doi.org/ prefix."
+    },
+    "arxiv_id": {
+      "type": "string",
+      "description": "arXiv identifier without a version suffix, for example 2607.09182."
+    },
+    "title": {
+      "type": "string",
+      "description": "Title to store when no identifier is given or none resolves. Required in that case."
+    },
+    "url": {
+      "type": "string",
+      "description": "Landing page of the work."
+    },
+    "tags": {
+      "type": "array",
+      "description": "Tags to attach; merged with an existing entry's tags.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "with_pdf": {
+      "type": "boolean",
+      "description": "Download the work's open-access PDF into its library directory when one is known."
+    }
+  }
+}
+```
+
+源码：[`packages/sci/sci-library/src/index.ts`](../packages/sci/sci-library/src/index.ts)
+
+### `library_search`
+
+检索用户自己的知识库——收藏的文献、数据集与笔记，带用户自己的标签、状态和笔记。匹配是对标题、标签、摘要、作者的词法计分。问题涉及用户已收藏的资料时先用它，再考虑 literature_search。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "Free text scored over title, tags, abstract, and authors. Omit to list the whole library."
+    },
+    "kind": {
+      "type": "string",
+      "description": "Keep only entries of this kind.",
+      "enum": [
+        "paper",
+        "dataset",
+        "note"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "description": "Keep only entries in this reading state.",
+      "enum": [
+        "unread",
+        "reading",
+        "read",
+        "verified",
+        "low-confidence"
+      ]
+    },
+    "tag": {
+      "type": "string",
+      "description": "Keep only entries carrying this tag."
+    },
+    "limit": {
+      "type": "number",
+      "description": "Entries to return; an integer in 1..100, default 50."
+    }
+  }
+}
+```
+
+源码：[`packages/sci/sci-library/src/index.ts`](../packages/sci/sci-library/src/index.ts)
+
+library_search 先读用户自己的收藏，再考虑公开索引；library_add 在挂载了 sci-literature 时经它解析 DOI / arXiv id，否则按手工条目保存。prompt 章节点名已存文件在沙箱里的打开路径。
 
 <a id="deepseek-aidsh-sci-deliver"></a>
 

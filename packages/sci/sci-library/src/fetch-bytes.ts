@@ -139,7 +139,7 @@ export async function readCapped(response: Response, maxBytes: number): Promise<
   const reader = body.getReader()
   for (;;) {
     const step = await reader.read()
-    if (step.done === true) break
+    if (step.done) break
     const chunk = step.value
     total += chunk.byteLength
     if (total > maxBytes) {

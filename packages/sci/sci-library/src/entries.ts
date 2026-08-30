@@ -119,7 +119,7 @@ function optionalColumns(source: Partial<LibraryEntry>): Partial<LibraryEntry> {
     const value = source[column]
     if (value !== undefined && value !== '') copied[column] = value
   }
-  return copied as Partial<LibraryEntry>
+  return copied
 }
 
 /**

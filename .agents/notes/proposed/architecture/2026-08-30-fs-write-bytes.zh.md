@@ -16,7 +16,7 @@ Status: proposed
 
 `FileSystem` 新增第十三个原语：
 
-```ts
+```ts ignore-check
 abstract writeBytes(target: FsTarget, data: Uint8Array, signal: AbortSignal | undefined): Promise<void>
 ```
 

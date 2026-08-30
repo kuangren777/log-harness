@@ -62,15 +62,13 @@ Prefix-stable while the definitions are unchanged; the page limit appears in a p
 
 #### What the model sees
 
-One section at order `112`, immediately after `tool:literature_search`: search the user's own collection first, save keepers with `library_add`, cite only identifiers the entries carry, and open stored files from `<libraryRoot>/<entry-dir>/` with `read` instead of re-downloading.
+One section at order `112`, immediately after `tool:literature_search`: search the user's own collection first, save keepers with `library_add`, cite only identifiers the entries carry, and open stored files from `<libraryRoot>/<entry-dir>/` with `read` instead of re-downloading. The `libraryRoot` inside the text follows the configured value; the default is shown below.
 
 ##### Verbatim text of the section
 
 ```markdown
 用户的知识库用 library_search 查：里面是用户自己收藏的文献、数据集和笔记，还带着他们自己写的标签、状态和笔记。问题涉及「我收藏的」「我之前存的」资料时先查知识库，再决定要不要用 literature_search 检索公开索引。把值得长期留存的文献用 library_add 存进去：给了 doi 或 arxiv_id 会自动补全元数据，只有标题时按手工条目保存。引用知识库条目时写它自己的 DOI 或 arXiv id，不要凭印象补全。条目的文件就在沙箱里 /home/user/sci/library/<条目目录>/ 下，library_search 的结果里给的是完整路径，读 PDF 或数据文件直接用 read 或 pdf 技能打开那个路径，不要重新下载。
 ```
-
-The `libraryRoot` inside the text follows the configured value; the default is shown.
 
 #### Token effect
 

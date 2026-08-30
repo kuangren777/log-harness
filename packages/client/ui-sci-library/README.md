@@ -10,12 +10,16 @@ Five contributions, every one through `ctx.slots.inject` so a composition withou
 
 Every number on screen is read off the host's replies: the counts behind the filter chips, the tag histogram, the citation and year tiles, the file sizes, and the related-entry list. Statuses, tags, and notes save through `update` on change and render the returned entry, so the page shows what the table holds rather than what was typed.
 
+## Model Experience
+
+None, as this is a browser-side presentation package over the `sci.library` Remote namespace: it registers no tool, prompt section, or session event, and everything it draws is host state the user already owns.
+
+#### KV Cache effect
+
+None; this package neither assembles nor sends a provider request.
+
 ## Known Limitations and Deferred Work
 
 - **Preview stops at the RPC reply cap (8 MiB by default).** Larger stored files render a download link to `/library-api/file` instead of an inline preview.
 - **The add action's initial state is a snapshot.** 「已在知识库」 reflects the id listing taken when the search view mounted the action; an entry removed from another tab reads as present until the next mount.
 - **BibTeX is regenerated client-side.** `bibtex.ts` mirrors the search view's citekey rule (family name + year) instead of importing across packages; the two stay aligned by their shared spec tests.
-
-## Model Experience
-
-None, as this is a browser-side presentation package over the `sci.library` Remote namespace: it registers no tool, prompt section, or session event, and everything it draws is host state the user already owns.

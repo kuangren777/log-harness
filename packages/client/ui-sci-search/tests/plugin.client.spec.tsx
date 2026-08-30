@@ -199,12 +199,13 @@ describe('ui-sci-search plugin body', () => {
     expect(b.slots.entries(VIEW as never)[0]?.children).toEqual({
       [ACTIONS]: { kind: 'list', scope: 'root' },
     })
-    expect(b.slots.spec(ACTIONS as never)).toEqual({ kind: 'list', scope: 'root' })
+    const specOf = b.slots.spec.bind(b.slots) as (key: string) => unknown
+    expect(specOf(ACTIONS)).toEqual({ kind: 'list', scope: 'root' })
 
     // Declaring is claiming: the seat exists exactly as long as the view that
     // draws it, so composing this package out takes the strip with it.
     await fiber.dispose()
-    expect(b.slots.spec(ACTIONS as never)).toBeUndefined()
+    expect(specOf(ACTIONS)).toBeUndefined()
   })
 
   it('installs whether the seats are declared before or after apply', async () => {

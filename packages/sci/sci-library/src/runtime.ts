@@ -155,7 +155,7 @@ export class LibraryRuntime extends TypertRemoteService {
     this.table = domain.table(ENTRY_TABLE)
     // `writeBytes` is the filesystem seam's binary write; the structural
     // `LibraryFs` shape names exactly the four methods this package calls.
-    this.files = this.ctx.fs as unknown as LibraryFs
+    this.files = this.ctx.fs
     this.ctx.effect(() => this.ctx.webServer.register({
       kind: 'prefix',
       path: LIBRARY_ROUTE_PREFIX,

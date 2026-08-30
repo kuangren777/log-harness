@@ -51,14 +51,14 @@ export interface LibraryRouteHost {
    * @param file - the parsed upload.
    * @returns the entry carrying the stored file.
    */
-  upload(entryId: string, kind: LibraryKind | undefined, file: UploadedFile): Promise<LibraryEntry>
+  upload: (entryId: string, kind: LibraryKind | undefined, file: UploadedFile) => Promise<LibraryEntry>
   /**
    * Read one stored file back.
    * @param entryId - the owning entry.
    * @param name - the stored file name.
    * @returns the file record and its bytes.
    */
-  download(entryId: string, name: string): Promise<{ file: LibraryFile; bytes: Uint8Array }>
+  download: (entryId: string, name: string) => Promise<{ file: LibraryFile; bytes: Uint8Array }>
 }
 
 /**

@@ -53,20 +53,20 @@ export interface LibraryTooling {
    * @param query - the listing's filters and free text.
    * @returns the matching page.
    */
-  list(query: LibraryQuery): Promise<LibraryPage>
+  list: (query: LibraryQuery) => Promise<LibraryPage>
   /**
    * Put one entry in the knowledge base, merging into an existing id.
    * @param request - the record or draft to store.
    * @returns the stored entry and whether it was new.
    */
-  add(request: LibraryAddRequest): Promise<LibraryAddResult>
+  add: (request: LibraryAddRequest) => Promise<LibraryAddResult>
   /**
    * Resolve one identifier to a bibliographic record through the literature layer.
    * @param identifier - a DOI or an arXiv id.
    * @param signal - cancellation of the lookup.
    * @returns the matching record, or undefined when the layer is absent or found nothing.
    */
-  lookup(identifier: string, signal?: AbortSignal): Promise<LiteratureRecord | undefined>
+  lookup: (identifier: string, signal?: AbortSignal) => Promise<LiteratureRecord | undefined>
 }
 
 /** The model-facing arguments of one `library_search` call. */

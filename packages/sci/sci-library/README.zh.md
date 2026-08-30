@@ -62,15 +62,13 @@
 
 #### 模型看到什么
 
-顺序 `112` 的一节，紧跟 `tool:literature_search`：先查用户自己的收藏，值得留的用 `library_add` 存起来，引用只写条目携带的标识，已存文件从 `<libraryRoot>/<条目目录>/` 用 `read` 打开而不是重新下载。
+顺序 `112` 的一节，紧跟 `tool:literature_search`：先查用户自己的收藏，值得留的用 `library_add` 存起来，引用只写条目携带的标识，已存文件从 `<libraryRoot>/<条目目录>/` 用 `read` 打开而不是重新下载。文本中的 `libraryRoot` 跟随配置值；下方展示默认值。
 
 ##### 章节逐字文本
 
 ```markdown
 用户的知识库用 library_search 查：里面是用户自己收藏的文献、数据集和笔记，还带着他们自己写的标签、状态和笔记。问题涉及「我收藏的」「我之前存的」资料时先查知识库，再决定要不要用 literature_search 检索公开索引。把值得长期留存的文献用 library_add 存进去：给了 doi 或 arxiv_id 会自动补全元数据，只有标题时按手工条目保存。引用知识库条目时写它自己的 DOI 或 arXiv id，不要凭印象补全。条目的文件就在沙箱里 /home/user/sci/library/<条目目录>/ 下，library_search 的结果里给的是完整路径，读 PDF 或数据文件直接用 read 或 pdf 技能打开那个路径，不要重新下载。
 ```
-
-文本中的 `libraryRoot` 跟随配置值；此处展示默认值。
 
 #### Token 影响
 

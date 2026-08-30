@@ -10,12 +10,16 @@ CaMeL Science 的知识库表面：全幅的「知识库」视图及其条目详
 
 屏幕上的每个数字都读自宿主回复：筛选芯片背后的计数、标签直方图、被引与年份格、文件大小、相关条目列表。状态、标签、笔记在改动时经 `update` 保存并渲染返回的条目，页面显示的是表里持有的，而不是刚输入的。
 
+## Model Experience
+
+None, as this is a browser-side presentation package over the `sci.library` Remote namespace: it registers no tool, prompt section, or session event, and everything it draws is host state the user already owns.
+
+#### KV Cache effect
+
+None; this package neither assembles nor sends a provider request.
+
 ## Known Limitations and Deferred Work
 
 - **预览止步于 RPC 回复上限（默认 8 MiB）。** 更大的已存文件渲染指向 `/library-api/file` 的下载链接而非内联预览。
 - **添加动作的初始状态是一次快照。**「已在知识库」反映检索视图挂载动作时取的 id 列表；在别的标签页删掉的条目在下次挂载前仍显示为已存在。
 - **BibTeX 在客户端重新生成。** `bibtex.ts` 镜像检索视图的 citekey 规则（姓氏 + 年份）而不跨包导入；两者靠各自的规格测试保持一致。
-
-## Model Experience
-
-None, as this is a browser-side presentation package over the `sci.library` Remote namespace: it registers no tool, prompt section, or session event, and everything it draws is host state the user already owns.

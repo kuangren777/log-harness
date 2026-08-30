@@ -246,7 +246,7 @@ describe('get, update, remove, related', () => {
 
     const updated = await ctx.sciLibrary.update({ id: RECORD.id, patch: { status: 'reading', note: 'read section 3' } })
 
-    expect(updated).toMatchObject({ entry: expect.objectContaining({ status: 'reading', note: 'read section 3', tags: ['zt'] }) })
+    expect(updated).toMatchObject({ entry: { status: 'reading', note: 'read section 3', tags: ['zt'] } })
   })
 
   it('reports a missing id from update rather than creating a row', async () => {

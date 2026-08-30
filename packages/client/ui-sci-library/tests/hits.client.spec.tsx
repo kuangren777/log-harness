@@ -28,7 +28,7 @@ function settled(meta: unknown): ToolCallBlock {
 /** A still-running call, which carries no meta at all. */
 function running(): ToolCallBlock {
   return { callId: 'c1', name: 'library_search', argsRaw: '{}', turn: 1, step: 1, time: 0,
-    callView: null, subCalls: [] } as unknown as ToolCallBlock
+    callView: null, subCalls: [] }
 }
 
 /** The row's props over one call. */

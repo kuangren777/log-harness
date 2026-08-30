@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-08-30-fs-write-bytes.md
-2026-08-30-fs-write-bytes.md: a281d60141987de816cb3e5676b70ac9f1be3169
-2026-08-30-fs-write-bytes.zh.md: 85759dff7d2fd9a841b8b90b36dfdd907565ccd7
+2026-08-30-fs-write-bytes.md: c9bc8cf8294bb58999166f4c1e1e0896c99f00b9
+2026-08-30-fs-write-bytes.zh.md: 31176578449048664bd298c977d5835006044d26
