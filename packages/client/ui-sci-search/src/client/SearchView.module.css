@@ -2,6 +2,8 @@
  * strip, and the result column. */
 
 .root {
+  /* Padded page cell: without border-box the padding overflows the frame track. */
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
