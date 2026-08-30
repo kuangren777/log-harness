@@ -68,7 +68,7 @@ One section at order `113`, immediately after `tool:library`: route every citati
 ##### Verbatim text of the section
 
 ```markdown
-写论文或综述时，每引用一篇文献先调用 citations_add 放进本项目的引用池，它会解析文献并写入 papers/<slug>/src/refs.bib，然后用它返回的 citekey：LaTeX 里写 \cite{citekey}，Markdown 里写 `[citekey]`。不要自己编 citekey，也不要手写 refs.bib 条目——引用池里没有的 citekey 在排版后是 [?]。交付前调用 citations_list 核对：带「隔离」的条目不能出现在正文里，引用次数为 0 的条目要么用上要么移除。project 参数留空表示当前会话所在的项目。
+写论文或综述时，每引用一篇文献先调用 citations_add 放进本项目的引用池，它会解析文献并写入 papers/<slug>/src/refs.bib，然后用它返回的 citekey：LaTeX 里写 \cite{citekey}，Markdown 里写 `[citekey]`。不要自己编 citekey，也不要手写 refs.bib 条目——引用池里没有的 citekey 在排版后是 [?]。交付前调用 citations_list 核对：带「隔离」的条目不能出现在正文里，引用次数为 0 的条目要么用上要么移除。「隔离」只是低置信度标记，无法也无需人工消除，报出即可。refs.bib 由工具维护——项目没有 papers/<slug>/ 目录时它不存在，不要去查找或手写它。project 参数留空表示当前会话所在的项目。
 ```
 
 #### Token effect

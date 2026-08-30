@@ -190,6 +190,22 @@ describe('add', () => {
     expect(fs.store.files.get(REFS)).toContain('journal = {Nature}')
   })
 
+  it('converges a repeat add of the same work onto one row, however the DOI is spelled', async () => {
+    StubLiterature.records = [WORK]
+    const { citations } = await boot()
+    const first = await citations.add({ project: PROJECT, doi: '10.1038/nature13184' })
+
+    // The doi:-prefixed spelling of the very same work must not mint a
+    // suffixed twin — the duplicate-pool bug a production benchmark run
+    // surfaced when the model repeated its adds with record-id spellings.
+    const again = await citations.add({ project: PROJECT, doi: 'doi:10.1038/NATURE13184' })
+
+    expect(again.created).toBe(false)
+    expect(again.citation.citekey).toBe(first.citation.citekey)
+    const pool = await citations.pool({ project: PROJECT })
+    expect(pool.citations).toHaveLength(1)
+  })
+
   it('takes a handed-in record without any lookup and mints a de-duplicated citekey', async () => {
     const { citations } = await boot()
     await citations.add({ project: PROJECT, record: { title: 'First', authors: ['Zhao'], year: 2015 } })

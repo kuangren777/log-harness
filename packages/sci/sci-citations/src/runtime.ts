@@ -57,6 +57,7 @@ import {
   groupKeyFromLabel,
   groupRowKey,
   mergeBibEntry,
+  normalizeDoi,
   paletteColor,
   poolStats,
   quarantineFlag,
@@ -298,10 +299,22 @@ export class CitationsRuntime extends TypertRemoteService {
     })
     const record = resolved.record
     const authors = [...(record.authors ?? [])]
-    const taken = new Set(this.citationsOf(project).map(citation => citation.citekey))
-    const citekey = request.citekey === undefined
-      ? uniqueCitekey(citekeyBase(authors, record.year), taken)
-      : normalizeCitekey(request.citekey)
+    const rows = this.citationsOf(project)
+    const taken = new Set(rows.map(citation => citation.citekey))
+    // The same work added twice must converge on one row: identity is the
+    // work's own identifier, not the minted citekey, so a repeat add (a bare
+    // DOI after a doi:-prefixed one, a record after a plain doi) updates the
+    // existing citation instead of minting a suffixed twin.
+    const doiKey = normalizeDoi(record.doi)
+    const twin = request.citekey !== undefined
+      ? undefined
+      : rows.find(row => (doiKey !== undefined && normalizeDoi(row.doi) === doiKey)
+        || (record.arxivId !== undefined && row.arxivId === record.arxivId))
+    const citekey = request.citekey !== undefined
+      ? normalizeCitekey(request.citekey)
+      : twin !== undefined
+        ? twin.citekey
+        : uniqueCitekey(citekeyBase(authors, record.year), taken)
     if (citekey === '') throw new CitationsError('citekey 不能为空', CITATIONS_INVALID_REQUEST)
     const group = request.group ?? UNGROUPED
     this.assertGroup(project, group)
