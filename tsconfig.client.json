@@ -73,6 +73,7 @@
     { "path": "./packages/client/ui-sci-files" },
     { "path": "./packages/client/ui-sci-conversation" },
     { "path": "./packages/client/ui-sci-library" },
+    { "path": "./packages/client/ui-sci-citations" },
     { "path": "./packages/client/ui-sci-search" },
     { "path": "./packages/client/ui-sci-shell" },
     { "path": "./packages/client/ui-workflow-run" },

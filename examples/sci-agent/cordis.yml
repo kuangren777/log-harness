@@ -185,6 +185,14 @@
   config:
     libraryRoot: !!js (process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()) + '/demo/library'
 
+# One citation pool per paper project, over the same project tree the workspace
+# gate classifies: `citations_add` resolves through the literature layer above
+# and writes `papers/<slug>/src/refs.bib`.
+- id: sci-citations
+  name: '@deepseek-ai/dsh-sci-citations'
+  config:
+    projectRoot: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+
 # The balanced tier: the section plus the deny-only guard over `fanoutTools`.
 # The composition mounts none of those tools, which is what the plugin verifies
 # against the catalog at load.

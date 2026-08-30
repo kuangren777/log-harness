@@ -37,6 +37,7 @@ import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import LiteratureRuntime from '@deepseek-ai/dsh-sci-literature'
 import LibraryRuntime from '@deepseek-ai/dsh-sci-library'
+import CitationsRuntime from '@deepseek-ai/dsh-sci-citations'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
 import * as ClientConnection from '@deepseek-ai/dsh-client-connection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
@@ -298,6 +299,25 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'library_search reads the user\'s own collection before the public indexes; library_add resolves a DOI or arXiv id through sci-literature when it is mounted and stores a manual entry otherwise. The prompt section pins the sandbox path stored files are opened from.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-sci-citations',
+    dir: 'sci-citations',
+    source: 'packages/sci/sci-citations/src/index.ts',
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.storageDomain', 'ctx.fs'],
+    writes: ['tool/call', 'sci/citations-changed', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(Storage)
+      await ctx.plugin(StorageJson, { root: mkdtempSync(join(tmpdir(), 'dsh-tool-catalog-citations-')) })
+      await ctx.plugin(StorageDomain, { backend: 'json' })
+      // The runtime reads and writes `refs.bib` through `ctx.fs`; the bare local
+      // provider is sufficient because neither schema depends on what a project
+      // directory contains, and the catalog opens nothing.
+      await ctx.plugin(LocalFileSystem)
+      await ctx.plugin(CitationsRuntime)
+    },
+    note:
+      'Neither tool requires a project: the slug is inferred from the session\'s working directory under `projectRoot`, and a session that is not inside a project gets a refusal rather than a guess. citations_add resolves a DOI or arXiv id through sci-literature and a library id through sci-library when either is mounted.',
   },
   {
     pkg: '@deepseek-ai/dsh-sci-deliver',
