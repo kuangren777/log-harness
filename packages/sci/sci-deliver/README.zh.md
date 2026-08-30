@@ -85,7 +85,7 @@ spool 拾取记录一次失败之后，下一次 assembly 会带上 `sci:deliver
 
 ## Known Limitations and Deferred Work
 
-- **非 UTF-8 快照以 base64 存储。** `ctx.fs` 只暴露 `writeText`，没有二进制写、也没有 copy，所以交付的 PNG/PDF 会以 base64 文本写进带 `.base64` 后缀的快照。事件里的 `sha256` 与 `size` 始终描述原始字节，因此从事件投影出的卡片是正确的；直接读快照文件的消费者必须识别该后缀。文件系统 seam 增加二进制写动词即可彻底去掉这层编码。
+- **非 UTF-8 快照以 base64 存储。** 快照路径早于 `FileSystem.writeBytes`，尚未迁移过去，所以交付的 PNG/PDF 仍以 base64 文本写进带 `.base64` 后缀的快照。事件里的 `sha256` 与 `size` 始终描述原始字节，因此从事件投影出的卡片是正确的；直接读快照文件的消费者必须识别该后缀。把 spool 迁到 `writeBytes` 即可彻底去掉这层编码，但同时会改变既有消费者读取的磁盘快照格式。
 - **spool 是按轮拾取，不是 watch。** `pollOnTurnStart` 是「没有目录 watcher」时的兜底，而今天所有部署都没有。因此一次 shell 交付在下一个轮边界才可见；只有当 watcher 驱动同一段拾取逻辑后，`pollOnTurnStart: false` 才是正确选项。
 - **已决的 spool 条目从不删除。** `<spoolDir>/done/` 与 `<spoolDir>/failed/` 的保留策略属于镜像的 cron（`ClawsGO-System/11-Deployment-Plan`），不属于本包。
 - **canvas 资源靠遍历 manifest 所在目录解析。** `canvasAssetDepth`（默认 `3`）限定遍历深度；被引用但落在深度之外的资源会被判定为缺失并拒绝交付。

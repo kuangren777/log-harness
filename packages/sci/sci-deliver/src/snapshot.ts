@@ -3,11 +3,11 @@
  * so a later edit to the source file cannot change what the user already
  * received.
  *
- * The copy goes through `ctx.fs`, whose only write method is `writeText`
- * (`FileSystem` has no binary write and no copy — see the README's Known
- * Limitations). A snapshot of bytes that are not valid UTF-8 is therefore
- * written base64-encoded under a `.base64` suffix; the digest and size in the
- * session event always describe the ORIGINAL bytes, never the encoding.
+ * The copy goes through `ctx.fs` and predates `FileSystem.writeBytes` (see
+ * the README's Known Limitations for the deferred migration). A snapshot of
+ * bytes that are not valid UTF-8 is therefore written base64-encoded under a
+ * `.base64` suffix; the digest and size in the session event always describe
+ * the ORIGINAL bytes, never the encoding.
  * @module @deepseek-ai/dsh-sci-deliver/src/snapshot
  */
 
