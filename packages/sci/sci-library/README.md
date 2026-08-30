@@ -11,7 +11,7 @@ English | [中文](README.zh.md)
 | Tool `library_search` | `ctx.tools.register()`, render intent `generic` (`kind: 'search'`) | `maxEntries` |
 | Tool `library_add` | `ctx.tools.register()`, render intent `generic` | `maxFileBytes`, `fetchTimeoutMs` |
 | Service `ctx.sciLibrary` | `LibraryRuntime extends TypertRemoteService` | all of `Config` |
-| Remote `sci.library` | `list` / `get` / `add` / `update` / `remove` / `related` / `fetchPdf` | — |
+| Remote `sci.library` | `list` / `get` / `add` / `update` / `removeEntry` / `related` / `fetchPdf` | — |
 | HTTP routes | `POST /library-api/upload`, `GET /library-api/file` (trusted requests only) | `maxFileBytes` |
 | Storage domain `sci_library` | table `sci_library_entry` | `maxEntries` |
 | Session event `sci/library-changed` | appended on the tool path only, `ignorable: true` | — |

@@ -11,7 +11,7 @@
 | 工具 `library_search` | `ctx.tools.register()`，呈现意图 `generic`（`kind: 'search'`） | `maxEntries` |
 | 工具 `library_add` | `ctx.tools.register()`，呈现意图 `generic` | `maxFileBytes`、`fetchTimeoutMs` |
 | 服务 `ctx.sciLibrary` | `LibraryRuntime extends TypertRemoteService` | 全部 `Config` |
-| Remote `sci.library` | `list` / `get` / `add` / `update` / `remove` / `related` / `fetchPdf` | — |
+| Remote `sci.library` | `list` / `get` / `add` / `update` / `removeEntry` / `related` / `fetchPdf` | — |
 | HTTP 路由 | `POST /library-api/upload`、`GET /library-api/file`（仅受信请求） | `maxFileBytes` |
 | 存储 domain `sci_library` | 表 `sci_library_entry` | `maxEntries` |
 | 会话事件 `sci/library-changed` | 仅工具路径追加，`ignorable: true` | — |

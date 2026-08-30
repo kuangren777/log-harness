@@ -10,7 +10,7 @@
  *   typed, a status they set — was never model-visible, so the row is the only
  *   record any of it happened.
  * - The `sci.library` Remote the browser's library view is made of: `list`,
- *   `get`, `add`, `update`, `remove`, `related`, and `fetchPdf`.
+ *   `get`, `add`, `update`, `removeEntry`, `related`, and `fetchPdf`.
  * - `library_search` and `library_add` on `ctx.tools`, plus the one prompt
  *   section telling the model to look in the user's own collection before the
  *   public indexes, and to open a stored PDF from disk rather than re-download.

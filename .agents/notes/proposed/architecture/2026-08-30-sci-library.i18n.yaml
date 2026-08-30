@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-08-30-sci-library.md
-2026-08-30-sci-library.md: 738f143038fbbd140e293144c1ba257e8dd1a1f0
-2026-08-30-sci-library.zh.md: ff942de461c992ff3ca56398a143099b586c6403
+2026-08-30-sci-library.md: 411361b89e326535ec0bd1bfc54125329cabbcc1
+2026-08-30-sci-library.zh.md: ec19c20202841629e3289eab6639663aec5a609e

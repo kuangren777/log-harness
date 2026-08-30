@@ -267,8 +267,8 @@ export class LibraryRuntime extends TypertRemoteService {
    * @param request - the entry to drop and whether to empty its files.
    * @returns whether a row existed, and how many files were emptied.
    */
-  @Remote('remove')
-  async remove(request: LibraryRemoveRequest): Promise<LibraryRemoveResult> {
+  @Remote('removeEntry')
+  async removeEntry(request: LibraryRemoveRequest): Promise<LibraryRemoveResult> {
     const existing = this.table.get(request.id)
     let filesCleared = 0
     if (existing !== undefined && request.deleteFiles === true) {

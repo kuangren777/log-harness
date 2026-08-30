@@ -1279,7 +1279,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the edited entry, or `not-found` when the library does not hold it.',
       },
       {
-        signature: '@Remote(\'remove\') async remove(request: LibraryRemoveRequest): Promise<LibraryRemoveResult>',
+        signature: '@Remote(\'removeEntry\') async removeEntry(request: LibraryRemoveRequest): Promise<LibraryRemoveResult>',
         description: 'Drop one entry, optionally emptying its files.\n\n`deleteFiles` empties rather than unlinks: the filesystem seam offers no removal, so the honest thing it can do is truncate each file to zero bytes. The zero-byte files and their directory stay until the sandbox is reset.',
         parameters: [{ name: 'request', description: 'the entry to drop and whether to empty its files.' }],
         returns: 'whether a row existed, and how many files were emptied.',

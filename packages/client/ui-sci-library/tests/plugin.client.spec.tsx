@@ -52,7 +52,7 @@ async function bench(options: BenchOptions = {}) {
     get: vi.fn(async () => ({ ok: true as const, value: { entry: FULL } })),
     add: vi.fn(async () => ({ ok: true as const, value: { entry: FULL, created: true } })),
     update: vi.fn(async () => ({ ok: true as const, value: { entry: FULL } })),
-    remove: vi.fn(async () => ({ ok: true as const, value: { removed: true, filesCleared: 2 } })),
+    removeEntry: vi.fn(async () => ({ ok: true as const, value: { removed: true, filesCleared: 2 } })),
     related: vi.fn(async () => ({ ok: true as const, value: { entries: [BARE] } })),
     fetchPdf: vi.fn(async () => ({ ok: true as const, value: { entry: FULL } })),
   }
@@ -212,9 +212,9 @@ describe('the injected view face over the sci.library namespace', () => {
     await expect(b.view.remove(FULL.id)).resolves.toEqual({ ok: true, value: null })
     // A user removing an entry means its PDFs too: bytes left behind would be
     // unreachable from every surface.
-    expect(b.library.remove).toHaveBeenCalledWith({ id: FULL.id, deleteFiles: true })
+    expect(b.library.removeEntry).toHaveBeenCalledWith({ id: FULL.id, deleteFiles: true })
 
-    b.library.remove.mockResolvedValueOnce({ ok: true, value: { removed: false, filesCleared: 0 } } as never)
+    b.library.removeEntry.mockResolvedValueOnce({ ok: true, value: { removed: false, filesCleared: 0 } } as never)
     await expect(b.view.remove('doi:gone')).resolves.toEqual({ ok: false, code: 'LIBRARY_NOT_FOUND' })
   })
 
@@ -243,7 +243,7 @@ describe('the injected view face over the sci.library namespace', () => {
     // The write and fetch calls pass a host refusal through unshaped too.
     b.library.update.mockResolvedValueOnce(refusal as never)
     await expect(b.view.update(FULL.id, {})).resolves.toEqual({ ok: false, code: 'STORAGE_UNAVAILABLE' })
-    b.library.remove.mockResolvedValueOnce(refusal as never)
+    b.library.removeEntry.mockResolvedValueOnce(refusal as never)
     await expect(b.view.remove(FULL.id)).resolves.toEqual({ ok: false, code: 'STORAGE_UNAVAILABLE' })
     b.library.fetchPdf.mockResolvedValueOnce(refusal as never)
     await expect(b.view.fetchPdf(FULL.id)).resolves.toEqual({ ok: false, code: 'STORAGE_UNAVAILABLE' })

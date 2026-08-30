@@ -260,8 +260,8 @@ describe('get, update, remove, related', () => {
     const { ctx } = await boot()
     await ctx.sciLibrary.add({ record: RECORD })
 
-    expect(await ctx.sciLibrary.remove({ id: RECORD.id })).toEqual({ removed: true, filesCleared: 0 })
-    expect(await ctx.sciLibrary.remove({ id: RECORD.id })).toEqual({ removed: false, filesCleared: 0 })
+    expect(await ctx.sciLibrary.removeEntry({ id: RECORD.id })).toEqual({ removed: true, filesCleared: 0 })
+    expect(await ctx.sciLibrary.removeEntry({ id: RECORD.id })).toEqual({ removed: false, filesCleared: 0 })
   })
 
   it('empties the files when asked, because the filesystem seam has no removal', async () => {
@@ -269,7 +269,7 @@ describe('get, update, remove, related', () => {
     await ctx.sciLibrary.upload('new', 'dataset', { name: 'x.csv', mediaType: 'text/csv', bytes: new Uint8Array([1, 2, 3]) })
     const [stored] = (await ctx.sciLibrary.list({})).entries
 
-    const result = await ctx.sciLibrary.remove({ id: stored?.id ?? '', deleteFiles: true })
+    const result = await ctx.sciLibrary.removeEntry({ id: stored?.id ?? '', deleteFiles: true })
 
     expect(result).toEqual({ removed: true, filesCleared: 1 })
     expect(fs.store.written.get(`/lib/${stored?.files[0]?.path ?? ''}`)).toEqual(new Uint8Array(0))
@@ -310,7 +310,7 @@ describe('fetchPdf', () => {
     const { ctx } = await boot()
     await ctx.sciLibrary.add({ record: RECORD })
     vi.stubGlobal('fetch', vi.fn(async () => {
-      await ctx.sciLibrary.remove({ id: RECORD.id })
+      await ctx.sciLibrary.removeEntry({ id: RECORD.id })
       return new Response(PDF, { headers: { 'content-type': 'application/pdf' } })
     }))
 

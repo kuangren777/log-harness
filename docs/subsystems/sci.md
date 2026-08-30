@@ -164,7 +164,7 @@ The user's knowledge base: papers, datasets, and notes they chose to keep, plus 
  * @param request - the entry to drop and whether to empty its files.
  * @returns whether a row existed, and how many files were emptied.
  */
-@Remote('remove') async remove(request: LibraryRemoveRequest): Promise<LibraryRemoveResult>
+@Remote('removeEntry') async removeEntry(request: LibraryRemoveRequest): Promise<LibraryRemoveResult>
 
 /**
  * The entries most like one the library already holds.

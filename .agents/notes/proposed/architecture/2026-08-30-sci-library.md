@@ -50,5 +50,5 @@ A build-plumbing consequence this change surfaced: `tsconfig.base.json`'s `@deep
 
 - **The table is unreconstructable by design.** Losing the storage medium loses the library rows; only the files under `libraryRoot` survive with the sandbox. The README states this; no backup path exists in this cycle.
 - **The add action's pressed-state is a snapshot.** The mount-time id listing is capped at one host page (100), so a library larger than that can offer 「加入知识库」 for an already-stored record; the host-side merge makes the second add harmless, which is why the cap is acceptable.
-- **`remove` cannot unlink.** The filesystem seam has no removal verb, so clearing an entry's files truncates them to zero bytes and leaves the empty files and directory behind until the sandbox is reset.
+- **`removeEntry` cannot unlink.** The filesystem seam has no removal verb, so clearing an entry's files truncates them to zero bytes and leaves the empty files and directory behind until the sandbox is reset.
 - **The `/types` paths-row rule is easy to forget.** Nothing fails until the typert workspace pass runs; the failure message now documented here is the breadcrumb.

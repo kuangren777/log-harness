@@ -125,7 +125,7 @@ interface LibraryNamespace {
     id: string
     patch: LibraryPatch
   }): Promise<RemoteAnswer<{ entry: LibraryEntry } | { error: 'not-found' }>>
-  remove(request: {
+  removeEntry(request: {
     id: string
     deleteFiles?: boolean
   }): Promise<RemoteAnswer<{ removed: boolean; filesCleared: number }>>
@@ -212,7 +212,7 @@ export async function apply(ctx: ClientContext): Promise<void> {
     // library means its PDFs too, and leaving them behind would keep bytes no
     // surface can reach again.
     remove: async (id: string): Promise<LibraryOutcome<null>> => {
-      const outcome = await settle(namespaceOf(ctx), namespace => namespace.remove({ id, deleteFiles: true }))
+      const outcome = await settle(namespaceOf(ctx), namespace => namespace.removeEntry({ id, deleteFiles: true }))
       if (!outcome.ok) return outcome
       return outcome.value.removed ? { ok: true, value: null } : { ok: false, code: NOT_FOUND }
     },
