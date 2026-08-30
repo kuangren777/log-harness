@@ -114,6 +114,102 @@ Types: [SessionId](core.zh.md)
 
 Source: [`packages/sci/sci-audit/src/index.ts`](../../packages/sci/sci-audit/src/index.ts)
 
+<a id="ctxscilibrary--libraryruntime"></a>
+
+### `ctx.sciLibrary` — `LibraryRuntime`
+
+The user's knowledge base: papers, datasets, and notes they chose to keep, plus the sandbox files that belong to them. The service performs reads and table writes only: it never creates, resumes, or drives an Agent or Session.
+
+```ts cordis-catalog
+/**
+ * List or search the knowledge base.
+ * @param query - the listing's filters, free text, and page bounds.
+ * @returns the page, with the tag facets and the whole-library counts beside it.
+ */
+@Remote('list') list(query: LibraryQuery): Promise<LibraryPage>
+
+/**
+ * Read one entry.
+ * @param request - the entry to read.
+ * @returns the entry, or `not-found` when the library does not hold it.
+ */
+@Remote('get') get(request: LibraryGetRequest): Promise<LibraryGetResult>
+
+/**
+ * Put one entry in the knowledge base.
+ *
+ * An id the library already holds is merged into rather than overwritten, and
+ * the answer says so through `created: false`: adding the same paper twice
+ * must gain the second call's tags without losing the title, status, or note
+ * the user set on the first.
+ * @param request - the record or draft to store, the tags, and whether to fetch the PDF.
+ * @returns the stored entry, whether it was new, and any download failure.
+ * @throws LibraryError `LIBRARY_INVALID_REQUEST` when the request names neither a record nor a draft.
+ */
+@Remote('add') async add(request: LibraryAddRequest): Promise<LibraryAddResult>
+
+/**
+ * Change the fields the user owns on one entry.
+ * @param request - the entry and the fields to change.
+ * @returns the edited entry, or `not-found` when the library does not hold it.
+ */
+@Remote('update') async update(request: LibraryUpdateRequest): Promise<LibraryUpdateResult>
+
+/**
+ * Drop one entry, optionally emptying its files.
+ *
+ * `deleteFiles` empties rather than unlinks: the filesystem seam offers no
+ * removal, so the honest thing it can do is truncate each file to zero bytes.
+ * The zero-byte files and their directory stay until the sandbox is reset.
+ * @param request - the entry to drop and whether to empty its files.
+ * @returns whether a row existed, and how many files were emptied.
+ */
+@Remote('remove') async remove(request: LibraryRemoveRequest): Promise<LibraryRemoveResult>
+
+/**
+ * The entries most like one the library already holds.
+ * @param request - the entry to find neighbours of, and how many to return.
+ * @returns the neighbours, best first; empty when the id is unknown.
+ */
+@Remote('related') related(request: LibraryRelatedRequest): Promise<LibraryRelatedResult>
+
+/**
+ * Download one entry's open-access PDF into its library directory.
+ * @param request - the entry whose `pdfUrl` to fetch.
+ * @returns the entry carrying the stored file, or the failure class.
+ */
+@Remote('fetchPdf') async fetchPdf(request: LibraryFetchPdfRequest): Promise<LibraryFetchPdfResult>
+
+/**
+ * Resolve one identifier to a bibliographic record through the literature layer.
+ * @param identifier - a DOI or an arXiv id.
+ * @param signal - cancellation of the lookup.
+ * @returns the matching record, or undefined when the layer is absent or matched nothing.
+ */
+async lookup(identifier: string, signal?: AbortSignal): Promise<LiteratureRecord | undefined>
+
+/**
+ * Store one uploaded file, creating the entry when the caller asked for one.
+ * @param entryId - the entry to attach to, or `new`.
+ * @param kind - the kind a new entry takes; ignored when the entry exists.
+ * @param file - the parsed upload.
+ * @returns the entry carrying the stored file.
+ * @throws LibraryError `LIBRARY_NOT_FOUND` when a named entry is not in the library.
+ */
+async upload(entryId: string, kind: LibraryKind | undefined, file: UploadedFile): Promise<LibraryEntry>
+
+/**
+ * Read one stored file back for the download route.
+ * @param entryId - the owning entry.
+ * @param name - the stored file name.
+ * @returns the file record and its bytes.
+ * @throws LibraryError `LIBRARY_NOT_FOUND` when the entry or the file is unknown.
+ */
+async download(entryId: string, name: string): Promise<{ file: LibraryFile; bytes: Uint8Array }>
+```
+
+Source: [`packages/sci/sci-library/src/runtime.ts`](../../packages/sci/sci-library/src/runtime.ts)
+
 <a id="ctxsciliterature--literatureruntime"></a>
 
 ### `ctx.sciLiterature` — `LiteratureRuntime`

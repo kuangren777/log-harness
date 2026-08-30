@@ -36,6 +36,9 @@ import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import LiteratureRuntime from '@deepseek-ai/dsh-sci-literature'
+import LibraryRuntime from '@deepseek-ai/dsh-sci-library'
+import WebServer from '@deepseek-ai/dsh-host-webserver'
+import * as ClientConnection from '@deepseek-ai/dsh-client-connection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider, SubagentReportDelivery } from '@deepseek-ai/dsh-subagent'
 import * as ToolSubagentControl from '@deepseek-ai/dsh-tool-subagent-control'
@@ -274,6 +277,27 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'literature_search fans out to OpenAlex, Semantic Scholar, arXiv, and Crossref in one call and merges them, so the model-visible schema does not change when a source is dropped from `sources`.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-sci-library',
+    dir: 'sci-library',
+    source: 'packages/sci/sci-library/src/index.ts',
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.storageDomain', 'ctx.fs', 'ctx.webServer', 'ctx.connection'],
+    writes: ['tool/call', 'sci/library-changed', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(Storage)
+      await ctx.plugin(StorageJson, { root: mkdtempSync(join(tmpdir(), 'dsh-tool-catalog-library-')) })
+      await ctx.plugin(StorageDomain, { backend: 'json' })
+      // The runtime registers its /library-api routes at mount; an ephemeral
+      // loopback webserver and the browser-trust fence stand them up without
+      // serving anything the catalog reads.
+      await ctx.plugin(LocalFileSystem)
+      await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
+      await ctx.plugin(ClientConnection)
+      await ctx.plugin(LibraryRuntime)
+    },
+    note:
+      'library_search reads the user\'s own collection before the public indexes; library_add resolves a DOI or arXiv id through sci-literature when it is mounted and stores a manual entry otherwise. The prompt section pins the sandbox path stored files are opened from.',
   },
   {
     pkg: '@deepseek-ai/dsh-sci-deliver',

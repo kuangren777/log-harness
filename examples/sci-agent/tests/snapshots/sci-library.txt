@@ -1,0 +1,26 @@
+isError: false
+---
+已加入知识库：Electronic structure and thermoelectric properties of n - and p -type SnSe from first-principles calculations（id doi:10.1103/physrevb.91.205201）
+---
+isError: false
+---
+匹配 1 条，返回前 1 条（知识库共 1 条：1 篇文献、0 个数据集、0 条笔记）：
+[1] Electronic structure and thermoelectric properties of n - and p -type SnSe from first-principles calculations — K. Kutorasiński, Bartłomiej Wiendlocha, S. Kaprzyk et al. · 2015 · unread · 标签 thermoelectric/snse · doi:10.1103/physrevb.91.205201 · arXiv:1502.04599
+---
+sci events: [
+  {
+    "type": "sci/tier-resolved",
+    "data": {
+      "tier": "balanced",
+      "presetName": "sci-balanced"
+    }
+  },
+  {
+    "type": "sci/library-changed",
+    "data": {
+      "op": "add",
+      "id": "doi:10.1103/physrevb.91.205201",
+      "kind": "paper"
+    }
+  }
+]

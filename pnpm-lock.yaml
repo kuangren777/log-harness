@@ -460,6 +460,9 @@ importers:
       '@deepseek-ai/dsh-bash-sandbox':
         specifier: workspace:*
         version: link:../packages/shell/bash-sandbox
+      '@deepseek-ai/dsh-client-connection':
+        specifier: workspace:*
+        version: link:../packages/client/connection
       '@deepseek-ai/dsh-code-runtime-worker-thread':
         specifier: workspace:*
         version: link:../packages/code-runtime/code-runtime-worker-thread
@@ -523,6 +526,9 @@ importers:
       '@deepseek-ai/dsh-hooks-codex':
         specifier: workspace:*
         version: link:../packages/hooks/hooks-codex
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: workspace:*
+        version: link:../packages/host/webserver
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:*
         version: link:../packages/runtime-diagnostics/invariants
@@ -580,6 +586,9 @@ importers:
       '@deepseek-ai/dsh-sci-guard':
         specifier: workspace:*
         version: link:../packages/sci/sci-guard
+      '@deepseek-ai/dsh-sci-library':
+        specifier: workspace:^
+        version: link:../packages/sci/sci-library
       '@deepseek-ai/dsh-sci-literature':
         specifier: workspace:^
         version: link:../packages/sci/sci-literature

@@ -805,6 +805,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the outcome, including the version the write produced.',
       },
       {
+        signature: 'abstract writeBytes(target: FsTarget, data: Uint8Array, signal: AbortSignal | undefined): Promise<void>',
+        description: 'Atomically create or replace a file with raw bytes, with no decoding, no text normalization, and no diff basis. This is the write counterpart of readBytes, for host plugins that own binary payloads (a downloaded PDF, an uploaded dataset); model-facing text writes stay on writeText.\n\nContract every backend owes callers:\n\n- Missing parent directories are created, exactly as writeText does.\n- Publication is atomic where the backend has an atomic replace: a reader observes either the previous file or the complete new one, never a partially written file.\n- The write is unconditional. There is no FsWriteIntent and no version guard, so no `fs/write-intent` decision applies: the caller is trusted host code that already owns the destination path, not a model choosing an arbitrary file.\n- A payload larger than the backend\'s configured `maxWriteBytes` is refused with `FS_TOO_LARGE` before any content leaves the host, so an oversized buffer never reaches remote transport or disk.\n- An existing non-regular-file target is refused with `FS_NOT_REGULAR_FILE`; a backend that confines mutations fences this call by the calling session\'s resolved sandbox policy and refuses with `FS_SANDBOX_DENIED`. There is no per-call policy parameter because these callers are host plugins with no escalation path, unlike the tool layer.',
+        parameters: [{ name: 'target', description: 'the resolved target to write.' }, { name: 'data', description: 'the full new file content as raw bytes.' }, { name: 'signal', description: 'aborts before atomic publication takes effect.' }],
+        returns: 'nothing; bytes carry no text diff basis or version the callers use.',
+      },
+      {
         signature: 'abstract editText( target: FsTarget, edit: FsEditRequest, expected?: { version: FsVersion }, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsEditOutcome>',
         description: 'Atomically edit literal text. When supplied, the version guard is checked before matching so stale content reports `FS_STALE_VERSION`; omission edits the current content without a freshness precondition.',
         parameters: [{ name: 'target', description: 'the resolved target to edit.' }, { name: 'edit', description: 'the literal search/replace request.' }, { name: 'expected', description: 'the version guard; omit for an unconditional edit.' }, { name: 'signal', description: 'aborts before atomic publication takes effect.' }, { name: 'sandboxPolicy', description: 'the per-call mode and workspace root this edit runs under; a sandboxing backend fences the edit by it, the bare backend ignores it. Omit to leave the backend its own default.' }],
@@ -1239,6 +1245,76 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Snapshot every committed `sci_plan` row.',
         parameters: [],
         returns: 'the rows, in table order.',
+      },
+    ],
+  },
+  {
+    key: 'sciLibrary',
+    summary: 'The user\'s knowledge base: papers, datasets, and notes they chose to keep, plus the sandbox files that belong to them.',
+    description: 'The user\'s knowledge base: papers, datasets, and notes they chose to keep, plus the sandbox files that belong to them. The service performs reads and table writes only: it never creates, resumes, or drives an Agent or Session.',
+    methods: [
+      {
+        signature: '@Remote(\'list\') list(query: LibraryQuery): Promise<LibraryPage>',
+        description: 'List or search the knowledge base.',
+        parameters: [{ name: 'query', description: 'the listing\'s filters, free text, and page bounds.' }],
+        returns: 'the page, with the tag facets and the whole-library counts beside it.',
+      },
+      {
+        signature: '@Remote(\'get\') get(request: LibraryGetRequest): Promise<LibraryGetResult>',
+        description: 'Read one entry.',
+        parameters: [{ name: 'request', description: 'the entry to read.' }],
+        returns: 'the entry, or `not-found` when the library does not hold it.',
+      },
+      {
+        signature: '@Remote(\'add\') async add(request: LibraryAddRequest): Promise<LibraryAddResult>',
+        description: 'Put one entry in the knowledge base.\n\nAn id the library already holds is merged into rather than overwritten, and the answer says so through `created: false`: adding the same paper twice must gain the second call\'s tags without losing the title, status, or note the user set on the first.',
+        parameters: [{ name: 'request', description: 'the record or draft to store, the tags, and whether to fetch the PDF.' }],
+        returns: 'the stored entry, whether it was new, and any download failure.',
+        throws: ['LibraryError `LIBRARY_INVALID_REQUEST` when the request names neither a record nor a draft.'],
+      },
+      {
+        signature: '@Remote(\'update\') async update(request: LibraryUpdateRequest): Promise<LibraryUpdateResult>',
+        description: 'Change the fields the user owns on one entry.',
+        parameters: [{ name: 'request', description: 'the entry and the fields to change.' }],
+        returns: 'the edited entry, or `not-found` when the library does not hold it.',
+      },
+      {
+        signature: '@Remote(\'remove\') async remove(request: LibraryRemoveRequest): Promise<LibraryRemoveResult>',
+        description: 'Drop one entry, optionally emptying its files.\n\n`deleteFiles` empties rather than unlinks: the filesystem seam offers no removal, so the honest thing it can do is truncate each file to zero bytes. The zero-byte files and their directory stay until the sandbox is reset.',
+        parameters: [{ name: 'request', description: 'the entry to drop and whether to empty its files.' }],
+        returns: 'whether a row existed, and how many files were emptied.',
+      },
+      {
+        signature: '@Remote(\'related\') related(request: LibraryRelatedRequest): Promise<LibraryRelatedResult>',
+        description: 'The entries most like one the library already holds.',
+        parameters: [{ name: 'request', description: 'the entry to find neighbours of, and how many to return.' }],
+        returns: 'the neighbours, best first; empty when the id is unknown.',
+      },
+      {
+        signature: '@Remote(\'fetchPdf\') async fetchPdf(request: LibraryFetchPdfRequest): Promise<LibraryFetchPdfResult>',
+        description: 'Download one entry\'s open-access PDF into its library directory.',
+        parameters: [{ name: 'request', description: 'the entry whose `pdfUrl` to fetch.' }],
+        returns: 'the entry carrying the stored file, or the failure class.',
+      },
+      {
+        signature: 'async lookup(identifier: string, signal?: AbortSignal): Promise<LiteratureRecord | undefined>',
+        description: 'Resolve one identifier to a bibliographic record through the literature layer.',
+        parameters: [{ name: 'identifier', description: 'a DOI or an arXiv id.' }, { name: 'signal', description: 'cancellation of the lookup.' }],
+        returns: 'the matching record, or undefined when the layer is absent or matched nothing.',
+      },
+      {
+        signature: 'async upload(entryId: string, kind: LibraryKind | undefined, file: UploadedFile): Promise<LibraryEntry>',
+        description: 'Store one uploaded file, creating the entry when the caller asked for one.',
+        parameters: [{ name: 'entryId', description: 'the entry to attach to, or `new`.' }, { name: 'kind', description: 'the kind a new entry takes; ignored when the entry exists.' }, { name: 'file', description: 'the parsed upload.' }],
+        returns: 'the entry carrying the stored file.',
+        throws: ['LibraryError `LIBRARY_NOT_FOUND` when a named entry is not in the library.'],
+      },
+      {
+        signature: 'async download(entryId: string, name: string): Promise<{ file: LibraryFile; bytes: Uint8Array }>',
+        description: 'Read one stored file back for the download route.',
+        parameters: [{ name: 'entryId', description: 'the owning entry.' }, { name: 'name', description: 'the stored file name.' }],
+        returns: 'the file record and its bytes.',
+        throws: ['LibraryError `LIBRARY_NOT_FOUND` when the entry or the file is unknown.'],
       },
     ],
   },
@@ -3795,6 +3871,54 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface KvUnitDescriptor {\n    readonly name: string;\n    readonly version: number;\n    readonly tables: readonly string[];\n    readonly hasGlobal: boolean;\n}',
   },
   {
+    name: 'LibraryAddRequest',
+    declaration: 'export interface LibraryAddRequest {\n    record?: LiteratureRecord;\n    entry?: Partial<LibraryEntry> & {\n        title: string;\n    };\n    tags?: readonly string[];\n    withPdf?: boolean;\n}',
+  },
+  {
+    name: 'LibraryAddResult',
+    declaration: 'export interface LibraryAddResult {\n    entry: LibraryEntry;\n    created: boolean;\n    fetchError?: string;\n}',
+  },
+  {
+    name: 'LibraryFetchPdfRequest',
+    declaration: 'export interface LibraryFetchPdfRequest {\n    id: string;\n}',
+  },
+  {
+    name: 'LibraryFetchPdfResult',
+    declaration: 'export type LibraryFetchPdfResult = {\n    entry: LibraryEntry;\n} | {\n    error: string;\n};',
+  },
+  {
+    name: 'LibraryGetRequest',
+    declaration: 'export interface LibraryGetRequest {\n    id: string;\n}',
+  },
+  {
+    name: 'LibraryGetResult',
+    declaration: 'export type LibraryGetResult = {\n    entry: LibraryEntry;\n} | {\n    error: \'not-found\';\n};',
+  },
+  {
+    name: 'LibraryRelatedRequest',
+    declaration: 'export interface LibraryRelatedRequest {\n    id: string;\n    limit?: number;\n}',
+  },
+  {
+    name: 'LibraryRelatedResult',
+    declaration: 'export interface LibraryRelatedResult {\n    entries: readonly LibraryEntry[];\n}',
+  },
+  {
+    name: 'LibraryRemoveRequest',
+    declaration: 'export interface LibraryRemoveRequest {\n    id: string;\n    deleteFiles?: boolean;\n}',
+  },
+  {
+    name: 'LibraryRemoveResult',
+    declaration: 'export interface LibraryRemoveResult {\n    removed: boolean;\n    filesCleared: number;\n}',
+  },
+  {
+    name: 'LibraryUpdateRequest',
+    declaration: 'export interface LibraryUpdateRequest {\n    id: string;\n    patch: LibraryPatch;\n}',
+  },
+  {
+    name: 'LibraryUpdateResult',
+    declaration: 'export type LibraryUpdateResult = {\n    entry: LibraryEntry;\n} | {\n    error: \'not-found\';\n};',
+  },
+  {
     name: 'LiteratureForgetRequest',
     declaration: 'export interface LiteratureForgetRequest {\n    id: string;\n}',
   },
@@ -5249,6 +5373,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'UpdateTeamTaskRequest',
     declaration: 'export interface UpdateTeamTaskRequest {\n    readonly taskId: TeamTaskId;\n    readonly expectedRevision: number;\n    readonly action: TeamTaskAction;\n    readonly subject?: string;\n    readonly description?: string;\n    readonly blockedBy?: readonly TeamTaskId[];\n    readonly writeScopes?: readonly string[];\n    readonly owner?: string;\n}',
+  },
+  {
+    name: 'UploadedFile',
+    declaration: 'export interface UploadedFile {\n    name: string;\n    mediaType: string;\n    bytes: Uint8Array;\n}',
   },
   {
     name: 'UpsertHostRequest',

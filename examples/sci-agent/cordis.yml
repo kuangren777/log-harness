@@ -81,10 +81,12 @@
 - id: storage
   name: '@deepseek-ai/dsh-storage'
 
+# The storage root follows the project-root override so a test boot gets a
+# fresh table set; the runnable demo keeps its cwd-relative directory.
 - id: storage-json
   name: '@deepseek-ai/dsh-storage-json'
   config:
-    root: ./.storages
+    root: !!js (process.env.DSH_SCI_PROJECT_ROOT ?? '.') + '/.storages'
 
 - id: storage-domain
   name: '@deepseek-ai/dsh-storage-domain'
@@ -165,6 +167,23 @@
   name: '@deepseek-ai/dsh-sci-literature'
   config:
     mailto: !!js process.env.SCI_LITERATURE_MAILTO ?? ''
+
+# The knowledge base over the storage domain and the project tree. Its
+# `/library-api` byte routes require the loopback webserver and the
+# browser-trust fence at load even though no browser drives this composition.
+- id: webserver
+  name: '@deepseek-ai/dsh-host-webserver'
+  config:
+    host: 127.0.0.1
+    port: 0
+
+- id: connection
+  name: '@deepseek-ai/dsh-client-connection'
+
+- id: sci-library
+  name: '@deepseek-ai/dsh-sci-library'
+  config:
+    libraryRoot: !!js (process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()) + '/demo/library'
 
 # The balanced tier: the section plus the deny-only guard over `fanoutTools`.
 # The composition mounts none of those tools, which is what the plugin verifies

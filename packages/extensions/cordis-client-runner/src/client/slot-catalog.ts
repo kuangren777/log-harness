@@ -1345,6 +1345,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'rail\' (client-ui-sci-shell), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-sci-library LibraryRailItem',
       'client-ui-sci-search SearchRailItem',
       'client-ui-sci-shell ConversationRailItem id \'conversation\'',
     ],
@@ -1377,6 +1378,49 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'root\', () => ctx.slots.register(\n      { name: \'root\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
     source: 'packages/client/runtime/src/client/slots.ts:41',
+  },
+  {
+    key: 'search.result.actions',
+    kind: 'list',
+    scope: 'root',
+    summary: 'Per-record actions other packages contribute to a result card, drawn at the end of its action row in registration order.',
+    doc: 'Per-record actions other packages contribute to a result card, drawn at\nthe end of its action row in registration order.\n\nDeclared by this package\'s `view` entry and owned by the card that\nrenders it: the whole merged record is the owner share, so a\ncontribution decides for itself what it needs (an id to check, a DOI to\ncite, a pdfUrl to fetch) without this package growing a member per\nconsumer. Root scope like the view itself — a search runs with no\nsession selected.',
+    registerOptions: [
+      {
+        name: 'id',
+        requirement: 'required',
+        type: 'string',
+        doc: 'Your cell key. Use an id of your own: a fresh id is added beside the shipped entries, while reusing a shipped id puts you in THAT cell and replaces it. Owners that filter by id address you by it.',
+      },
+      {
+        name: 'order',
+        requirement: 'optional',
+        type: 'number',
+        doc: 'Position among the entries, ascending (default 0).',
+      },
+      {
+        name: 'label',
+        requirement: 'optional',
+        type: 'string | (() => string)',
+        doc: 'Display text where the owner projects one (nav rows, tabs). A thunk is re-read on every projection, so localized text follows the active locale without re-registering.',
+      },
+    ],
+    ownerProps: [],
+    ownerPropsReferences: [],
+    standardProps: [
+      'useSessions: SnapshotSelectorHook<SessionListState>',
+      'useWorkspaces: SnapshotSelectorHook<import(\'./workspaces/service.ts\').WorkspaceListState>',
+    ],
+    keyDomain: '',
+    hookContext: '',
+    slotInject: '',
+    declaredBy: 'an entry in \'view\' (client-ui-sci-search), so it exists while that entry is mounted',
+    occupants: [
+      'client-ui-sci-library AddToLibrary',
+    ],
+    replaceRisk: 'none',
+    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'search.result.actions\', () => ctx.slots.register(\n      { name: \'search.result.actions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+    source: 'packages/client/ui-sci-search/src/client/contract.ts:147',
   },
   {
     key: 'settings.action',
@@ -2039,6 +2083,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'conversation.chat.node\' (client-ui-tool), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-sci-library LibraryHits',
+      'client-ui-sci-library LibraryAdded',
       'client-ui-sci-search LiteratureHits',
       'client-ui-skill SkillRow key \'skill\'',
       'client-ui-tool AskQuestionRow key \'ask_user_question\'',
@@ -2127,6 +2173,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'root\' (client-ui-layout), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-sci-library LibraryView',
       'client-ui-sci-search SearchView',
     ],
     replaceRisk: 'none',

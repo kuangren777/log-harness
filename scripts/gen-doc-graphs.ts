@@ -114,6 +114,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Fans one query out to OpenAlex, Semantic Scholar, arXiv and Crossref, merges the replies by DOI / arXiv id / title, registers literature_search, and serves the 检索 view over sci.literature.',
   },
   {
+    key: 'sciLibrary',
+    pkg: 'sci-library',
+    title: 'Science-research knowledge library',
+    mode: 'core',
+    consumers: ['sci-profile'],
+    note: 'One direct-write table of the user\'s papers, datasets and notes, served to the model as library_search/library_add, to the browser as the sci.library Remote plus the /library-api byte routes.',
+  },
+  {
     key: 'sciMemory',
     pkg: 'sci-memory',
     title: 'Science-research memory nodes and recall',

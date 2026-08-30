@@ -28,7 +28,7 @@ English | [中文](README.zh.md)
 
 ## Entries, identity, and the merge
 
-An entry's id is the literature record's id (`doi:…` / `arxiv:…` / `title:…`) when it came from the search layer, `file:<sha256>` for a bare upload, and `note:<ulid>` for a note. Adding an id the table already holds merges: tags union, files union, absent fields fill in, and the reply says `created: false`. Deleting can also delete the entry's directory, but only when asked.
+An entry's id is the literature record's id (`doi:…` / `arxiv:…` / `title:…`) when it came from the search layer, `file:<sha256>` for a bare upload, and `note:<ulid>` for a note. Adding an id the table already holds merges: tags union, files union, absent fields fill in, and the reply says `created: false`. Deleting can also clear the entry's files, but only when asked — and clearing truncates each file to zero bytes rather than unlinking it, because the filesystem seam offers no removal; the empty files and their directory stay until the sandbox is reset.
 
 Listing is a lexical scan — tokens of the query scored over title (×3), tags (×2), abstract (×1), and authors (×1); no query means newest-updated first. Filters (`kind`, `status`, `tag`) apply before pagination, and every reply carries the real `counts` and tag histogram the 知识库 view draws its chips from. There is no embedding index anywhere in this repository, and this package does not pretend otherwise.
 
