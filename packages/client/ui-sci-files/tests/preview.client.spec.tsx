@@ -157,6 +157,21 @@ describe('FilePreview', () => {
     expect(screen.getByText('preview.binary')).toBeTruthy()
   })
 
+  it('reads a convertible office document as bytes and says how to open it online', async () => {
+    // A .docx must not reach the office frame: the state route refuses every
+    // extension but .univer, which dead-ended in a runtime-unavailable notice.
+    const { officeState } = await preview('/p/report.docx', {
+      ok: true,
+      file: content({
+        path: '/p/report.docx',
+        mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        encoding: 'base64', content: 'AAAA', size: 4096,
+      }),
+    })
+    expect(officeState).not.toHaveBeenCalled()
+    expect(screen.getByText('preview.officeConvert')).toBeTruthy()
+  })
+
   it('frames an office path without reading a byte of it', async () => {
     const { readFile } = await preview('/p/w/book.univer', { ok: true, file: content() }, {
       ok: true, viewerUrl: '/univer-gw/?file=x', gatewayRunning: true,

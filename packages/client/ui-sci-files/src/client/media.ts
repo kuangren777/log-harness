@@ -10,12 +10,9 @@ import { extensionOf } from './paths.ts'
 /** The preview renderers this mode ships. */
 export type PreviewKind = 'markdown' | 'text' | 'image' | 'pdf' | 'office' | 'binary'
 
-/** Media types the Univer runtime owns; the frame renders them, not a byte read. */
+/** The one media type the Univer runtime owns; the frame renders it, not a byte read. */
 const OFFICE_MEDIA_TYPES: ReadonlySet<string> = new Set([
   'application/x-univer',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ])
 
 /** Non-`text/` media types whose content is still source the code arm shows. */

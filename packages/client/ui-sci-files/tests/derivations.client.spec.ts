@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ConversationNode, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
 import {
-  ancestorsOf, extensionOf, fileName, isHiddenName, isOfficePath, isVersionsDirectory,
+  ancestorsOf, extensionOf, fileName, isConvertibleOfficePath, isHiddenName, isOfficePath, isVersionsDirectory,
 } from '../src/client/paths.ts'
 import { dataUrl, formatSize, highlightLanguage, previewKindFor } from '../src/client/media.ts'
 import { embeddedViewerUrl } from '../src/client/office-url.ts'
@@ -40,11 +40,19 @@ describe('path arithmetic', () => {
     expect(extensionOf('/a/.gitignore')).toBe('')
   })
 
-  it('routes the four office extensions to the frame and nothing else', () => {
-    for (const path of ['a.univer', 'a.xlsx', 'a.docx', 'a.pptx', 'A.UNIVER']) {
+  it('routes only .univer to the frame; the OOXML trio is convertible, not framed', () => {
+    // The state route refuses everything but .univer — framing a .docx
+    // dead-ended in a runtime-unavailable notice (production defect).
+    for (const path of ['a.univer', 'A.UNIVER']) {
       expect(isOfficePath(path)).toBe(true)
+      expect(isConvertibleOfficePath(path)).toBe(false)
+    }
+    for (const path of ['a.xlsx', 'a.docx', 'a.pptx', 'A.DOCX']) {
+      expect(isOfficePath(path)).toBe(false)
+      expect(isConvertibleOfficePath(path)).toBe(true)
     }
     expect(isOfficePath('a.md')).toBe(false)
+    expect(isConvertibleOfficePath('a.md')).toBe(false)
   })
 
   it('tags a versions archive and hides dot-prefixed rows', () => {
@@ -82,9 +90,12 @@ describe('preview dispatch', () => {
     expect(previewKindFor('text/x-python')).toBe('text')
     expect(previewKindFor('application/json')).toBe('text')
     expect(previewKindFor('application/x-univer')).toBe('office')
-    expect(previewKindFor('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toBe('office')
-    expect(previewKindFor('application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe('office')
-    expect(previewKindFor('application/vnd.openxmlformats-officedocument.presentationml.presentation')).toBe('office')
+    // The OOXML trio reads as bytes with a conversion hint: the Viewer only
+    // opens .univer units, so an office kind here would loop back into the
+    // refusing state route.
+    expect(previewKindFor('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toBe('binary')
+    expect(previewKindFor('application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe('binary')
+    expect(previewKindFor('application/vnd.openxmlformats-officedocument.presentationml.presentation')).toBe('binary')
   })
 
   it('treats an unlisted type as opaque bytes', () => {

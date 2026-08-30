@@ -17,7 +17,7 @@ import type { SciFilesKey } from './locales.ts'
 import { OfficeFrame } from './OfficeFrame.tsx'
 import { decodeBase64 } from './download.ts'
 import { dataUrl, formatSize, highlightLanguage, previewKindFor } from './media.ts'
-import { fileName, isOfficePath } from './paths.ts'
+import { fileName, isConvertibleOfficePath, isOfficePath } from './paths.ts'
 import css from './FilePreview.module.css'
 
 /** Owner-supplied preview props: the file to show and the two wire calls. */
@@ -104,6 +104,11 @@ function FileBody({ file, sessionId, officeState, t }: {
     <div className={css.body}>
       <div className={css.meta}>{t('preview.size', { size: formatSize(file.size), mediaType: file.mediaType })}</div>
       {renderTyped(kind, file, t)}
+      {/* An office format the Viewer cannot open directly says how it becomes
+          openable, instead of dead-ending in a runtime-unavailable notice. */}
+      {isConvertibleOfficePath(file.path) && (
+        <div className={css.note}>{t('preview.officeConvert')}</div>
+      )}
     </div>
   )
 }

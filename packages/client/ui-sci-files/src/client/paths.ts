@@ -7,8 +7,11 @@
 /** Directory name the sci workspace keeps append-only; the tree tags it read-only. */
 const VERSIONS_DIRECTORY = 'versions'
 
-/** Extensions routed to the office frame instead of a byte read. */
-const OFFICE_EXTENSIONS: ReadonlySet<string> = new Set(['.univer', '.xlsx', '.docx', '.pptx'])
+/** The one extension the Univer state route accepts, routed to the office frame. */
+const UNIVER_EXTENSION = '.univer'
+
+/** Office formats the Viewer cannot open directly; `univer_import` converts them. */
+const CONVERTIBLE_OFFICE_EXTENSIONS: ReadonlySet<string> = new Set(['.xlsx', '.docx', '.pptx'])
 
 /** Split positions of both path separators. */
 const SEPARATORS = /[/\\]/
@@ -35,14 +38,27 @@ export function extensionOf(path: string): string {
 }
 
 /**
- * Whether a path is an office document the Univer runtime owns. Routing on
- * the extension keeps a `.univer` SQLite container off the read RPC entirely:
- * the frame streams it from the Gateway instead.
+ * Whether a path is a `.univer` unit the office frame renders. Routing on the
+ * extension keeps the SQLite container off the read RPC entirely: the frame
+ * streams it from the Gateway instead. ONLY `.univer` qualifies — the state
+ * route refuses every other extension, so sending a `.docx` here dead-ends in
+ * a runtime-unavailable notice (the production defect this split fixed).
  * @param path - separator-joined path.
- * @returns true for `.univer`, `.xlsx`, `.docx`, and `.pptx`.
+ * @returns true for `.univer`.
  */
 export function isOfficePath(path: string): boolean {
-  return OFFICE_EXTENSIONS.has(extensionOf(path))
+  return extensionOf(path) === UNIVER_EXTENSION
+}
+
+/**
+ * Whether a path is an office format the Viewer cannot open until
+ * `univer_import` converts it into a `.univer` unit. These read as ordinary
+ * bytes (download still works) with a conversion hint instead of a frame.
+ * @param path - separator-joined path.
+ * @returns true for `.xlsx`, `.docx`, and `.pptx`.
+ */
+export function isConvertibleOfficePath(path: string): boolean {
+  return CONVERTIBLE_OFFICE_EXTENSIONS.has(extensionOf(path))
 }
 
 /**
