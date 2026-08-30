@@ -130,3 +130,20 @@ export interface SciSearchInjected {
    */
   readonly deepDive: (prompt: string) => void
 }
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    /**
+     * Per-record actions other packages contribute to a result card, drawn at
+     * the end of its action row in registration order.
+     *
+     * Declared by this package's `view` entry and owned by the card that
+     * renders it: the whole merged record is the owner share, so a
+     * contribution decides for itself what it needs (an id to check, a DOI to
+     * cite, a pdfUrl to fetch) without this package growing a member per
+     * consumer. Root scope like the view itself — a search runs with no
+     * session selected.
+     */
+    'search.result.actions': { kind: 'list'; scope: 'root'; owner: { record: LiteratureRecord } }
+  }
+}

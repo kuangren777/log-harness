@@ -28,6 +28,7 @@ usePinnedBrowserLanguages('zh-CN')
 const VIEW = 'view'
 const RAIL = 'rail.item'
 const TOOLVIEW = 'tool.call.toolview'
+const ACTIONS = 'search.result.actions'
 
 /** Cordis service key the mounted namespace registers itself under. */
 const NAMESPACE = 'remote.sci.literature'
@@ -187,6 +188,23 @@ describe('ui-sci-search plugin body', () => {
     for (const key of [VIEW, RAIL, TOOLVIEW]) {
       expect(b.slots.entries(key as never)).toHaveLength(0)
     }
+  })
+
+  it('declares the per-record action strip, and collapses it with the view', async () => {
+    const b = await bench()
+    b.declare()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+
+    expect(b.slots.entries(VIEW as never)[0]?.children).toEqual({
+      [ACTIONS]: { kind: 'list', scope: 'root' },
+    })
+    expect(b.slots.spec(ACTIONS as never)).toEqual({ kind: 'list', scope: 'root' })
+
+    // Declaring is claiming: the seat exists exactly as long as the view that
+    // draws it, so composing this package out takes the strip with it.
+    await fiber.dispose()
+    expect(b.slots.spec(ACTIONS as never)).toBeUndefined()
   })
 
   it('installs whether the seats are declared before or after apply', async () => {

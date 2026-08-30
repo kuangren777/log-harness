@@ -35,15 +35,27 @@ function faceOf(overrides: Partial<SciSearchInjected> = {}) {
   }
 }
 
+/**
+ * The view's child-slot dispatcher, standing in for the renderer's: it draws
+ * one marker per call carrying the record it was given, which is what the
+ * per-card action strip has to prove.
+ */
+function stubRenderSlot() {
+  return vi.fn((key: string, owner: { record: LiteratureRecord }) => (
+    <span data-testid={key}>{`slot:${owner.record.id}`}</span>
+  ))
+}
+
 /** Mount the view over a live store instance, flushing its history read. */
 async function mount(overrides: Partial<SciSearchInjected> = {}) {
   const store = createSearchStore().create()
   const face = faceOf(overrides)
+  const renderSlot = stubRenderSlot()
   const props = {
-    useStore: bindSnapshotSelector(store), actions: store.actions, ...face, t,
+    useStore: bindSnapshotSelector(store), actions: store.actions, renderSlot, ...face, t,
   } as unknown as SearchViewProps
   await act(async () => { render(<SearchView {...props} />) })
-  return { store, face }
+  return { store, face, renderSlot }
 }
 
 /** Type one query into the box. */
@@ -210,9 +222,21 @@ describe('SearchView deep dive', () => {
   })
 })
 
+describe('SearchView contributed result actions', () => {
+  it('dispatches the strip once per drawn card, each with its own record', async () => {
+    const b = await mount()
+    type('zT')
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '检索' })) })
+
+    expect(b.renderSlot.mock.calls.map(call => call[1].record.id)).toEqual([FULL.id, BARE.id])
+    expect(screen.getAllByTestId('search.result.actions').map(node => node.textContent))
+      .toEqual([`slot:${FULL.id}`, `slot:${BARE.id}`])
+  })
+})
+
 /** One card's props over a record. */
 function cardProps(record: LiteratureRecord, onDeepDive = vi.fn()): ResultCardProps {
-  return { record, onDeepDive, t }
+  return { record, onDeepDive, renderSlot: stubRenderSlot() as unknown as ResultCardProps['renderSlot'], t }
 }
 
 describe('ResultCard', () => {
@@ -272,6 +296,13 @@ describe('ResultCard', () => {
     render(<ResultCard {...cardProps(FULL, onDeepDive)} />)
     fireEvent.click(screen.getByRole('button', { name: '在研究流中深入' }))
     expect(onDeepDive).toHaveBeenCalledWith(FULL)
+  })
+
+  it('offers its action row to the contributed strip, one dispatch per card', () => {
+    const props = cardProps(FULL)
+    render(<ResultCard {...props} />)
+    expect(props.renderSlot).toHaveBeenCalledWith('search.result.actions', { record: FULL })
+    expect(screen.getByTestId('search.result.actions').textContent).toBe(`slot:${FULL.id}`)
   })
 })
 

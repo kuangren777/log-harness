@@ -10,7 +10,9 @@
  */
 import { useEffect } from 'react'
 import { SciLogo } from '@deepseek-ai/dsh-client-ui-brand-sci/client'
-import type { InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type {
+  InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
+} from '@deepseek-ai/dsh-client-ui-slots'
 import type { LiteratureRecord, SciSearchInjected } from './contract.ts'
 import type { SearchStore } from './stores.ts'
 import { RecentChips } from './RecentChips.tsx'
@@ -33,6 +35,7 @@ const MS_PER_SECOND = 1000
 /** Full props of the search view, composed from its four shares. */
 export type SearchViewProps =
   PropsRuntime<'view', 'search'>
+  & PropsRenderSlots<'search.result.actions'>
   & PropsStore<SearchStore>
   & InjectFace<SciSearchInjected>
   & PropsLocale<'sci-search'>
@@ -42,7 +45,7 @@ export type SearchViewProps =
  * @param props - the view's composed slot props.
  * @returns the hero, the query box, the recent strip, and the result column.
  */
-export function SearchView({ useStore, actions, search, recent, forget, deepDive, t }: SearchViewProps) {
+export function SearchView({ useStore, actions, renderSlot, search, recent, forget, deepDive, t }: SearchViewProps) {
   const query = useStore(s => s.query)
   const status = useStore(s => s.status)
   const result = useStore(s => s.result)
@@ -138,7 +141,9 @@ export function SearchView({ useStore, actions, search, recent, forget, deepDive
               : (
                 <div className={css.cards}>
                   {result.records.map(record => (
-                    <ResultCard key={record.id} record={record} onDeepDive={dig} t={t} />
+                    <ResultCard
+                      key={record.id} record={record} onDeepDive={dig} renderSlot={renderSlot} t={t}
+                    />
                   ))}
                 </div>
               )}

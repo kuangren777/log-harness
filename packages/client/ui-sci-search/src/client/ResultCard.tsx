@@ -9,6 +9,7 @@
  */
 import { useEffect, useState } from 'react'
 import type { Translate } from '@deepseek-ai/dsh-client-locale/client'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { LiteratureRecord } from './contract.ts'
 import type { SciSearchKey } from './locales.ts'
 import { toBibtex } from './bibtex.ts'
@@ -32,6 +33,12 @@ export interface ResultCardProps {
   record: LiteratureRecord
   /** Take this record into the research flow. */
   onDeepDive: (record: LiteratureRecord) => void
+  /**
+   * The view's child-slot dispatcher, handed down verbatim: the authorizing
+   * identity stays the `view` entry that declared `search.result.actions`,
+   * and this card is only the render site.
+   */
+  renderSlot: PropsRenderSlots<'search.result.actions'>['renderSlot']
   /** Localized card copy. */
   t: Translate<SciSearchKey>
 }
@@ -85,7 +92,7 @@ async function writeClipboard(text: string): Promise<boolean> {
  * @param props - owner-controlled card props.
  * @returns the card.
  */
-export function ResultCard({ record, onDeepDive, t }: ResultCardProps) {
+export function ResultCard({ record, onDeepDive, renderSlot, t }: ResultCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [copy, setCopy] = useState<CopyState>('idle')
 
@@ -165,6 +172,7 @@ export function ResultCard({ record, onDeepDive, t }: ResultCardProps) {
         >
           {t('card.deepDive')}
         </button>
+        {renderSlot('search.result.actions', { record })}
         {copy !== 'idle' && (
           <span className={copy === 'copied' ? css.notice : `${css.notice} ${css.noticeFailed}`}>
             {copy === 'copied' ? t('card.copied') : t('card.copyFailed')}

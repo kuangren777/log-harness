@@ -32,6 +32,9 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {
   LiteratureSearchRequest, LiteratureSearchResult, RecentQuery, SciSearchInjected, SearchOutcome,
 } from './contract.ts'
+// Keep the contract module — and its ambient SlotMap merge for
+// 'search.result.actions' — in the built types consumers load.
+export type * from './contract.ts'
 import { LiteratureHits } from './LiteratureHits.tsx'
 import { SearchRailItem } from './RailItem.tsx'
 import { SearchView } from './SearchView.tsx'
@@ -233,8 +236,16 @@ export async function apply(ctx: ClientContext): Promise<void> {
   // slots.inject, not a bare register: each of the three declarations lives
   // in another package whose entry may activate after this one, and a
   // redeclaration must re-install the contribution.
+  // The view declares (and thereby authorizes) the per-record action strip its
+  // cards render. Declaring is claiming: this package owns the seat and draws
+  // it, and a package with nothing to contribute leaves every card unchanged.
   ctx.slots.inject('view', () => ctx.slots.register({
-    name: 'view', key: SEARCH_VIEW, locale: NS, store, inject: injected,
+    name: 'view',
+    key: SEARCH_VIEW,
+    locale: NS,
+    store,
+    inject: injected,
+    children: { 'search.result.actions': { kind: 'list', scope: 'root' } },
   }, SearchView))
 
   ctx.slots.inject('rail.item', () => ctx.slots.register({
