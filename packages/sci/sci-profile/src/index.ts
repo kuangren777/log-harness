@@ -7,9 +7,10 @@
  * and `config/agent-presets/` holds the two per-session compositions. The one
  * plugin here is the persona roster: this harness has no file-discovered agent
  * definitions, and `@deepseek-ai/dsh-tool-subagent` binds one persona per
- * MOUNTED row rather than per call, so the roster reaches the model as a
- * system-prompt section that the orchestrating thread copies into each child
- * prompt. The section is mounted by `sci-cluster` only: the balanced tier
+ * MOUNTED row rather than per call, so `sci-cluster` mounts that package once
+ * per persona as `subagent_researcher` … `subagent_deliverer` and the roster
+ * reaches the model as a system-prompt section naming which tool runs which
+ * charter. The section is mounted by `sci-cluster` only: the balanced tier
  * cannot fan out, so a roster there would describe agents it may not start.
  * @module @deepseek-ai/dsh-sci-profile
  */
@@ -38,7 +39,7 @@ export {
   parsePersonaDocument,
   renderPersonaRoster,
 } from './persona-file.ts'
-export type { SciPersona } from './types.ts'
+export type { SciPersona, SciPersonaDisplay } from './types.ts'
 
 /** Extension of a persona charter document. */
 const CHARTER_EXTENSION = '.md'

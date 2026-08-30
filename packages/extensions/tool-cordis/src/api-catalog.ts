@@ -1210,6 +1210,39 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'sciAgents',
+    summary: 'The roster, its configuration, and its delegation log.',
+    description: 'The roster, its configuration, and its delegation log.\n\nThe service performs reads only, apart from the one settings write AgentsRuntime.configure makes; it never creates, resumes, or drives an Agent or Session.',
+    methods: [
+      {
+        signature: '@Remote(\'roster\') async roster(): Promise<RosterResult>',
+        description: 'The six personas with their live configuration and this month\'s real usage.',
+        parameters: [],
+        returns: 'the roster, in `PERSONA_NAMES` order.',
+      },
+      {
+        signature: '@Remote(\'configure\') async configure(request: ConfigureRequest): Promise<ConfigureResult>',
+        description: 'Write one persona\'s availability, base model, or permissions.\n\nThe write lands in the delegation tool\'s own settings section, which that tool re-reads on its next execution — so the change reaches the next delegation without re-registering the tool or restarting the session.',
+        parameters: [{ name: 'request', description: 'the persona and the fields the gesture changed.' }],
+        returns: 'the persona as the roster reports it after the write.',
+        throws: ['Error when no persona carries the id, or when the deployment\'s composition mounts no delegation tool for it.'],
+      },
+      {
+        signature: '@Remote(\'calls\') async calls(request: CallsRequest): Promise<CallsResult>',
+        description: 'One persona\'s delegations, newest first.',
+        parameters: [{ name: 'request', description: 'the persona and how many rows to return.' }],
+        returns: 'the delegation log.',
+        throws: ['Error when no persona carries the id.'],
+      },
+      {
+        signature: '@Remote(\'models\') async models(): Promise<ModelsResult>',
+        description: 'The base models this deployment can route a child to.\n\nRead from `ctx.llm` — the same directory `sessions.models` serves the session model picker from — rather than from a list of this package\'s own, so a provider a deployment added is offered here the moment it registers. A provider whose catalog lookup fails is reported instead of failing the read, exactly as the session picker treats it: the other providers stay choosable.',
+        parameters: [],
+        returns: 'the catalog, and the providers that did not answer.',
+      },
+    ],
+  },
+  {
     key: 'sciAudit',
     summary: 'The audit projection, its cold rebuild, and the per-session summary.',
     description: 'The audit projection, its cold rebuild, and the per-session summary.\n\nThe service reads the session log and writes only its own three tables; it never creates, resumes, or drives an Agent or Session.',
@@ -3363,6 +3396,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type Branded<B extends string> = string & {\n    readonly [BRAND]: B;\n};',
   },
   {
+    name: 'CallsRequest',
+    declaration: 'export interface CallsRequest {\n    readonly persona: string;\n    readonly limit?: number;\n}',
+  },
+  {
+    name: 'CallsResult',
+    declaration: 'export interface CallsResult {\n    readonly calls: readonly AgentCall[];\n}',
+  },
+  {
     name: 'CancelOptions',
     declaration: 'export interface CancelOptions {\n    keepInbox?: boolean | undefined;\n}',
   },
@@ -3517,6 +3558,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CompactionTrigger',
     declaration: 'export type CompactionTrigger = \'pressure\' | \'context-overflow\';',
+  },
+  {
+    name: 'ConfigureRequest',
+    declaration: 'export interface ConfigureRequest {\n    readonly persona: string;\n    readonly patch: AgentPatch;\n}',
+  },
+  {
+    name: 'ConfigureResult',
+    declaration: 'export interface ConfigureResult {\n    readonly agent: RosterAgent;\n}',
   },
   {
     name: 'ConfinedArgv',
@@ -4295,6 +4344,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ModelModalityMap {\n    text: \'text\';\n    image: \'image\';\n}',
   },
   {
+    name: 'ModelsResult',
+    declaration: 'export interface ModelsResult {\n    readonly providers: readonly ModelProvider[];\n    readonly failures: readonly ModelCatalogFailure[];\n}',
+  },
+  {
     name: 'ObjectJsonSchema',
     declaration: 'export type ObjectJsonSchema = JsonSchemaNode & {\n    type: \'object\';\n};',
   },
@@ -4537,6 +4590,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ResumeAgentOptions',
     declaration: 'export interface ResumeAgentOptions {\n    readonly resumeSessionId: SessionId;\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
+  },
+  {
+    name: 'RosterResult',
+    declaration: 'export interface RosterResult {\n    readonly agents: readonly RosterAgent[];\n}',
   },
   {
     name: 'RpcError',

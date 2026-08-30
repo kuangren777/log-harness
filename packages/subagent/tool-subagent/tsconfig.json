@@ -30,6 +30,9 @@
       "path": "../../core/system-prompt"
     },
     {
+      "path": "../../settings/settings"
+    },
+    {
       "path": "../subagent"
     },
     {

@@ -12,6 +12,7 @@
     { "path": "../../core/session" },
     { "path": "../../core/system-prompt" },
     { "path": "../sci-plan" },
+    { "path": "../sci-tier" },
     { "path": "../../runtime-diagnostics/invariants" }
   ]
 }

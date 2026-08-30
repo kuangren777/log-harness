@@ -1,0 +1,26 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cosmokit" },
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
+    { "path": "../../core/session" },
+    { "path": "../../llm/llm" },
+    { "path": "../../preset/agent-presets" },
+    { "path": "../../session-query/session-query" },
+    { "path": "../../settings/settings" },
+    { "path": "../../subagent/subagent" },
+    { "path": "../../subagent/tool-subagent" },
+    { "path": "../../typert/protocol" },
+    { "path": "../sci-audit" },
+    { "path": "../sci-plan" },
+    { "path": "../sci-profile" },
+    { "path": "../sci-tier" },
+    { "path": "../../runtime-diagnostics/invariants" }
+  ]
+}

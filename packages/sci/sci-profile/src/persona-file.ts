@@ -10,7 +10,8 @@
 
 import { parse } from 'yaml'
 import { ICON_PERSONA, PERSONA_NAMES, type PersonaName, type PlanIcon } from '@deepseek-ai/dsh-sci-plan'
-import type { SciPersona } from './types.ts'
+import { subagentToolName } from '@deepseek-ai/dsh-sci-tier'
+import type { SciPersona, SciPersonaDisplay } from './types.ts'
 
 /** Display name of the roster section, and the title a `sci:*` context may cite. */
 export const SECTION_PERSONAS = 'Research personas'
@@ -35,6 +36,80 @@ function splitDocument(text: string): { frontmatter: string; body: string } | un
   return {
     frontmatter: normalized.slice(FENCE.length + 1, end + 1),
     body: normalized.slice(end + FENCE.length + 2),
+  }
+}
+
+/**
+ * Read the optional `tools.deny` frontmatter list.
+ *
+ * A charter states its exclusions in prose ("do not deliver files"), which the
+ * child reads and may still disregard. `tools.deny` is the same sentence made
+ * enforceable: the names go into the mounted row's `toolFilter.deny`, which
+ * `ctx.tools.restrict()` applies at child creation, so a denied tool is absent
+ * from the child's prompt and refuses to execute. None of the six charters this
+ * package ships declares one — their exclusions cover tools a deployment may
+ * rename — so the field exists for a deployment that points `agentsRoot` at its
+ * own tree.
+ * @param fields - the parsed frontmatter mapping.
+ * @param source - the document path, for the thrown message.
+ * @returns the denied tool names, or `undefined` when the document declares none.
+ * @throws Error when `tools` is present but is not a mapping whose `deny` is a
+ *   non-empty array of non-empty strings.
+ */
+function readToolDenials(fields: Record<string, unknown>, source: string): readonly string[] | undefined {
+  const tools = fields.tools
+  if (tools === undefined) return undefined
+  if (typeof tools !== 'object' || tools === null || Array.isArray(tools)) {
+    throw new Error(`sci-profile: persona document ${source} has a "tools" frontmatter field that is not a mapping`)
+  }
+  const deny = (tools as Record<string, unknown>).deny
+  if (!Array.isArray(deny) || deny.length === 0 || deny.some(name => typeof name !== 'string' || name.trim() === '')) {
+    throw new Error(
+      `sci-profile: persona document ${source} declares "tools" but its "deny" is not a non-empty list of tool names`,
+    )
+  }
+  return (deny as string[]).map(name => name.trim())
+}
+
+/**
+ * Read one field of a `display` block as a non-empty string.
+ * @param block - the parsed `display` mapping.
+ * @param key - the field to read.
+ * @param source - the document path, for the thrown message.
+ * @returns the trimmed value.
+ * @throws Error when the field is absent, not a string, or blank.
+ */
+function requireDisplayField(block: Record<string, unknown>, key: string, source: string): string {
+  const value = block[key]
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`sci-profile: persona document ${source} declares "display" without a non-empty "${key}"`)
+  }
+  return value.trim()
+}
+
+/**
+ * Read the optional `display` frontmatter block.
+ *
+ * All three fields are required together once the block exists: a card drawn
+ * with a title and no body would be worse than one drawn from the English
+ * fallback, because the gap is invisible to whoever wrote the document.
+ * @param fields - the parsed frontmatter mapping.
+ * @param source - the document path, for the thrown message.
+ * @returns the card copy, or `undefined` when the document declares none.
+ * @throws Error when `display` is present but is not a mapping carrying all
+ *   three non-empty string fields.
+ */
+function readDisplay(fields: Record<string, unknown>, source: string): SciPersonaDisplay | undefined {
+  const display = fields.display
+  if (display === undefined) return undefined
+  if (typeof display !== 'object' || display === null || Array.isArray(display)) {
+    throw new Error(`sci-profile: persona document ${source} has a "display" frontmatter field that is not a mapping`)
+  }
+  const block = display as Record<string, unknown>
+  return {
+    name: requireDisplayField(block, 'name', source),
+    role: requireDisplayField(block, 'role', source),
+    description: requireDisplayField(block, 'description', source),
   }
 }
 
@@ -66,7 +141,9 @@ function requireField(fields: Record<string, unknown>, key: string, source: stri
  * @returns the parsed persona.
  * @throws Error when the frontmatter is missing or malformed, when `name` is not
  *   one of the six personas `@deepseek-ai/dsh-sci-plan` defines, when `icon` is
- *   present but is not the icon that selects this persona, or when the body is blank.
+ *   present but is not the icon that selects this persona, when `tools` is
+ *   present but carries no usable `deny` list, when `display` is present but
+ *   incomplete, or when the body is blank.
  */
 export function parsePersonaDocument(text: string, source: string): SciPersona {
   const split = splitDocument(text)
@@ -90,7 +167,15 @@ export function parsePersonaDocument(text: string, source: string): SciPersona {
   if (charter === '') {
     throw new Error(`sci-profile: persona document ${source} has an empty charter body`)
   }
-  const persona: SciPersona = { name: name as PersonaName, summary, charter }
+  const deny = readToolDenials(fields, source)
+  const display = readDisplay(fields, source)
+  const persona: SciPersona = {
+    name: name as PersonaName,
+    summary,
+    charter,
+    ...deny === undefined ? {} : { deny },
+    ...display === undefined ? {} : { display },
+  }
   if (fields.icon === undefined) return persona
   const icon = requireField(fields, 'icon', source)
   const routed: string | undefined = (ICON_PERSONA as Readonly<Record<string, string>>)[icon]
@@ -135,16 +220,26 @@ export function assertCompleteRoster(personas: readonly SciPersona[]): void {
  */
 export function renderPersonaRoster(personas: readonly SciPersona[]): string {
   const lines = [
-    'Six personas are defined for this profile. A subagent or workflow step runs as one of them: '
-    + 'open the child prompt with that persona\'s charter, verbatim, before the task text. '
-    + 'A `declare_research_plan` icon selects the persona for its step, and the two personas no icon reaches are chosen from the step\'s own task text.',
+    'Six personas are defined for this profile, and each one is a delegation tool of its own: '
+    + 'delegate a step to a persona by calling `subagent_<persona>`. The tool carries that persona\'s '
+    + 'charter into its child, so the `prompt` you send is the task alone — do not restate the charter, '
+    + 'and do not ask one persona to do another\'s work. '
+    + 'A `declare_research_plan` icon selects the persona for its step; `plotter`, which no icon reaches, '
+    + 'is chosen from the step\'s own task text.',
     '',
   ]
   for (const persona of personas) {
     const selector = persona.icon === undefined
       ? 'no icon selects it'
       : `selected by the \`${persona.icon}\` icon`
-    lines.push(`### ${persona.name} (${selector})`, '', persona.summary, '', persona.charter, '')
+    lines.push(
+      `### ${persona.name} — \`${subagentToolName(persona.name)}\` (${selector})`,
+      '',
+      persona.summary,
+      '',
+      persona.charter,
+      '',
+    )
   }
   return lines.join('\n').trimEnd()
 }

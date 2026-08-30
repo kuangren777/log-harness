@@ -1,0 +1,204 @@
+/* The roster: a title block over a two-column card grid. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.subtitle {
+  margin-top: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12.5px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  padding: 22px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 20px;
+  background: var(--dsw-sci-card-bg);
+}
+
+.head {
+  display: flex;
+  gap: 13px;
+  align-items: center;
+}
+
+.glyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 15px;
+  background: linear-gradient(135deg, var(--dsw-sci-accent-a), var(--dsw-sci-accent-b));
+  /* The accent gradient is the same hex in both themes, so the glyph on it
+     must be too: the theme-flipping label aliases go dark here and leave the
+     letter unreadable on #0a68ff. */
+  color: var(--dsw-static-neutral-bluish-00);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  color: var(--dsw-alias-label-primary);
+  font-size: 15.5px;
+  font-weight: 700;
+}
+
+.role {
+  margin-top: 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11.5px;
+}
+
+.pill {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 11px;
+  border-radius: var(--dsw-sci-radius-pill);
+  font-size: 11px;
+}
+
+.pillStandby {
+  background: var(--dsw-sci-chip-bg);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.pillRunning {
+  background: var(--dsw-alias-state-success-secondary);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.pillOff {
+  background: var(--dsw-sci-chip-bg);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentcolor;
+}
+
+.summary {
+  margin: 14px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.tiles {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.tile {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--dsw-sci-chip-bg);
+}
+
+.tileValue {
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--dsw-font-family-mono, ui-monospace, monospace);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.tileLabel {
+  margin-top: 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+}
+
+.actions {
+  display: flex;
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.secondary {
+  flex: 1;
+  padding: 8px 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 11px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.secondary:hover {
+  background: var(--dsw-sci-hover-bg);
+}
+
+.primary {
+  flex: 1;
+  padding: 8px 0;
+  border: none;
+  border-radius: 11px;
+  background: var(--dsw-sci-chip-bg);
+  color: var(--dsw-alias-brand-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.primary:hover {
+  opacity: 0.82;
+}
+
+.empty {
+  margin: 24px 0 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12.5px;
+}
+
+.error {
+  margin-top: 24px;
+  padding: 14px 18px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-sci-radius-card);
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12.5px;
+}

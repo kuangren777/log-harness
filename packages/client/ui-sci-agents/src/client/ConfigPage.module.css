@@ -1,0 +1,80 @@
+/* One persona's settings: the save indicator over a column of setting cards. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 640px;
+}
+
+.save {
+  margin-top: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11.5px;
+}
+
+.saveFailed {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.card {
+  padding: 20px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 17px;
+  background: var(--dsw-sci-card-bg);
+}
+
+.cardTitle {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.note {
+  margin: 9px 0 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.provider {
+  margin-top: 11px;
+}
+
+.providerName {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  width: fit-content;
+  margin-top: 7px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--dsw-sci-hover-bg);
+}
+
+.segment {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.segment:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.segmentOn {
+  background: var(--dsw-sci-card-bg);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}

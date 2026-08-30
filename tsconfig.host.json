@@ -297,6 +297,7 @@
     { "path": "./packages/sci/sci-literature" },
     { "path": "./packages/sci/sci-library" },
     { "path": "./packages/sci/sci-citations" },
+    { "path": "./packages/sci/sci-agents" },
     { "path": "./packages/sci/sci-plan" },
     { "path": "./packages/sci/sci-guard" },
     { "path": "./packages/sci/sci-credit" },

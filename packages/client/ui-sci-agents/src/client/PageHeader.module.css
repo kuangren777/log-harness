@@ -1,0 +1,64 @@
+/* The header both persona pages share: the way back, then the identity line. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.back {
+  display: inline-flex;
+  flex: none;
+  gap: 7px;
+  align-self: flex-start;
+  align-items: center;
+  padding: 7px 15px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-sci-radius-pill);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.back:hover {
+  background: var(--dsw-sci-hover-bg);
+  color: var(--dsw-alias-label-primary);
+}
+
+.identity {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.glyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--dsw-sci-accent-a), var(--dsw-sci-accent-b));
+  /* The accent gradient is the same hex in both themes, so the glyph on it
+     must be too: the theme-flipping label aliases go dark here and leave the
+     letter unreadable on #0a68ff. */
+  color: var(--dsw-static-neutral-bluish-00);
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.title {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.role {
+  margin-top: 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}

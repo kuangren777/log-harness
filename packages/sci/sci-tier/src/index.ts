@@ -55,7 +55,12 @@ export {
   TIER_SECTIONS,
   TIER_SECTION_ORDER,
 } from './chapter.ts'
-export { DEFAULT_FANOUT_TOOLS } from './config.ts'
+export {
+  DEFAULT_FANOUT_TOOLS,
+  PERSONA_FANOUT_TOOLS,
+  SUBAGENT_TOOL_PREFIX,
+  subagentToolName,
+} from './config.ts'
 export {
   FORK_NAMESPACE,
   SERVICE_KEY,

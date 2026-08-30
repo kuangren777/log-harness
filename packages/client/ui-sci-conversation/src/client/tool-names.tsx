@@ -36,6 +36,13 @@ const TOOL_ICONS: Readonly<Record<string, ReactNode>> = {
 /** Prefix of the office runtime's tool family, which shares one glyph. */
 const OFFICE_PREFIX = 'univer_'
 
+/**
+ * Prefix of the persona-bound delegation tools (`subagent_researcher` and its
+ * five siblings), which the sci-cluster preset mounts in place of the single
+ * generic `subagent`.
+ */
+const SUBAGENT_PREFIX = 'subagent_'
+
 /** The tools whose card body is the galaxy board rather than a tool view. */
 const AGENT_TOOLS: ReadonlySet<string> = new Set(['subagent', 'workflow'])
 
@@ -47,6 +54,7 @@ const AGENT_TOOLS: ReadonlySet<string> = new Set(['subagent', 'workflow'])
 export function toolIcon(name: string): ReactNode {
   const known = TOOL_ICONS[name]
   if (known !== undefined) return known
+  if (name.startsWith(SUBAGENT_PREFIX)) return <IconAgentPresetOutline16 size={GLYPH_SIZE} />
   return name.startsWith(OFFICE_PREFIX)
     ? <IconDataOutline16 size={GLYPH_SIZE} />
     : <IconSparkle16 size={GLYPH_SIZE} />
@@ -58,5 +66,5 @@ export function toolIcon(name: string): ReactNode {
  * @returns whether the card body is the galaxy.
  */
 export function isAgentTool(name: string): boolean {
-  return AGENT_TOOLS.has(name)
+  return AGENT_TOOLS.has(name) || name.startsWith(SUBAGENT_PREFIX)
 }

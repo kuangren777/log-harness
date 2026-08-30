@@ -113,13 +113,65 @@
 - id: tool-subagent-report
   name: '@deepseek-ai/dsh-tool-subagent-report'
 
-- id: tool-subagent
+# One delegation tool per persona, the shape `sci-cluster` ships: the persona
+# is bound to the MOUNTED row, so the six names in `fanoutTools` above are what
+# the G1 latch actually gates. The charters here are one-line stand-ins — the
+# shipped preset restates the full documents from
+# `packages/sci/sci-profile/config/agents/`.
+
+- id: tool-subagent-researcher
   name: '@deepseek-ai/dsh-tool-subagent'
   config:
     provider: spawn
-    toolName: subagent
+    toolName: subagent_researcher
     backgroundMode: continuable
     maxDepth: 1
+    persona: Gather sources and report what they say, with a link behind every claim.
+
+- id: tool-subagent-adversary
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_adversary
+    backgroundMode: continuable
+    maxDepth: 1
+    persona: Attack a finished claim and report only the ways it fails.
+
+- id: tool-subagent-scout
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_scout
+    backgroundMode: continuable
+    maxDepth: 1
+    persona: Locate one file, fact, or dataset and return where it is.
+
+- id: tool-subagent-writer
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_writer
+    backgroundMode: continuable
+    maxDepth: 1
+    persona: Produce the prose or code a step owes, in the directories the model owns.
+
+- id: tool-subagent-plotter
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_plotter
+    backgroundMode: continuable
+    maxDepth: 1
+    persona: Run the sciplot render path; no other persona renders a figure.
+
+- id: tool-subagent-deliverer
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_deliverer
+    backgroundMode: continuable
+    maxDepth: 1
+    persona: Copy finished work into the delivery workspace; no other persona delivers.
 
 - id: workflow-worker-thread
   name: '@deepseek-ai/dsh-workflow-worker-thread'
@@ -177,6 +229,12 @@
     fanoutTools:
       - workflow
       - subagent
+      - subagent_researcher
+      - subagent_adversary
+      - subagent_scout
+      - subagent_writer
+      - subagent_plotter
+      - subagent_deliverer
       - subagent_fork
       - subagent_codex
       - subagent_claude_code

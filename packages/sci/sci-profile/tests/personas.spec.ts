@@ -6,6 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import { PERSONA_NAMES } from '@deepseek-ai/dsh-sci-plan'
+import { subagentToolName } from '@deepseek-ai/dsh-sci-tier'
 import type { PersonaName } from '@deepseek-ai/dsh-sci-plan'
 import * as SciProfile from '../src/index.ts'
 import * as SciProfileInvariant from '../src/invariant.ts'
@@ -55,6 +56,18 @@ describe('loadPersonas', () => {
     }
   })
 
+  it('ships card copy for every persona the browser roster draws', () => {
+    // The agent view reads `display` and falls back to the English charter
+    // fields when a document declares none; the SHIPPED tree must never make it
+    // fall back, or six English one-liners would reach a Chinese product page.
+    for (const persona of SciProfile.loadPersonas(SciProfile.BUNDLED_AGENTS_ROOT)) {
+      expect(persona.display, persona.name).toBeDefined()
+      expect(persona.display?.name.length, persona.name).toBeGreaterThan(0)
+      expect(persona.display?.role.length, persona.name).toBeGreaterThan(0)
+      expect(persona.display?.description.length, persona.name).toBeGreaterThan(0)
+    }
+  })
+
   it('gives plotter and deliverer the exclusive charter the profile promises', () => {
     const personas = SciProfile.loadPersonas(SciProfile.BUNDLED_AGENTS_ROOT)
     const by = new Map(personas.map(persona => [persona.name, persona.charter]))
@@ -100,7 +113,8 @@ describe('the sci-profile plugin', () => {
     const assembled = await ctx.systemPrompt.assemble()
     const text = JSON.stringify(assembled)
     expect(text).toContain(SciProfile.SECTION_PERSONAS)
-    for (const name of PERSONA_NAMES) expect(text, name).toContain(`### ${name} (`)
+    // The roster heading now names the tool the persona is mounted behind.
+    for (const name of PERSONA_NAMES) expect(text, name).toContain(`### ${name} \u2014 \`${subagentToolName(name)}\``)
   })
 
   it('defaults to the charters shipped inside this package', async () => {

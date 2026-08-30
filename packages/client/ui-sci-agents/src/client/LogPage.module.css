@@ -1,0 +1,95 @@
+/* One persona's delegation log: a table whose rows reopen their session. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.table {
+  width: 100%;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 17px;
+  border-collapse: collapse;
+  overflow: hidden;
+  background: var(--dsw-sci-card-bg);
+  font-size: 12px;
+  text-align: left;
+}
+
+.caption {
+  padding: 0 0 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-align: left;
+}
+
+.table th {
+  padding: 11px 17px;
+  background: var(--dsw-sci-chip-bg);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.table td {
+  padding: 12px 17px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-primary);
+}
+
+.row {
+  cursor: pointer;
+  transition: background var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.row:hover,
+.row:focus-visible {
+  background: var(--dsw-sci-hover-bg);
+  outline: none;
+}
+
+.mono {
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--dsw-font-family-mono, ui-monospace, monospace);
+  white-space: nowrap;
+}
+
+.task {
+  width: 100%;
+  min-width: 0;
+}
+
+.status {
+  color: var(--dsw-alias-state-success-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.failed {
+  color: var(--dsw-alias-state-error-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.empty {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12.5px;
+}
+
+.error {
+  padding: 14px 18px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-sci-radius-card);
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12.5px;
+}
+
+.running {
+  color: var(--dsw-alias-brand-text);
+  font-weight: 600;
+  white-space: nowrap;
+}

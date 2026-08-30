@@ -27,6 +27,18 @@ A foreground call passes the execution signal through startup and execution, awa
 | `toolFilter` | Per-child global-tool restriction; requires `toolFilter` capability. |
 | `maxDepth` | Absolute delegation-depth cap, default `3` (`0` forbids delegation); a numeric cap requires the `depthLimit` capability and fails the mount without it. `'provider-managed'` sends no cap for an out-of-process provider whose budget belongs to the child harness. The tool stays visible at the cap; each attempted start checks the calling agent's current depth and returns an errored tool result when rejected. |
 
+## Runtime settings
+
+Each mounted instance registers the settings namespace named after its tool — `subagent` for the default name, `subagent-researcher` for `subagent_researcher`, since `_` becomes the `-` a namespace admits — and re-reads the resolved section on every execution, so a committed change reaches the next delegation without re-registering the tool. The composition entry is the section's `base` layer: a deployment that composes no settings service, and one whose provider detaches, both run on that entry unchanged.
+
+| Key | Meaning |
+|---|---|
+| `enabled` | Whether delegation is permitted, default `true`. A disabled instance keeps its tool registered and refuses every call with `该智能体已停用，请在「智能体」页启用后再委派。` without starting a child, so the calling model observes the refusal instead of a tool catalog that changed mid-conversation. |
+| `model` | Child `provider` and `model`, required together, replacing the entry's `agentOptions` route; the entry's `maxTokens` stands. |
+| `toolFilter` | `deny` is the union of the entry's list and this one — an entry denial is a floor no stored section lifts — while `allow`, being a whitelist, replaces the entry's. Requires the provider's `toolFilter` capability: a stored filter on a provider without it fails the delegation, not the mount. |
+
+`provider`, `toolName`, `enableRunInBackground`, `backgroundMode`, `persona`, and `maxDepth` stay composition-only. They decide what the tool is — its identity in the model's catalog, the scheduling promise its own schema already made, and its recursion budget — rather than whether and how one delegation runs.
+
 ## Concurrency
 
 Foreground and background calls are concurrency-safe: sibling delegations in one assistant message overlap under the loop's rolling pool (`maxParallelToolCalls`), and results still commit in model order. Children work in their own sessions and a run never mutates the parent session; the one-shot background form's one parent-owned write — registering a Task — is a synchronous, commutative insertion that tolerates concurrent dispatch, so overlapping background calls acquire their job ids in dispatch-race order. Coordinating sibling workspace effects belongs to the model, exactly as it already does for background and continuable children. See the [parallel subagent Agent Note](../../../.agents/notes/implemented/feature/2026-08-09-parallel-subagent-delegations.md) and the [parallel tool-call Agent Note](../../../.agents/notes/implemented/feature/2026-07-10-parallel-tool-call-execution.md).
@@ -51,7 +63,7 @@ Prefix-stable while provider instances, names, descriptions, and schemas are unc
 
 #### What the model sees
 
-The call retains the description and prompt. Success contains only the child's final text; other outcomes become `Error: <stop reason>`, followed by a safe provider diagnostic when present and then any partial assistant text. Intermediate child steps stay out of the parent.
+The call retains the description and prompt. Success contains only the child's final text; other outcomes become `Error: <stop reason>`, followed by a safe provider diagnostic when present and then any partial assistant text. A disabled instance returns `Error: 该智能体已停用，请在「智能体」页启用后再委派。` and starts no child. Intermediate child steps stay out of the parent.
 
 #### Token effect
 
@@ -79,4 +91,5 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 - **Background runs expose no result through this tool** — a one-shot task's final output is collected through the generic task surface, and a continuable child's output stays in its own session, read by its subagent id. The settlement notice states how that child ended and carries any final assistant message, but it is not this call's return value and cannot be awaited here.
 - **Duplicate names across waiting one-shot instances are detected late** (`TODO(subagent-dup-toolname)`) — continuable instances reserve their prompt-section name during plugin application, but preventing provider-registration rollback for waiting one-shot instances requires a registry of intended names.
-- **Child policy is fixed per instance** — another model, persona, tool filter, or depth cap requires another distinctly named tool.
+- **Persona and depth cap are fixed per instance** — availability, the child's model route, and extra tool denials are retunable through the runtime settings section, but another persona or depth cap still requires another distinctly named tool.
+- **Reasoning effort does not reach the child** — `AgentOptions` carries `provider`, `model`, and `maxTokens` only, and the loop seeds a child request from exactly those, so no per-instance effort setting is offered. Passing one would need a field on `AgentOptions` and its seeding in `dsh-agent-loop`; see the [subagent runtime settings Agent Note](../../../.agents/notes/proposed/architecture/2026-08-30-subagent-runtime-settings.md).

@@ -5,6 +5,12 @@
  * Background policy is selected by this plugin's configuration: one-shot
  * calls own a plain Task, while continuable calls use
  * `ctx.subagents.startContinuable()`.
+ *
+ * The composition entry fixes what a mounted instance can never change
+ * (provider, tool name, scheduling policy, depth cap). The subset a
+ * deployment's operator retunes between delegations — availability, the
+ * child's model route, and extra tool denials — is the settings section
+ * {@link RuntimeConfig}, re-read on every execution.
  * @module @deepseek-ai/dsh-tool-subagent
  */
 
@@ -14,6 +20,8 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { AgentOptions } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
+import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import { assertSubagentMaxDepth, settleRun } from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider, SubagentResult, SubagentRun } from '@deepseek-ai/dsh-subagent'
 import type { JobOutcome } from '@deepseek-ai/dsh-jobs'
@@ -97,6 +105,135 @@ export const Config: z<Config> = z.object({
   }).default(undefined as unknown as { allow: string[]; deny: string[] }),
   maxDepth: z.union([z.natural().max(Number.MAX_SAFE_INTEGER), z.const('provider-managed' as const)]).default(3),
 })
+
+/**
+ * Stored runtime settings for one mounted delegation tool, layered over the
+ * composition entry and re-read on every execution. Only the fields an
+ * operator retunes between delegations live here: the provider route,
+ * scheduling policy, persona, and depth cap stay compile-time {@link Config}
+ * because changing them changes what the tool IS, not whether and how it runs.
+ */
+export interface RuntimeConfig {
+  /**
+   * Whether delegation through this tool is permitted. A disabled instance
+   * keeps its tool registered and refuses every call with
+   * {@link SUBAGENT_DISABLED_MESSAGE} instead of starting a child, so the
+   * refusal is visible to the calling model rather than silently changing the
+   * tool catalog mid-conversation.
+   */
+  enabled: boolean
+  /**
+   * Child model route replacing the entry's `agentOptions.provider`/`model`.
+   * Both fields are required together: a provider without a model selects
+   * nothing. The entry's `agentOptions.maxTokens` is preserved.
+   */
+  model?: {
+    /** Provider route the child runs on. */
+    provider: string
+    /** Model id interpreted by that provider's adapter. */
+    model: string
+  }
+  /**
+   * Tool scoping layered over the entry's `toolFilter`: `deny` is the UNION of
+   * both lists (the entry's denials are a floor no stored section can lift),
+   * while `allow`, being a whitelist, replaces the entry's when present.
+   * Requires the provider's `toolFilter` capability — a stored filter on a
+   * provider without it fails the delegation, not the mount.
+   */
+  toolFilter?: {
+    /** Global tool names the child keeps; everything else is removed. */
+    allow?: string[]
+    /** Global tool names removed from the child, on top of the entry's. */
+    deny?: string[]
+  }
+}
+
+/** Schema resolving one instance's settings namespace; see {@link RuntimeConfig}. */
+export const RuntimeConfig: z<RuntimeConfig> = z.object({
+  enabled: z.boolean().default(true),
+  // Preserve omission the way Config does: a materialized `{}` would read as
+  // an explicit route with neither field set.
+  model: z.object({
+    provider: z.string().required(),
+    model: z.string().required(),
+  }).default(undefined as unknown as { provider: string; model: string }),
+  toolFilter: z.object({
+    allow: z.array(z.string()).default(undefined as unknown as string[]),
+    deny: z.array(z.string()).default(undefined as unknown as string[]),
+  }).default(undefined as unknown as { allow: string[]; deny: string[] }),
+})
+
+/**
+ * Refusal a disabled instance returns to the calling model. Product copy: the
+ * model cannot re-enable the agent, so the text names the surface where the
+ * person running the deployment can.
+ */
+export const SUBAGENT_DISABLED_MESSAGE = '该智能体已停用，请在「智能体」页启用后再委派。'
+
+/**
+ * Settings namespace carrying one mounted instance's {@link RuntimeConfig}.
+ * Derived from the model-facing tool name so a configuration surface can map
+ * a tool the model calls to the section that governs it without a registry.
+ * @param toolName - the instance's model-facing tool name.
+ * @returns the branded namespace, with `_` rewritten to the `-` a namespace admits.
+ * @throws {TypeError} when the rewritten name is not lowercase kebab-case.
+ */
+export function subagentSettingsNamespace(toolName: string): SettingsNamespace {
+  return settingsNamespace(toolName.replaceAll('_', '-'))
+}
+
+/**
+ * Project the composition entry into the settings `base` layer, so a stored
+ * section overrides values a reader can see rather than invisible defaults.
+ * @param config - the mounted instance's composition entry.
+ * @returns the runtime settings this instance runs with before any stored section.
+ */
+function runtimeEntry(config: Config): RuntimeConfig {
+  const { provider, model } = config.agentOptions ?? {}
+  return {
+    enabled: true,
+    // A partial entry route selects no model, so it contributes no base layer;
+    // `agentOptions` keeps supplying its own fields at resolution.
+    ...provider !== undefined && model !== undefined ? { model: { provider, model } } : {},
+    ...config.toolFilter !== undefined ? { toolFilter: config.toolFilter } : {},
+  }
+}
+
+/**
+ * Resolve the child's agent options: the stored route replaces the entry's
+ * provider/model pair and leaves every other entry field standing.
+ * @param configured - the entry's `agentOptions`, if any.
+ * @param override - the stored route, if any.
+ * @returns the options to send with the start request, or `undefined` for none.
+ */
+function resolveAgentOptions(
+  configured: AgentOptions | undefined,
+  override: RuntimeConfig['model'],
+): AgentOptions | undefined {
+  if (override === undefined) return configured
+  return { ...configured, provider: override.provider, model: override.model }
+}
+
+/**
+ * Resolve the child's tool filter: denials union, allow-list replaces.
+ * @param configured - the entry's `toolFilter`, if any.
+ * @param override - the stored `toolFilter`, if any.
+ * @returns the filter to send with the start request, or `undefined` when
+ *   neither layer names anything.
+ */
+function resolveToolFilter(
+  configured: Config['toolFilter'],
+  override: RuntimeConfig['toolFilter'],
+): Config['toolFilter'] {
+  const allow = override?.allow ?? configured?.allow
+  const denied = [...configured?.deny ?? [], ...override?.deny ?? []]
+  const deny = denied.length === 0 ? undefined : [...new Set(denied)]
+  if (allow === undefined && deny === undefined) return undefined
+  return {
+    ...allow === undefined ? {} : { allow },
+    ...deny === undefined ? {} : { deny },
+  }
+}
 
 /** Render text blocks from the canonical JSON block array without trusting arbitrary values. */
 function outputValueText(values: JsonValue[]): string {
@@ -284,6 +421,19 @@ export function apply(ctx: Context, config: Config): void {
   const backgroundEnabled = config.enableRunInBackground !== false
   const continuable = (config.backgroundMode ?? 'one-shot') === 'continuable'
   const toolName = config.toolName ?? 'subagent'
+  const entry = runtimeEntry(config)
+  // Every execution re-reads this thunk, so a committed change reaches the
+  // next delegation without re-registering the tool, and a deployment with no
+  // settings service keeps running on the composition entry.
+  let runtime: () => RuntimeConfig = () => entry
+  installSettingsSection(ctx, subagentSettingsNamespace(toolName), RuntimeConfig, entry, {
+    setSource: (source) => {
+      runtime = source
+    },
+    // Nothing is derived at registration time: the tool projects the section
+    // per call, so a committed change needs no re-registration.
+    onChange: () => {},
+  })
   // Mirror provider lifecycle because sibling load order and HMR replacement
   // can change provider availability while this fiber remains active.
   let disposeTool: (() => void) | undefined
@@ -376,6 +526,12 @@ export function apply(ctx: Context, config: Config): void {
       // (tasks.start) is a synchronous commutative insertion.
       isConcurrencySafe: () => true,
       async execute(args, exec) {
+        const settings = runtime()
+        if (!settings.enabled) {
+          // The registry converts this throw to isError: a refusal must never
+          // reach the model as a started delegation it can wait on.
+          throw new Error(SUBAGENT_DISABLED_MESSAGE)
+        }
         const parent = exec.agent
         if (!parent) {
           // Non-agent callers provide no parent for delegation ownership.
@@ -383,13 +539,15 @@ export function apply(ctx: Context, config: Config): void {
         }
 
         const maxDepth = typeof config.maxDepth === 'number' ? config.maxDepth : undefined
+        const agentOptions = resolveAgentOptions(config.agentOptions, settings.model)
+        const toolFilter = resolveToolFilter(config.toolFilter, settings.toolFilter)
         const request = {
           label: args.description,
           prompt: [{ type: 'text', text: args.prompt }] as ContentBlock[],
           parent,
-          ...config.agentOptions !== undefined ? { agentOptions: config.agentOptions } : {},
+          ...agentOptions !== undefined ? { agentOptions } : {},
           ...config.persona !== undefined ? { persona: config.persona } : {},
-          ...config.toolFilter !== undefined ? { toolFilter: config.toolFilter } : {},
+          ...toolFilter !== undefined ? { toolFilter } : {},
           ...maxDepth !== undefined ? { maxDepth } : {},
         }
 

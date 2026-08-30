@@ -27,6 +27,18 @@
 | `toolFilter` | 每个子 agent 独立的全局工具限制；要求提供方具备 `toolFilter` 能力。 |
 | `maxDepth` | 绝对委派深度上限，默认 `3`（`0` 禁止委派）；数值上限要求 `depthLimit` 能力，缺失时挂载失败。对于预算由子 harness 拥有的进程外提供方，`'provider-managed'` 不发送上限。工具在达到上限时仍然可见；每次尝试启动都会检查调用 agent 的当前深度，被拒绝时返回出错的工具结果。 |
 
+## 运行时设置
+
+每个已挂载实例都会注册一个以其工具命名的设置命名空间——默认名称对应 `subagent`，`subagent_researcher` 对应 `subagent-researcher`，因为 `_` 会替换为命名空间允许的 `-`——并在每次执行时重新读取解析后的 section，因此已提交的改动会在下一次委派时生效，无需重新注册工具。组装项（composition entry）是该 section 的 `base` 层：既没有组装设置服务的部署，以及设置提供方已分离的部署，都会原样按该组装项运行。
+
+| 键 | 含义 |
+|---|---|
+| `enabled` | 是否允许委派，默认 `true`。停用的实例仍保留其工具注册，并以 `该智能体已停用，请在「智能体」页启用后再委派。` 拒绝每一次调用且不创建子 agent，因此调用方模型看到的是这条拒绝，而不是一份在会话中途变化的工具目录。 |
+| `model` | 子 agent 的 `provider` 与 `model`，两者必须同时给出，用于替换组装项 `agentOptions` 中的路由；组装项的 `maxTokens` 保持不变。 |
+| `toolFilter` | `deny` 是组装项列表与本列表的并集——组装项的拒绝是任何存储 section 都无法解除的下限——而 `allow` 作为白名单会替换组装项的白名单。要求提供方具备 `toolFilter` 能力：在不具备该能力的提供方上，存储的过滤器会让这次委派失败，而不是让挂载失败。 |
+
+`provider`、`toolName`、`enableRunInBackground`、`backgroundMode`、`persona` 和 `maxDepth` 仍然只属于组装项。它们决定这个工具**是什么**——它在模型工具目录中的身份、其自身 schema 已经做出的调度承诺，以及它的递归预算——而不是某一次委派是否运行、如何运行。
+
 ## 并发
 
 前台调用和后台调用均并发安全：同一条 assistant 消息中的同级委派会在循环的滚动池（`maxParallelToolCalls`）下重叠执行，结果仍按模型顺序提交。子 agent 在各自的会话中工作，一次运行绝不变更父会话；一次性后台形态对父级拥有状态的唯一写入是注册一个 Task——这是一次同步、可交换、能容忍并发分发的插入，因此重叠的后台调用按分发竞态顺序获得各自的 job id。协调同级工作区效果由模型负责，正如模型已经对后台和可继续子 agent 所承担的那样。见 [并行 subagent Agent Note](../../../.agents/notes/implemented/feature/2026-08-09-parallel-subagent-delegations.zh.md) 和 [并行工具调用 Agent Note](../../../.agents/notes/implemented/feature/2026-07-10-parallel-tool-call-execution.zh.md)。
@@ -51,7 +63,7 @@
 
 #### 模型看到的内容
 
-调用会保留描述和提示词。成功时只包含子 agent 的最终文本；其他结果会变为 `Error: <终止原因>`，随后在存在时附上安全的提供方诊断，再附上任何部分 assistant 文本。子 agent 中间步骤不会进入父级。
+调用会保留描述和提示词。成功时只包含子 agent 的最终文本；其他结果会变为 `Error: <终止原因>`，随后在存在时附上安全的提供方诊断，再附上任何部分 assistant 文本。停用的实例会返回 `Error: 该智能体已停用，请在「智能体」页启用后再委派。` 且不创建子 agent。子 agent 中间步骤不会进入父级。
 
 #### Token 影响
 
@@ -79,4 +91,5 @@
 
 - **后台运行不通过本工具公开结果**：一次性任务的最终输出通过通用 Task 接口收集，可继续子 agent 的输出留在其自身会话中，按其 subagent id 读取。结算通知会说明该子 agent 如何结束，并携带可能存在的最终 assistant 消息，但它不是本次调用的返回值，也无法在此等待。
 - **等待中的一次性实例较晚才发现重复名称**（`TODO(subagent-dup-toolname)`）：可继续实例会在插件应用期间预留提示词 section 名称，但若要阻止等待中的一次性实例回滚提供方注册，仍需要一份预期名称注册表。
-- **每个实例的子 agent 策略固定**：其他模型、persona、工具过滤器或深度上限都需要另一个名称不同的工具。
+- **每个实例的 persona 与深度上限固定**：可用性、子 agent 的模型路由以及额外的工具拒绝项都可以通过运行时设置 section 调整，但更换 persona 或深度上限仍需要另一个名称不同的工具。
+- **推理力度无法传递到子 agent**：`AgentOptions` 只携带 `provider`、`model` 和 `maxTokens`，而循环也正是仅按这三项为子 agent 请求播种，因此不提供按实例设置推理力度的选项。要传递它，需要在 `AgentOptions` 上新增字段并在 `dsh-agent-loop` 中为其播种；见 [subagent 运行时设置 Agent Note](../../../.agents/notes/proposed/architecture/2026-08-30-subagent-runtime-settings.zh.md)。
