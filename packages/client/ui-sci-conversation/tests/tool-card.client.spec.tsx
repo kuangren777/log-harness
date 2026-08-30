@@ -107,14 +107,20 @@ describe('card readings', () => {
     expect(isAgentTool('subagents')).toBe(false)
   })
 
-  it('summarizes a call by its first string argument, on one line and capped', () => {
-    expect(summarizeArgs(settled())).toBe('ls -la /home/user/sci')
+  it('abstracts a call: description first, ten characters at most, never the raw content', () => {
+    // The default fixture's command is longer than the clamp: the head shows
+    // an abstract, the full command stays in the details column.
+    expect(summarizeArgs(settled())).toBe('ls -la /ho…')
+    // The model's own description outranks every other argument.
+    expect(summarizeArgs(running({ argsRaw: '{"command":"ls -la /x","description":"列出目录"}' }))).toBe('列出目录')
+    // The clamp counts code points, so CJK text is not half-priced.
+    expect(summarizeArgs(running({ argsRaw: JSON.stringify({ description: '一二三四五六七八九十十一' }) }))).toBe('一二三四五六七八九十…')
     // Newlines collapse: the head is one line.
     expect(summarizeArgs(running({ argsRaw: '{"command":"a\\n\\n  b"}' }))).toBe('a b')
     // A leading non-string and a blank string are both skipped.
     expect(summarizeArgs(running({ argsRaw: '{"count":3,"blank":"  ","q":"kept"}' }))).toBe('kept')
     const long = 'x'.repeat(80)
-    expect(summarizeArgs(running({ argsRaw: JSON.stringify({ q: long }) }))).toBe(`${'x'.repeat(60)}…`)
+    expect(summarizeArgs(running({ argsRaw: JSON.stringify({ q: long }) }))).toBe(`${'x'.repeat(10)}…`)
     // Nothing to summarize: no string field, a non-object, or truncated JSON.
     expect(summarizeArgs(running({ argsRaw: '{"count":3}' }))).toBe('')
     expect(summarizeArgs(running({ argsRaw: '42' }))).toBe('')
@@ -128,7 +134,7 @@ describe('the tool card head', () => {
   it('names a settled call by its noun, summarizes it, and reports its recorded wall time', () => {
     mount(settled())
     expect(screen.getByText('命令执行')).toBeTruthy()
-    expect(screen.getByText('ls -la /home/user/sci')).toBeTruthy()
+    expect(screen.getByText('ls -la /ho…')).toBeTruthy()
     // Dispatched at 3000ms, settled at 8000ms.
     expect(screen.getByText('5 秒')).toBeTruthy()
     expect(screen.getByText(zh['card.done'])).toBeTruthy()
@@ -167,10 +173,10 @@ describe('the tool card head', () => {
 })
 
 describe('the disclosure', () => {
-  it('opens a running call, because that is the moment its body is news', () => {
+  it('keeps even a running ordinary call shut: the stream carries abstracts, not output', () => {
     mount(running())
-    expect(screen.getByLabelText(zh['card.collapse']).getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getByTestId('tool-body')).toBeTruthy()
+    expect(screen.getByLabelText(zh['card.expand']).getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByTestId('tool-body')).toBeNull()
   })
 
   it('leaves a settled call shut, and the user toggle wins from then on', () => {

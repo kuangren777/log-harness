@@ -286,9 +286,10 @@ describe('the board inside a delegating card', () => {
     // A running delegation opens itself, and its body is the board — both
     // siblings, not just the call the card draws.
     expect(screen.getByText('survey halide doping')).toBeTruthy()
-    // Twice: the card head summarizes its own arguments, and the board rows
-    // that same call as one of the turn's delegations.
-    expect(screen.getAllByText('fit zT curves')).toHaveLength(2)
+    // Once each: the card head shows the clamped abstract of its own
+    // arguments, and the board rows the full task text of that delegation.
+    expect(screen.getByText('fit zT cur…')).toBeTruthy()
+    expect(screen.getAllByText('fit zT curves')).toHaveLength(1)
     expect(screen.getByText(zh['galaxy.center'])).toBeTruthy()
     // The per-tool view the owner handed over is displaced, not stacked.
     expect(screen.queryByTestId('tool-body')).toBeNull()

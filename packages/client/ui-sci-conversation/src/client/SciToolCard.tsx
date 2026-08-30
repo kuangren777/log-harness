@@ -28,8 +28,13 @@ import type { SciConversationKey } from './locales.ts'
 import { isAgentTool, toolIcon } from './tool-names.tsx'
 import css from './SciToolCard.module.css'
 
-/** Longest argument summary the head prints before eliding. */
-const SUMMARY_LIMIT = 60
+/**
+ * Longest argument summary the head prints, in characters the reader counts
+ * (code points, so CJK text is not half-priced). Ten by product decision: the
+ * head is an abstract of the call, never the call itself — the raw command
+ * and its output live in the details column, not the stream.
+ */
+const SUMMARY_LIMIT = 10
 
 /** How often a running card refreshes its live seconds. */
 const TICK_MS = 1_000
@@ -65,15 +70,17 @@ export function cardStatus(block: ToolCallBlock): CardStatus {
 }
 
 /**
- * One line of what the model asked this tool to do.
+ * One line of what the model asked this tool to do — the ABSTRACT, never the
+ * content.
  *
- * The first string argument is the one every tool of this harness puts the
- * subject in — the command, the path, the query, the description — so the
- * summary needs no per-tool table. Newlines collapse because the head is one
- * line, and a truncated argument string summarizes nothing rather than
- * guessing at the half that arrived.
+ * An explicit `description` argument wins when the call carries one (the
+ * model's own abstract of the call); otherwise the first string argument
+ * stands in — the command, the path, the query. Either way the head clamps
+ * to {@link SUMMARY_LIMIT} characters, so a shell one-liner or a long query
+ * never spills into the stream; the full arguments stay in the details
+ * column. Newlines collapse because the head is one line.
  * @param block - the call in either lifecycle form.
- * @returns the summary, or an empty string when the call names no subject.
+ * @returns the clamped summary, or an empty string when the call names no subject.
  */
 export function summarizeArgs(block: ToolCallBlock): string {
   const raw = 'kind' in block ? block.call?.argsRaw ?? '' : block.argsRaw
@@ -84,11 +91,14 @@ export function summarizeArgs(block: ToolCallBlock): string {
     return ''
   }
   if (typeof args !== 'object' || args === null) return ''
-  for (const value of Object.values(args as Record<string, unknown>)) {
+  const record = args as Record<string, unknown>
+  const described = typeof record['description'] === 'string' ? [record['description']] : []
+  for (const value of [...described, ...Object.values(record)]) {
     if (typeof value !== 'string') continue
     const line = value.replace(/\s+/gu, ' ').trim()
     if (line.length === 0) continue
-    return line.length > SUMMARY_LIMIT ? `${line.slice(0, SUMMARY_LIMIT)}…` : line
+    const points = Array.from(line)
+    return points.length > SUMMARY_LIMIT ? `${points.slice(0, SUMMARY_LIMIT).join('')}…` : line
   }
   return ''
 }
@@ -140,7 +150,10 @@ export function SciToolCard({
   toolName, block, selected, turn, inspect, openDetails, body, children, useSession, t,
 }: SciToolCardProps) {
   const status = cardStatus(block)
-  const [open, setOpen] = useState(status === 'running')
+  // Only a delegating call opens itself: its body is the live agent board.
+  // Every other tool stays an abstract one-liner until the user asks — the
+  // stream is for scanning, and command output belongs to the details column.
+  const [open, setOpen] = useState(status === 'running' && isAgentTool(toolName))
   // The clock only moves while this call is in flight; a settled card reads
   // its elapsed off recorded timestamps and mounts no timer at all.
   const now = useLiveNow(status === 'running')
@@ -148,7 +161,10 @@ export function SciToolCard({
   const elapsedMs = callElapsedMs(block, now)
   const summary = summarizeArgs(block)
   return (
-    <div className={css.card} data-status={status} data-open={open || undefined} data-card-selected={selected || undefined}>
+    <div
+      className={css.card} data-sci-tool-card data-status={status}
+      data-open={open || undefined} data-card-selected={selected || undefined}
+    >
       <div className={css.head}>
         <button
           type="button"

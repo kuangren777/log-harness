@@ -49,3 +49,23 @@
 [data-phase='hero'] [data-composer-card] {
   max-width: min(var(--dsh-composer-card-max-width), 720px);
 }
+
+/* Consecutive tool calls read as ONE card: the run shares a border box and a
+ * hairline divider instead of sixteen separate cards. The negative margin
+ * cancels the flow column's 16px row gap between two tool-call seats; a Think
+ * row or an assistant step between calls breaks the run naturally. The inner
+ * selector is this package's own card attribute, so the rule touches nothing
+ * another skin draws into the same seat. */
+[data-chat-flow-kind='tool-call']:has(+ [data-chat-flow-kind='tool-call']) [data-sci-tool-card] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+}
+[data-chat-flow-kind='tool-call'] + [data-chat-flow-kind='tool-call'] {
+  margin-top: -16px;
+}
+[data-chat-flow-kind='tool-call'] + [data-chat-flow-kind='tool-call'] [data-sci-tool-card] {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}

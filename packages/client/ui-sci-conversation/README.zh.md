@@ -30,5 +30,5 @@ None；本包既不组装也不发送任何模型请求。
 
 - **已结束的委派，其星系会自行停表。** 活时钟属于自身调用仍在运行的那张卡片，因此一张已经结束、而兄弟委派仍在跑的 `subagent` 卡片，只会在会话发布下一次快照时刷新。轮次运行期间快照是连续的，所以可见影响仅限于收尾的空闲阶段。
 - **位置未解析的委派调用，其展开体仍是普通工具视图。** 星系需要轮次号才能寻址兄弟委派，而引擎无法解析位置的 Chat Node 报不出轮次；这类调用渲染它自己的工具视图，而不是一块空看板。
-- **换肤依赖出厂对话流的八个属性。** `[data-phase]`（对话根节点，也是 `--dsh-chat-content-width` 的声明处）、`[data-phase='hero']`、`[data-chat-flow-kind='user']` 与 `[data-chat-flow-kind='steering']`（节点座位）、`[data-chat-flow-kind='assistant-step']`、`[data-turn-tail]`、`[data-composer-card]`（输入卡片）。其中任何一个被改名或去掉，读它的那条规则就会静默失效；CSS 没有任何机制让这件事报错。输入框那条规则把 `--dsw-alias-button-info-fill` 与 `--dsw-alias-button-info-hover` 限定在卡片内重定义，因此卡片内其他读这两个 token 的元素也会一并变成渐变。
+- **换肤依赖出厂对话流的九个属性。** `[data-phase]`（对话根节点，也是 `--dsh-chat-content-width` 的声明处）、`[data-phase='hero']`、`[data-chat-flow-kind='user']` 与 `[data-chat-flow-kind='steering']`（节点座位）、`[data-chat-flow-kind='assistant-step']`、`[data-chat-flow-kind='tool-call']`（连续的该座位围绕本包自己的 `[data-sci-tool-card]` 融合为一张视觉卡）、`[data-turn-tail]`、`[data-composer-card]`（输入卡片）。其中任何一个被改名或去掉，读它的那条规则就会静默失效；CSS 没有任何机制让这件事报错。输入框那条规则把 `--dsw-alias-button-info-fill` 与 `--dsw-alias-button-info-hover` 限定在卡片内重定义，因此卡片内其他读这两个 token 的元素也会一并变成渐变。
 - **`subagent` 结果里的 token 数是乐观读取的。** 面板会在已结束的委派上找 `meta.usage.outputTokens`，因为子运行的用量如果存在就该在那里；wire 契约并不强制它，所以在不上报用量的部署上整列 token 会直接消失，而不是显示为零。
