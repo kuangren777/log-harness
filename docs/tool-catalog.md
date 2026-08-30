@@ -19,6 +19,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-sci-plan` | `declare_research_plan` | `ctx.tools` | `tool/call`, `sci/plan-declared`, `tool/result` | - | declare_research_plan names the parallel lines of work before a fan-out; the tier gate consumes its sci/plan-declared event and refuses a fan-out tool until one is declared. |
 | `@deepseek-ai/dsh-sci-literature` | `literature_search` | `ctx.tools`, `ctx.systemPrompt`, `ctx.storageDomain` | `tool/call`, `sci/literature-searched`, `tool/result` | - | literature_search fans out to OpenAlex, Semantic Scholar, arXiv, and Crossref in one call and merges them, so the model-visible schema does not change when a source is dropped from `sources`. |
 | `@deepseek-ai/dsh-sci-library` | `library_add`, `library_search` | `ctx.tools`, `ctx.systemPrompt`, `ctx.storageDomain`, `ctx.fs`, `ctx.webServer`, `ctx.connection` | `tool/call`, `sci/library-changed`, `tool/result` | - | library_search reads the user's own collection before the public indexes; library_add resolves a DOI or arXiv id through sci-literature when it is mounted and stores a manual entry otherwise. The prompt section pins the sandbox path stored files are opened from. |
+| `@deepseek-ai/dsh-sci-citations` | `citations_add`, `citations_list` | `ctx.tools`, `ctx.systemPrompt`, `ctx.storageDomain`, `ctx.fs` | `tool/call`, `sci/citations-changed`, `tool/result` | - | Neither tool requires a project: the slug is inferred from the session's working directory under `projectRoot`, and a session that is not inside a project gets a refusal rather than a guess. citations_add resolves a DOI or arXiv id through sci-literature and a library id through sci-library when either is mounted. |
 | `@deepseek-ai/dsh-sci-deliver` | `deliver_files` | `ctx.tools`, `ctx.fs`, `ctx.systemPrompt` | `tool/call`, `sci/delivered`, `sci/delivery-failed`, `tool/result` | - | deliver_files is the only way a file reaches the user; the in-sandbox `sci deliver` CLI writes the same request into the spool the plugin drains at turn start, through the same validation. |
 | `@deepseek-ai/dsh-camel-runtime` | `fork_workspace` | `ctx.tools`, `ctx.e2b` | `tool/call`, `sci/fork-completed`, `tool/result` | - | fork_workspace is the cluster tier's only way to run competing variants in isolation: every variant resumes from one AgentENV snapshot of the Dormice workspace, and only stdout, stderr, the exit code, and the collected directory flow back. |
 | `@deepseek-ai/dsh-office-univer` | `univer_api`, `univer_compile_svg`, `univer_execute`, `univer_export`, `univer_import`, `univer_inspect`, `univer_lint`, `univer_new`, `univer_resources`, `univer_screenshot`, `univer_status`, `univer_unit`, `univer_worktree` | `ctx.tools`, `ctx.univer`, `ctx.attachments` | `tool/call`, `tool/result`, `a tools/pre-execute approval ask on univer_worktree merge and discard` | - | The catalogued set is what `@deepseek-ai/dsh-office-univer/tools` registers with nothing withheld. Every name is withholdable through that row's `disabledTools`, and a deployment whose host ships no Chromium or no outbound network is expected to withhold `univer_screenshot`, `univer_lint`, and `univer_resources`; `univer_screenshot` additionally requires an attachment store. Mounting the package entry with its default `tools: true` registers the same set. |
@@ -279,6 +280,72 @@ Search the user's own knowledge base of saved papers, datasets, and notes, with 
 Source: [`packages/sci/sci-library/src/index.ts`](../packages/sci/sci-library/src/index.ts)
 
 library_search reads the user's own collection before the public indexes; library_add resolves a DOI or arXiv id through sci-literature when it is mounted and stores a manual entry otherwise. The prompt section pins the sandbox path stored files are opened from.
+
+<a id="deepseek-aidsh-sci-citations"></a>
+
+## `@deepseek-ai/dsh-sci-citations`
+
+### `citations_add`
+
+Resolve one work by DOI, arXiv id, or knowledge-base id and put it in the current paper project's citation pool, writing the entry into papers/&lt;slug&gt;/src/refs.bib. Returns the citekey to cite with. Always use this instead of writing a refs.bib entry or inventing a citekey by hand.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "description": "Project directory name. Omit to use the project this session is working in."
+    },
+    "doi": {
+      "type": "string",
+      "description": "DOI of the work, with or without the https://doi.org/ prefix."
+    },
+    "arxiv_id": {
+      "type": "string",
+      "description": "arXiv identifier without a version suffix, for example 2607.09182."
+    },
+    "library_id": {
+      "type": "string",
+      "description": "Knowledge-base entry id, when the work is already in the library."
+    },
+    "citekey": {
+      "type": "string",
+      "description": "Citekey to use. Omit to derive <family><year> with a de-duplicating suffix."
+    },
+    "group": {
+      "type": "string",
+      "description": "Group key to file the citation under. Defaults to ungrouped."
+    }
+  }
+}
+```
+
+Source: [`packages/sci/sci-citations/src/index.ts`](../packages/sci/sci-citations/src/index.ts)
+
+### `citations_list`
+
+List the citation pool of the current paper project: every citekey with its title, year, deterministic confidence score, group, and how many times the manuscript actually cites it. Use it before handing over a draft to check that no quarantined or unused entry is left in the text.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "description": "Project directory name. Omit to use the project this session is working in."
+    },
+    "group": {
+      "type": "string",
+      "description": "Only citations filed under this group key."
+    }
+  }
+}
+```
+
+Source: [`packages/sci/sci-citations/src/index.ts`](../packages/sci/sci-citations/src/index.ts)
+
+Neither tool requires a project: the slug is inferred from the session's working directory under `projectRoot`, and a session that is not inside a project gets a refusal rather than a guess. citations_add resolves a DOI or arXiv id through sci-literature and a library id through sci-library when either is mounted.
 
 <a id="deepseek-aidsh-sci-deliver"></a>
 

@@ -23,6 +23,7 @@
 | `@deepseek-ai/dsh-sci-plan` | `declare_research_plan` | `ctx.tools` | `tool/call`、`sci/plan-declared`、`tool/result` | - | declare_research_plan 在扇出前点名各条并行工作线；档位门禁消费其 sci/plan-declared 事件，在声明之前拒绝扇出工具。 |
 | `@deepseek-ai/dsh-sci-library` | `library_add`、`library_search` | `ctx.tools`、`ctx.systemPrompt`、`ctx.storageDomain`、`ctx.fs`、`ctx.webServer`、`ctx.connection` | `tool/call`、`sci/library-changed`、`tool/result` | - | library_search 先读用户自己的收藏，再考虑公开索引；library_add 在挂载了 sci-literature 时经它解析 DOI / arXiv id，否则按手工条目保存。prompt 章节点名已存文件在沙箱里的打开路径。 |
 | `@deepseek-ai/dsh-sci-literature` | `literature_search` | `ctx.tools`、`ctx.systemPrompt`、`ctx.storageDomain` | `tool/call`、`sci/literature-searched`、`tool/result` | - | literature_search 一次调用扇出到 OpenAlex、Semantic Scholar、arXiv 与 Crossref 并合并结果，因此从 `sources` 里去掉某个来源不会改变模型可见的 schema。 |
+| `@deepseek-ai/dsh-sci-citations` | `citations_add`、`citations_list` | `ctx.tools`、`ctx.systemPrompt`、`ctx.storageDomain`、`ctx.fs` | `tool/call`、`sci/citations-changed`、`tool/result` | - | 两个工具都不要求给出项目：slug 由会话工作目录在 `projectRoot` 之下推断，不在任何项目里的会话得到的是拒绝而不是猜测。citations_add 在挂载了 sci-literature 时经它解析 DOI / arXiv id，在挂载了 sci-library 时经它解析知识库条目 id。 |
 | `@deepseek-ai/dsh-sci-deliver` | `deliver_files` | `ctx.tools`、`ctx.fs`、`ctx.systemPrompt` | `tool/call`、`sci/delivered`、`sci/delivery-failed`、`tool/result` | - | deliver_files 是文件送达用户的唯一途径；沙箱内的 `sci deliver` CLI 把同一份请求写进 spool，插件在轮次开始时拾取，走同一条校验链。 |
 | `@deepseek-ai/dsh-camel-runtime` | `fork_workspace` | `ctx.tools`、`ctx.e2b` | `tool/call`、`sci/fork-completed`、`tool/result` | - | fork_workspace 是集群档在隔离环境里跑竞争变体的唯一途径：每个变体都从 Dormice 工作区的同一份 AgentENV 快照恢复，只有 stdout、stderr、退出码与收集目录回流。 |
 | `@deepseek-ai/dsh-office-univer` | `univer_api`、`univer_compile_svg`、`univer_execute`、`univer_export`、`univer_import`、`univer_inspect`、`univer_lint`、`univer_new`、`univer_resources`、`univer_screenshot`、`univer_status`、`univer_unit`、`univer_worktree` | `ctx.tools`、`ctx.univer`、`ctx.attachments` | `tool/call`、`tool/result`、`univer_worktree` 的 merge 与 discard 会触发一次 tools/pre-execute 审批 ask | - | 本目录收录的是 `@deepseek-ai/dsh-office-univer/tools` 在不撤下任何工具时注册的集合。每一个名字都可以通过该行的 `disabledTools` 撤下；宿主没有 Chromium 或没有出网的部署，应当撤下 `univer_screenshot`、`univer_lint` 与 `univer_resources`；`univer_screenshot` 还额外要求挂载附件存储。以默认的 `tools: true` 挂载包入口会注册同一个集合。 |
@@ -283,6 +284,72 @@ literature_search 一次调用扇出到 OpenAlex、Semantic Scholar、arXiv 与 
 源码：[`packages/sci/sci-library/src/index.ts`](../packages/sci/sci-library/src/index.ts)
 
 library_search 先读用户自己的收藏，再考虑公开索引；library_add 在挂载了 sci-literature 时经它解析 DOI / arXiv id，否则按手工条目保存。prompt 章节点名已存文件在沙箱里的打开路径。
+
+<a id="deepseek-aidsh-sci-citations"></a>
+
+## `@deepseek-ai/dsh-sci-citations`
+
+### `citations_add`
+
+按 DOI、arXiv id 或知识库条目 id 解析一篇文献，放进当前论文项目的引用池，并把条目写入 papers/&lt;slug&gt;/src/refs.bib。返回可用于引用的 citekey。任何时候都用它，不要手写 refs.bib 条目，也不要自己编 citekey。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "description": "Project directory name. Omit to use the project this session is working in."
+    },
+    "doi": {
+      "type": "string",
+      "description": "DOI of the work, with or without the https://doi.org/ prefix."
+    },
+    "arxiv_id": {
+      "type": "string",
+      "description": "arXiv identifier without a version suffix, for example 2607.09182."
+    },
+    "library_id": {
+      "type": "string",
+      "description": "Knowledge-base entry id, when the work is already in the library."
+    },
+    "citekey": {
+      "type": "string",
+      "description": "Citekey to use. Omit to derive <family><year> with a de-duplicating suffix."
+    },
+    "group": {
+      "type": "string",
+      "description": "Group key to file the citation under. Defaults to ungrouped."
+    }
+  }
+}
+```
+
+源码：[`packages/sci/sci-citations/src/index.ts`](../packages/sci/sci-citations/src/index.ts)
+
+### `citations_list`
+
+列出当前论文项目的引用池：每个 citekey 及其标题、年份、确定性置信分、分组，以及稿子实际引用它的次数。交稿前用它核对正文里没有留下被隔离或从未用上的条目。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "description": "Project directory name. Omit to use the project this session is working in."
+    },
+    "group": {
+      "type": "string",
+      "description": "Only citations filed under this group key."
+    }
+  }
+}
+```
+
+源码：[`packages/sci/sci-citations/src/index.ts`](../packages/sci/sci-citations/src/index.ts)
+
+两个工具都不要求给出项目：slug 由会话工作目录在 `projectRoot` 之下推断，不在任何项目里的会话得到的是拒绝而不是猜测。citations_add 在挂载了 sci-literature 时经它解析 DOI / arXiv id，在挂载了 sci-library 时经它解析知识库条目 id。
 
 <a id="deepseek-aidsh-sci-deliver"></a>
 

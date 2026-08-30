@@ -1,0 +1,26 @@
+isError: false
+---
+已加入引用池：[kutorasinski2015] Electronic structure and thermoelectric properties of n - and p -type SnSe from first-principles calculations · 置信 84% · 分组 ungrouped。正文引用写 \cite{kutorasinski2015} 或 `[kutorasinski2015]`。
+---
+isError: false
+---
+项目 demo：1 条引用 · 平均置信 84% · 0 条隔离
+[1] [kutorasinski2015] Electronic structure and thermoelectric properties of n - and p -type SnSe from first-principles calculations · 2015 · 置信 84% · 分组 ungrouped · 引用 0 处
+---
+sci events: [
+  {
+    "type": "sci/tier-resolved",
+    "data": {
+      "tier": "balanced",
+      "presetName": "sci-balanced"
+    }
+  },
+  {
+    "type": "sci/citations-changed",
+    "data": {
+      "project": "demo",
+      "op": "add",
+      "citekey": "kutorasinski2015"
+    }
+  }
+]
