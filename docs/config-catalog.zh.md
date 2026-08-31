@@ -2156,6 +2156,50 @@ export interface MemoryToolBinding {
 
 来源：[`packages/sci/sci-memory/src/index.ts:85`](../packages/sci/sci-memory/src/index.ts)
 
+<a id="deepseek-aidsh-sci-models"></a>
+
+## `@deepseek-ai/dsh-sci-models`
+
+需要：`llm`
+
+```ts config-catalog
+/** Deployment-varying choices for the model catalog. */
+export interface Config {
+  /** Base URL of the gate that publishes this tenant's catalog. */
+  gateUrl: string
+  /**
+   * Environment name holding the gate VM bearer token. The name rather than
+   * the token: the value identifies whose catalog is served and belongs in the
+   * container's Env beside the other credentials, not in a composition file.
+   */
+  vmTokenEnv: string
+  /** Environment name holding the CaMeL Hub base URL the `camel-api` route posts to. */
+  apiBaseEnv: string
+  /** Environment name holding the CaMeL Hub API key, resolved per request through the credential seam. */
+  apiKeyEnv: string
+  /**
+   * How often the catalog is re-read. An institution's model selection changes
+   * at human pace, so this trades how long a revoked model stays callable
+   * against a request per VM per interval.
+   */
+  refreshMs: number
+  /** HTTP deadline for one catalog read, after which it counts as unreachable. */
+  requestTimeoutMs: number
+  /**
+   * What happens to a model call made before any catalog has been read.
+   * `open` admits it, `closed` refuses it. The default is `open` because the
+   * gate already refuses a call this VM cannot pay for: a catalog that has not
+   * arrived yet is a selection problem, not a spending one.
+   */
+  failMode: FailMode
+}
+
+/** What enforcement does while no catalog has ever been read. */
+export type FailMode = 'closed' | 'open'
+```
+
+来源：[`packages/sci/sci-models/src/config.ts:33`](../packages/sci/sci-models/src/config.ts)
+
 <a id="deepseek-aidsh-sci-plan"></a>
 
 ## `@deepseek-ai/dsh-sci-plan`

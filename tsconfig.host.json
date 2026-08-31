@@ -301,6 +301,7 @@
     { "path": "./packages/sci/sci-plan" },
     { "path": "./packages/sci/sci-guard" },
     { "path": "./packages/sci/sci-credit" },
+    { "path": "./packages/sci/sci-models" },
     { "path": "./packages/sci/sci-audit" },
     { "path": "./packages/sci/sci-remote-hosts" },
     { "path": "./packages/sci/sci-tier" },

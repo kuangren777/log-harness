@@ -45,10 +45,12 @@
 - id: directory-picker
   disabled: true
 
-# Only the deployment's own DeepSeek relay serves models here: the multi-vendor
-# provider table (anthropic, bedrock, …) would let a tenant point sessions at a
-# third-party endpoint the credit meter cannot price. `llm-deepseek` stays, keyed
-# from the process environment.
+# Only routes this deployment owns serve models here: the multi-vendor provider
+# table (anthropic, bedrock, …) would let a tenant point sessions at a
+# third-party endpoint the credit meter cannot price. `llm-deepseek` stays,
+# keyed from the process environment, and `sci-models` (inserted below) adds the
+# one `camel-api` route whose models the gate has priced and the institution has
+# opened.
 - id: llm-pi-ai
   disabled: true
 # The sci profile ships its own brand + theme row (ui-brand-sci, inserted below).
@@ -242,6 +244,17 @@
         gateUrl: !!js process.env.SCI_GATE_URL ?? 'http://127.0.0.1:3079'
         vmToken: !!js process.env.SCI_GATE_VM_TOKEN
         spoolPath: !!js dshHomePath('sci/credit-spool.jsonl')
+
+    # The institution's model selection: the gate's per-tenant catalog, the
+    # `camel-api` provider route it opens, and the whitelist that refuses every
+    # model the institution has not opened — the built-in DeepSeek ones
+    # included. Every value is an environment NAME: the gate token says whose
+    # catalog is served and the hub key is a secret, so both stay in the
+    # container's Env rather than in this file.
+    - id: sci-models
+      name: '@deepseek-ai/dsh-sci-models'
+      config:
+        gateUrl: !!js process.env.SCI_GATE_URL ?? 'http://127.0.0.1:3079'
 
     # Memory nodes, the recall RPC, and the timing metric. A Typert Remote
     # service: it resolves on the host and the gateway serves its namespace to
