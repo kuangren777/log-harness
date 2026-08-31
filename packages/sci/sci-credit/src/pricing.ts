@@ -127,20 +127,41 @@ export function isPeak(at: Date, schedule: PeakSchedule): boolean {
 }
 
 /**
+ * One row's three prices with its resale multiplier already applied, left
+ * scaled by {@link MULTIPLIER_UNIT} because only their order matters here and
+ * dividing would round two rows onto the same number.
+ * @param row - the card row to scale.
+ * @returns the output, uncached-input, and cached-input prices, times the multiplier.
+ */
+function chargedPrices(row: PriceRow): { out: bigint; miss: bigint; hit: bigint } {
+  const ratio = BigInt(row.ratioX1000)
+  return {
+    out: BigInt(row.outMicros) * ratio,
+    miss: BigInt(row.missMicros) * ratio,
+    hit: BigInt(row.hitMicros) * ratio,
+  }
+}
+
+/**
  * The row an unlisted model is priced by: the most expensive one on the card.
  *
  * Comparison walks output, then uncached input, then cached input, then the
- * model id, so the choice is total and does not depend on card order. Erring
+ * model id, so the choice is total and does not depend on card order. Each
+ * price is read AFTER the row's resale multiplier, because that product is what
+ * a call on the row would be charged; comparing list prices would pick a
+ * cheaper row whenever a dearer one carries a bigger multiplier. Erring
  * expensive is the safe direction: the alternative is serving an unpriced
- * model for free until someone notices the ledger.
+ * model below cost until someone notices the ledger.
  * @param models - the card's rows; must be non-empty.
  * @returns the most expensive row.
  */
 function mostExpensive(models: readonly PriceRow[]): PriceRow {
   return models.reduce((left, right) => {
-    if (right.outMicros !== left.outMicros) return right.outMicros > left.outMicros ? right : left
-    if (right.missMicros !== left.missMicros) return right.missMicros > left.missMicros ? right : left
-    if (right.hitMicros !== left.hitMicros) return right.hitMicros > left.hitMicros ? right : left
+    const dearer = chargedPrices(right)
+    const held = chargedPrices(left)
+    if (dearer.out !== held.out) return dearer.out > held.out ? right : left
+    if (dearer.miss !== held.miss) return dearer.miss > held.miss ? right : left
+    if (dearer.hit !== held.hit) return dearer.hit > held.hit ? right : left
     return right.model > left.model ? right : left
   })
 }

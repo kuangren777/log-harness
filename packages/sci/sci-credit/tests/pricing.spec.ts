@@ -159,6 +159,58 @@ describe('rate-card lookup', () => {
     expect(resolvePriceRow({ ...TABLE, models }, 'absent').row.model).toBe(winner)
   })
 
+  it.each([
+    {
+      label: 'a dearer resale multiplier over a dearer output list price',
+      models: [
+        { model: 'a', hitMicros: 1, missMicros: 1, outMicros: 10, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+        { model: 'b', hitMicros: 1, missMicros: 1, outMicros: 9, peakMultiplierX1000: 1000, ratioX1000: 2000 },
+      ],
+      winner: 'b',
+    },
+    {
+      label: 'the uncached-input multiplier when the charged output prices tie',
+      models: [
+        { model: 'a', hitMicros: 1, missMicros: 10, outMicros: 10, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+        { model: 'b', hitMicros: 1, missMicros: 6, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 2000 },
+      ],
+      winner: 'b',
+    },
+    {
+      label: 'the cached-input multiplier when both charged input and output prices tie',
+      models: [
+        { model: 'a', hitMicros: 10, missMicros: 10, outMicros: 10, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+        { model: 'b', hitMicros: 6, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 2000 },
+      ],
+      winner: 'b',
+    },
+    {
+      label: 'the model id when two rows charge identically through different multipliers',
+      models: [
+        { model: 'z', hitMicros: 10, missMicros: 10, outMicros: 10, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+        { model: 'b', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 2000 },
+      ],
+      winner: 'z',
+    },
+  ])('reads the fallback prices after the resale multiplier, breaking on $label', ({ models, winner }) => {
+    expect(resolvePriceRow({ ...TABLE, models }, 'absent').row.model).toBe(winner)
+  })
+
+  it('charges the unlisted model what the chosen row actually costs, not its list price', () => {
+    const table: PriceTable = {
+      ...TABLE,
+      models: [
+        { model: 'listed', hitMicros: 0, missMicros: 1_000_000, outMicros: 0, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+        { model: 'resold', hitMicros: 0, missMicros: 900_000, outMicros: 0, peakMultiplierX1000: 1000, ratioX1000: 2000 },
+      ],
+    }
+
+    // The 0.90 list row charges 1.80 and the 1.00 list row charges 1.00, so
+    // erring expensive means the resold row and 1_800_000 micro-USD.
+    expect(quoteCharge({ inputTokens: 1_000_000, outputTokens: 0 }, table, 'absent', MONDAY_PEAK))
+      .toMatchObject({ usdMicros: 1_800_000, unknownModel: true, row: { model: 'resold' } })
+  })
+
   it('refuses a card that prices nothing, because no call could be charged from it', () => {
     expect(() => resolvePriceRow({ ...TABLE, models: [] }, 'cheap')).toThrow(/lists no models/)
   })

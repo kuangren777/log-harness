@@ -32,7 +32,7 @@ Each component is `round_half_up(tokens × micros ÷ 1_000_000)`, the four are s
 
 **The resale multiplier** `ratioX1000` is the only field that states what the platform charges on top of the provider's list price: `1000` resells at cost, `1500` charges 1.5×. It is applied last, to the peak-adjusted total, and is deliberately not folded into the peak multiplier — keeping the two steps separate leaves the official price and the markup separately auditable from one ledger row, and each step rounds half up on its own. A gate that serves rows without the field is read as `1000`, because reselling at the official price is the only safe reading of its silence.
 
-**An unlisted model** is priced by the most expensive row on the card and marked `unknownModel` on both the charge and the session record. Comparison walks output, then uncached input, then cached input, then the model id, so the choice does not depend on card order. Erring expensive is the safe direction: the alternative is serving an unpriced model for free until someone notices the ledger.
+**An unlisted model** is priced by the most expensive row on the card and marked `unknownModel` on both the charge and the session record. Comparison walks output, then uncached input, then cached input, then the model id, so the choice does not depend on card order, and each price is read **after** the row's resale multiplier — that product is what a call on the row would be charged, and comparing list prices would pick a cheaper row whenever a dearer one carries a bigger multiplier. Erring expensive is the safe direction: the alternative is serving an unpriced model below cost until someone notices the ledger.
 
 ## Configuration
 
