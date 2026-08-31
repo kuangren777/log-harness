@@ -106,6 +106,7 @@ const priceRow: z<PriceRow> = z.object({
   missMicros: z.number().step(1).min(0).required(),
   outMicros: z.number().step(1).min(0).required(),
   peakMultiplierX1000: z.number().step(1).min(1).default(1000),
+  ratioX1000: z.number().step(1).min(1).default(1000),
 })
 
 /** Schemastery schema for credit metering. */

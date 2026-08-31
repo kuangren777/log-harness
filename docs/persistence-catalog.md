@@ -660,13 +660,14 @@ Source: [`packages/sci/sci-citations/src/events.ts:26`](../packages/sci/sci-cita
  * that does not know the type skips it instead of refusing the log.
  * @param data - the idempotency key, the model, the token counts, the
  *   computed micro-USD, the rate-card version, whether the request started
- *   in a peak window, whether the payload is waiting in the local spool,
- *   and whether the model was priced by the fallback row.
+ *   in a peak window, the resale multiplier applied, whether the payload is
+ *   waiting in the local spool, and whether the model was priced by the
+ *   fallback row.
  */
 'sci/credit-charged': SciCreditChargedData
 ```
 
-Source: [`packages/sci/sci-credit/src/types.ts:144`](../packages/sci/sci-credit/src/types.ts)
+Source: [`packages/sci/sci-credit/src/types.ts:171`](../packages/sci/sci-credit/src/types.ts)
 
 <a id="scidelivered--log-only"></a>
 

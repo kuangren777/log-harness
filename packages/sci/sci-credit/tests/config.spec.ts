@@ -32,7 +32,7 @@ describe('resolveSpoolPath', () => {
 
 describe('configuredPriceTable', () => {
   it('stamps the configured version and carries the built-in peak schedule', () => {
-    const rows = [{ model: 'm', hitMicros: 1, missMicros: 2, outMicros: 3, peakMultiplierX1000: 1000 }]
+    const rows = [{ model: 'm', hitMicros: 1, missMicros: 2, outMicros: 3, peakMultiplierX1000: 1000, ratioX1000: 1000 }]
 
     expect(configuredPriceTable(rows)).toEqual({
       version: CONFIGURED_PRICE_VERSION,
@@ -58,13 +58,15 @@ describe('the Config schema', () => {
     })
   })
 
-  it('defaults an inline row to the undiscounted peak multiplier', () => {
+  it('defaults an inline row to the undiscounted peak and resale multipliers', () => {
     const resolved = Config({
       vmToken: 'vm-token-placeholder',
       pricing: [{ model: 'm', hitMicros: 1, missMicros: 2, outMicros: 3 }],
     } as unknown as Config)
 
-    expect(resolved.pricing).toEqual([{ model: 'm', hitMicros: 1, missMicros: 2, outMicros: 3, peakMultiplierX1000: 1000 }])
+    expect(resolved.pricing).toEqual([
+      { model: 'm', hitMicros: 1, missMicros: 2, outMicros: 3, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+    ])
   })
 
   it.each([
@@ -75,7 +77,14 @@ describe('the Config schema', () => {
     { label: 'an unknown fail mode', config: { vmToken: 'v', failMode: 'ajar' } },
     { label: 'a negative price', config: { vmToken: 'v', pricing: [{ model: 'm', hitMicros: -1, missMicros: 1, outMicros: 1 }] } },
     { label: 'a row with no model id', config: { vmToken: 'v', pricing: [{ hitMicros: 1, missMicros: 1, outMicros: 1 }] } },
-    { label: 'a zero peak multiplier', config: { vmToken: 'v', pricing: [{ model: 'm', hitMicros: 1, missMicros: 1, outMicros: 1, peakMultiplierX1000: 0 }] } },
+    {
+      label: 'a zero peak multiplier',
+      config: { vmToken: 'v', pricing: [{ model: 'm', hitMicros: 1, missMicros: 1, outMicros: 1, peakMultiplierX1000: 0 }] },
+    },
+    {
+      label: 'a zero resale multiplier',
+      config: { vmToken: 'v', pricing: [{ model: 'm', hitMicros: 1, missMicros: 1, outMicros: 1, ratioX1000: 0 }] },
+    },
   ])('rejects $label', ({ config }) => {
     expect(() => Config(config as unknown as Config)).toThrow()
   })

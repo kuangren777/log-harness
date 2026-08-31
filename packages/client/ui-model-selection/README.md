@@ -12,7 +12,9 @@ Directories are per-session, resolved lazily through `ctx.modelDirectories.direc
 
 Every resident directory refetches directly on forwarded `llm/adapters-updated` and `settings/document-updated` owner events. Provider topology, provider catalogs, and the default selection therefore converge without the Host or client runtime deriving a separate model-change alias.
 
-The `/client` exports are the plugin body (`apply`/`inject`), `ModelDirectoryResolver`, `ModelDirectory` with its state fields, and the seat's injected face type.
+A model row can carry advisory lines another plugin contributes. `ctx.modelDirectories.registerHints(source)` takes one source at a time — a second registration while one stands throws — and returns its disposer. The seat reads whichever source stands when it mounts and asks it exactly once, so a menu opened while that answer is in flight renders unannotated and takes the lines on its next mount. Each hint names a provider and a model and carries already-localized text: this package places the lines on the row with that exact pair, both on the shared hover/focus tooltip and in a description the row names through `aria-describedby`, and never reads or reformats them. A hint for a model the directory does not list annotates nothing, and a source that rejects leaves every row exactly as a composition with no source at all.
+
+The `/client` exports are the plugin body (`apply`/`inject`), `ModelDirectoryResolver`, `ModelDirectory` with its state fields, the seat's injected face type, and the hint types a contributor writes against.
 
 ## Model Experience
 
@@ -26,4 +28,5 @@ Switching the route can reduce or invalidate provider-side cache reuse for subse
 
 - **No create-time or addressed-subagent selection** — both entries require an existing ordinary session's Agent; there is no draft-phase model choice to fold into session creation, and subagent continuation deliberately exposes no independent model-selection contract.
 - **Directory names are presentation-only** — selection and persistence use provider/model/effort ids; a provider whose catalog or exact-model metadata lookup fails lists as an unselectable failure row until reload.
+- **A hint source is read once per mount, and only its lines are shown** — the seat never polls it, so a contributor whose answer changes reaches an open menu on the next mount; the tooltip renders the lines verbatim, so anything a reader needs about how they were derived belongs in the text the contributor produced.
 - **No arbitrary effort input** — the composer offers only the exact model's adapter-advertised levels; an adapter without reasoning metadata leaves the Effort row absent.

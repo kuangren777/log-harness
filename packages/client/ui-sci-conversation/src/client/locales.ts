@@ -23,6 +23,8 @@ export const zh = {
   'artifacts.title': '研究产出 · 点击在右侧打开',
   'artifacts.open': '在右侧打开 {name}',
   'header.openArtifacts': '打开产出',
+  'model.official': '官方输入 {input} / 1M · 输出 {output} / 1M · 缓存命中 {cached} / 1M',
+  'model.ratio': '倍率 ×{ratio} → 实际输入 {input} / 输出 {output}',
 }
 
 /** English dictionary (same key set). */
@@ -45,6 +47,8 @@ export const en: Record<SciConversationKey, string> = {
   'artifacts.title': 'Research output · click to open on the right',
   'artifacts.open': 'Open {name} on the right',
   'header.openArtifacts': 'Open output',
+  'model.official': 'List input {input} / 1M · output {output} / 1M · cache hit {cached} / 1M',
+  'model.ratio': 'Multiplier ×{ratio} → effective input {input} / output {output}',
 }
 
 /** Key union of this plugin's dictionaries. */

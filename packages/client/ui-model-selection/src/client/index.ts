@@ -29,7 +29,7 @@ import { en, zh, type ModelKey } from './locales.ts'
 export { ModelDirectory } from './directory.ts'
 export type { ModelDirectoryState } from './directory.ts'
 export { ModelDirectoryResolver } from './service.ts'
-export type { ModelSelectInjected } from './slots.ts'
+export type { ModelHint, ModelHintSource, ModelSelectInjected } from './slots.ts'
 export type { ModelKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -160,9 +160,14 @@ export function apply(ctx: ClientContext): void {
       inject: (sessionId): ModelSelectInjected => {
         const directory = models.directoryFor(sessionId)
         const available = sessions.subagentAddress(sessionId) === undefined
+        // Absent rather than always-present-and-empty: a composition with no
+        // contributor must leave the seat exactly as it was before hints
+        // existed, down to the read it does not perform.
+        const hints = models.hints()
         return {
           available,
           directory: directory.store,
+          ...hints === undefined ? {} : { loadHints: hints },
           load: () => {
             if (available) directory.load().catch(() => { /* surfaced on the store */ })
           },

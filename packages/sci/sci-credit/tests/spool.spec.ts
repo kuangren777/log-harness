@@ -35,6 +35,7 @@ function payload(requestId: string, usdMicros = 10): ChargePayload {
     usage: { inputTokens: 1, outputTokens: 2, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 },
     usdMicros,
     priceVersion: 1,
+    ratioX1000: 1000,
     unknownModel: false,
   }
 }

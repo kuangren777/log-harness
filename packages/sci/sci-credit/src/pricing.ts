@@ -38,9 +38,21 @@ export const DEFAULT_PEAK_SCHEDULE: PeakSchedule = {
 export const DEFAULT_PRICE_TABLE: PriceTable = {
   version: 1,
   models: [
-    { model: 'deepseek-v4-flash', hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000, peakMultiplierX1000: 1000 },
-    { model: 'deepseek-v4-pro', hitMicros: 44_000, missMicros: 1_320_000, outMicros: 3_960_000, peakMultiplierX1000: 1000 },
-    { model: 'deepseek-v4-flash-vision-exp', hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000, peakMultiplierX1000: 1000 },
+    {
+      model: 'deepseek-v4-flash',
+      hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000,
+      peakMultiplierX1000: 1000, ratioX1000: 1000,
+    },
+    {
+      model: 'deepseek-v4-pro',
+      hitMicros: 44_000, missMicros: 1_320_000, outMicros: 3_960_000,
+      peakMultiplierX1000: 1000, ratioX1000: 1000,
+    },
+    {
+      model: 'deepseek-v4-flash-vision-exp',
+      hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000,
+      peakMultiplierX1000: 1000, ratioX1000: 1000,
+    },
   ],
   peak: DEFAULT_PEAK_SCHEDULE,
 }
@@ -115,20 +127,41 @@ export function isPeak(at: Date, schedule: PeakSchedule): boolean {
 }
 
 /**
+ * One row's three prices with its resale multiplier already applied, left
+ * scaled by {@link MULTIPLIER_UNIT} because only their order matters here and
+ * dividing would round two rows onto the same number.
+ * @param row - the card row to scale.
+ * @returns the output, uncached-input, and cached-input prices, times the multiplier.
+ */
+function chargedPrices(row: PriceRow): { out: bigint; miss: bigint; hit: bigint } {
+  const ratio = BigInt(row.ratioX1000)
+  return {
+    out: BigInt(row.outMicros) * ratio,
+    miss: BigInt(row.missMicros) * ratio,
+    hit: BigInt(row.hitMicros) * ratio,
+  }
+}
+
+/**
  * The row an unlisted model is priced by: the most expensive one on the card.
  *
  * Comparison walks output, then uncached input, then cached input, then the
- * model id, so the choice is total and does not depend on card order. Erring
+ * model id, so the choice is total and does not depend on card order. Each
+ * price is read AFTER the row's resale multiplier, because that product is what
+ * a call on the row would be charged; comparing list prices would pick a
+ * cheaper row whenever a dearer one carries a bigger multiplier. Erring
  * expensive is the safe direction: the alternative is serving an unpriced
- * model for free until someone notices the ledger.
+ * model below cost until someone notices the ledger.
  * @param models - the card's rows; must be non-empty.
  * @returns the most expensive row.
  */
 function mostExpensive(models: readonly PriceRow[]): PriceRow {
   return models.reduce((left, right) => {
-    if (right.outMicros !== left.outMicros) return right.outMicros > left.outMicros ? right : left
-    if (right.missMicros !== left.missMicros) return right.missMicros > left.missMicros ? right : left
-    if (right.hitMicros !== left.hitMicros) return right.hitMicros > left.hitMicros ? right : left
+    const dearer = chargedPrices(right)
+    const held = chargedPrices(left)
+    if (dearer.out !== held.out) return dearer.out > held.out ? right : left
+    if (dearer.miss !== held.miss) return dearer.miss > held.miss ? right : left
+    if (dearer.hit !== held.hit) return dearer.hit > held.hit ? right : left
     return right.model > left.model ? right : left
   })
 }
@@ -161,10 +194,13 @@ export function resolvePriceRow(table: PriceTable, model: string): ResolvedPrice
  * Price one model call.
  *
  * The four components are priced separately and rounded half up each, then
- * summed, and the peak multiplier is applied to that sum with one final
- * half-up rounding. Rounding once per component and once per call keeps the
- * arithmetic reproducible from the ledger row alone; multiplying the prices
- * first would compound a rounding error per component instead.
+ * summed; the peak multiplier is applied to that sum with a half-up rounding,
+ * and the row's resale multiplier to that result with another. Rounding once
+ * per component and once per multiplier keeps the arithmetic reproducible from
+ * the ledger row alone; multiplying the prices first would compound a rounding
+ * error per component instead. The two multipliers are applied in that order
+ * and not folded into one, so the official list price and the platform's markup
+ * stay separately auditable in the same quote.
  *
  * `reasoningTokens` is deliberately NOT priced on top of `outputTokens`. The
  * DeepSeek adapter maps `completion_tokens` straight to `outputTokens` and
@@ -174,11 +210,17 @@ export function resolvePriceRow(table: PriceTable, model: string): ResolvedPrice
  * completion count. Adding it would bill every reasoning token twice.
  * `cacheWriteTokens` is priced at the uncached-input rate, because DeepSeek
  * charges a cache write as ordinary uncached input.
+ *
+ * The charge is stamped with the ROW's version when the card states one, and
+ * with the card's own only when it does not. The gate's price list is
+ * append-only per model, so one card can carry rows of different ages and the
+ * card-wide version alone would not say which row a charge came from.
  * @param usage - the disjoint token counts the adapter reported.
  * @param table - the rate card in force.
  * @param model - the provider model id the request named.
  * @param startedAt - when the request started, which decides peak or off-peak.
- * @returns the price, its rate-card version, and the pricing inputs that produced it.
+ * @returns the price, the version of the row it was computed from, and the
+ *   pricing inputs that produced it.
  * @throws Error when the card cannot price anything, or names a timezone other than `UTC`.
  */
 export function quoteCharge(usage: TokenUsage, table: PriceTable, model: string, startedAt: Date): ChargeQuote {
@@ -189,8 +231,9 @@ export function quoteCharge(usage: TokenUsage, table: PriceTable, model: string,
     + priceComponent(usage.cacheReadTokens ?? 0, row.hitMicros)
     + priceComponent(usage.outputTokens, row.outMicros)
   const multiplier = BigInt(peak ? row.peakMultiplierX1000 : table.peak.offPeakMultiplierX1000)
-  const usdMicros = divideRoundHalfUp(atPeak * multiplier, MULTIPLIER_UNIT)
-  return { usdMicros: Number(usdMicros), priceVersion: table.version, peak, unknownModel, row }
+  const atRate = divideRoundHalfUp(atPeak * multiplier, MULTIPLIER_UNIT)
+  const usdMicros = divideRoundHalfUp(atRate * BigInt(row.ratioX1000), MULTIPLIER_UNIT)
+  return { usdMicros: Number(usdMicros), priceVersion: row.version ?? table.version, peak, unknownModel, row }
 }
 
 /**

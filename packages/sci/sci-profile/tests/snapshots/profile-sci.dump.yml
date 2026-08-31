@@ -599,6 +599,10 @@
     gateUrl: !!js process.env.SCI_GATE_URL ?? 'http://127.0.0.1:3079'
     vmToken: !!js process.env.SCI_GATE_VM_TOKEN
     spoolPath: !!js dshHomePath('sci/credit-spool.jsonl')
+- id: sci-models
+  name: '@deepseek-ai/dsh-sci-models'
+  config:
+    gateUrl: !!js process.env.SCI_GATE_URL ?? 'http://127.0.0.1:3079'
 - id: sci-memory
   name: '@deepseek-ai/dsh-sci-memory'
   config:

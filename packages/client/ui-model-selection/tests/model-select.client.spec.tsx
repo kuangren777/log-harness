@@ -5,6 +5,7 @@ import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ComponentProps } from 'react'
 import type { ModelDirectoryState } from '../src/client/directory.ts'
+import type { ModelHint } from '../src/client/slots.ts'
 import { ModelSelect } from '../src/client/ModelSelect.tsx'
 import { zh } from '../src/client/locales.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -180,5 +181,77 @@ describe('ModelSelect reasoning effort', () => {
 
     expect(screen.queryByRole('button')).toBeNull()
     expect(load).not.toHaveBeenCalled()
+  })
+})
+
+describe('ModelSelect row hints', () => {
+  const groups = [{
+    id: 'deepseek-official',
+    name: 'DeepSeek',
+    models: [
+      { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', reasoning },
+      { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' },
+    ],
+  }]
+
+  /** Open the model pane of a seat whose hint source answers with `hints`. */
+  async function openWith(loadHints: ComponentProps<typeof ModelSelect>['loadHints']) {
+    const view = render(<ModelSelect
+      locked={false}
+      available
+      directory={createSnapshotStore<ModelDirectoryState>(state({ groups }))}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      {...loadHints === undefined ? {} : { loadHints }}
+      t={t}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    return view
+  }
+
+  it('describes a hinted row and shows its lines on hover, leaving unhinted rows untouched', async () => {
+    await openWith(async () => [
+      { provider: 'deepseek-official', model: 'deepseek-v4-flash', lines: ['官方输入 $0.4400 / 1M', '倍率 ×1.500'] },
+      // A hint for a model this directory does not list annotates nothing.
+      { provider: 'camel-api', model: 'gpt-5', lines: ['官方输入 $2.0000 / 1M'] },
+    ])
+
+    const hinted = screen.getByRole('menuitemradio', { name: /DeepSeek-V4-Flash/ })
+    // The rows render before the source answers; the description lands with it.
+    await waitFor(() => { expect(hinted.getAttribute('aria-describedby')).not.toBeNull() })
+    expect(document.getElementById(hinted.getAttribute('aria-describedby') as string)?.textContent)
+      .toBe('官方输入 $0.4400 / 1M 倍率 ×1.500')
+    // The price is not part of the row's name: that stays the model.
+    expect(hinted.textContent).toBe('DeepSeek-V4-Flash')
+    expect(screen.getByRole('menuitemradio', { name: /DeepSeek-V4-Pro/ }).getAttribute('aria-describedby'))
+      .toBeNull()
+
+    fireEvent.mouseEnter(hinted)
+    const bubble = await screen.findByRole('tooltip')
+    expect(bubble.textContent).toBe('官方输入 $0.4400 / 1M\n倍率 ×1.500')
+  })
+
+  it('renders the rows unannotated when no source is injected, and when the one injected fails', async () => {
+    const plain = await openWith(undefined)
+    expect(screen.getByRole('menuitemradio', { name: /DeepSeek-V4-Flash/ }).getAttribute('aria-describedby'))
+      .toBeNull()
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    plain.unmount()
+
+    await openWith(async () => { throw new Error('gate unreachable') })
+    // The rejection settles before this row is asked for its description.
+    await waitFor(() => {
+      expect(screen.getByRole('menuitemradio', { name: /DeepSeek-V4-Flash/ }).getAttribute('aria-describedby'))
+        .toBeNull()
+    })
+  })
+
+  it('drops a hint answer that arrives after the seat is gone', async () => {
+    let settle: (hints: ModelHint[]) => void = () => undefined
+    const view = await openWith(() => new Promise<ModelHint[]>((resolve) => { settle = resolve }))
+    view.unmount()
+    settle([{ provider: 'deepseek-official', model: 'deepseek-v4-flash', lines: ['官方输入 $0.4400 / 1M'] }])
+    await waitFor(() => { expect(screen.queryByRole('menuitemradio')).toBeNull() })
   })
 })

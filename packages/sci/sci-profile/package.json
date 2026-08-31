@@ -70,6 +70,7 @@
     "@deepseek-ai/dsh-sci-citations": "workspace:^",
     "@deepseek-ai/dsh-sci-literature": "workspace:^",
     "@deepseek-ai/dsh-sci-memory": "workspace:^",
+    "@deepseek-ai/dsh-sci-models": "workspace:^",
     "@deepseek-ai/dsh-sci-plan": "workspace:^",
     "@deepseek-ai/dsh-sci-prompt": "workspace:^",
     "@deepseek-ai/dsh-sci-remote-hosts": "workspace:^",

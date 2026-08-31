@@ -19,9 +19,10 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { conversationSnapshot, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ToolCallOwnerProps, ToolTreeProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import { ToolCallTree } from '@deepseek-ai/dsh-client-ui-tool/src/client/tool/ToolCallTree.tsx'
+import type { ModelHintSource } from '@deepseek-ai/dsh-client-ui-model-selection/client'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as nodeApply } from '../src/index.ts'
-import { zh } from '../src/client/locales.ts'
+import { en, zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 
@@ -32,8 +33,14 @@ const TAIL_SLOT = 'conversation.chat.turnTail'
 const ACTION_SLOT = 'conversation.session.header.actions'
 const SESSION = 's1' as SessionId
 
-/** A Context carrying the five services the plugin injects, with recording doubles. */
-async function bench() {
+/**
+ * A Context carrying the five services the plugin injects, with recording
+ * doubles.
+ * @param withModelMenu - whether ui-model-selection's service stands, which is
+ * the only thing the price-hint contribution waits for.
+ * @returns the context, the live registry, and the doubles' records.
+ */
+async function bench(withModelMenu = true) {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
   ctx.provide('locale', new LocaleRuntime(ctx))
@@ -43,6 +50,15 @@ async function bench() {
   ctx.provide('layout', { showDetailsMode } as never)
   const locate = vi.fn()
   ctx.provide('sciFiles', { locate } as never)
+  const hints: ModelHintSource[] = []
+  if (withModelMenu) {
+    ctx.provide('modelDirectories', {
+      registerHints(source: ModelHintSource) {
+        hints.push(source)
+        return () => { hints.splice(hints.indexOf(source), 1) }
+      },
+    } as never)
+  }
   const slots = ctx.get('slots') as SlotRegistry
   const declare = () => slots.register({
     name: 'root',
@@ -61,7 +77,7 @@ async function bench() {
       [FRAME_SLOT]: { kind: 'single', scope: 'session' },
     },
   } as never, () => null)
-  return { ctx, slots, declare, declareTool, register, showDetailsMode, locate }
+  return { ctx, slots, declare, declareTool, register, showDetailsMode, locate, hints }
 }
 
 /** The `bash` view a shipped-shaped tool plugin registered before the sci card. */
@@ -238,6 +254,41 @@ describe('ui-sci-conversation plugin body', () => {
     for (const key of [FRAME_SLOT, TAIL_SLOT, ACTION_SLOT] as const) {
       expect(b.slots.entries(key)[0]?.locale).toBe('sci-conversation')
     }
+  })
+
+  it('contributes the model menu price hints, and takes them back with its fiber', async () => {
+    const b = await bench()
+    b.declare()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    expect(b.hints).toHaveLength(1)
+    // The contributed source is the gate read, bound to this plugin's own
+    // dictionary — the runtime's fallback locale here, which is English.
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ models: [{
+        model: 'deepseek-v4-flash', route: 'deepseek-official',
+        hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000, ratioX1000: 1000,
+      }] }),
+    }) as unknown as Response))
+    await expect(b.hints[0]?.()).resolves.toEqual([{
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash',
+      lines: ['List input $0.4400 / 1M · output $1.3200 / 1M · cache hit $0.0140 / 1M'],
+    }])
+    expect(en['model.official']).toContain('List input {input}')
+    vi.unstubAllGlobals()
+    await fiber.dispose()
+    expect(b.hints).toHaveLength(0)
+  })
+
+  it('keeps every other contribution in a composition that has no model menu', async () => {
+    const b = await bench(false)
+    b.declare()
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    expect(b.hints).toHaveLength(0)
+    expect(b.slots.entries(TAIL_SLOT)).toHaveLength(1)
+    expect(b.slots.entries(ACTION_SLOT)).toHaveLength(1)
   })
 
   it('mounts its stylesheet for exactly the plugin lifetime', async () => {

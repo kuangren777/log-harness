@@ -10,16 +10,20 @@
  * from the Host rather than a client-owned vocabulary. A rejected selection
  * announces through the shared transient Toast anchored to the composer
  * card; the in-menu strip with Retry remains the catalog-load surface.
+ * A registered hint source annotates the model rows: its lines ride the
+ * shared Tooltip, which is fixed-positioned and so escapes the menu card's
+ * own clipping, and repeat in a description the row points at for readers
+ * who never hover.
  */
 import {
-  useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
+  Fragment, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
   type KeyboardEvent, type FocusEvent,
 } from 'react'
 import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   IconCheckOutline16, IconChevronDownOutline14, IconChevronRightOutline14,
-  IconWarningOutline16, Toast,
+  IconWarningOutline16, Toast, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
@@ -27,6 +31,19 @@ import css from './ModelSelect.module.css'
 
 /** Which pane the dropdown shows: the two-row root or one drilled-in list. */
 type Pane = 'root' | 'model' | 'effort'
+
+/** Hover delay of a row's hint bubble, matching the composer's other menus. */
+const HINT_DELAY_MS = 200
+
+/**
+ * Map key of one model row's hint; opaque, minted and read only here.
+ * @param provider - provider group id.
+ * @param model - provider-owned model id.
+ * @returns the row's key.
+ */
+function hintKey(provider: string, model: string): string {
+  return `${provider}/${model}`
+}
 
 /** One dynamic effort row; undefined means preserve the provider default. */
 interface EffortChoice {
@@ -43,7 +60,7 @@ interface EffortChoice {
  * @returns the trigger and, while open, the two-level menu.
  */
 export function ModelSelect(
-  { locked, available, directory, load, select, t }:
+  { locked, available, directory, load, select, loadHints, t }:
   ModelSelectInjected & { locked: boolean } & PropsLocale<'model'>,
 ) {
   const state = useSyncExternalStore(
@@ -58,6 +75,7 @@ export function ModelSelect(
   // action was a load.
   const lastActionRef = useRef<'load' | 'select'>('load')
   const [toast, setToast] = useState<{ seq: number; text: string } | null>(null)
+  const [hints, setHints] = useState<ReadonlyMap<string, readonly string[]>>(() => new Map())
   const toastSeq = useRef(0)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -114,6 +132,21 @@ export function ModelSelect(
       load()
     }
   }, [available, load])
+
+  // The source answers asynchronously and the rows do not wait for it: they
+  // render unannotated until it lands, and a source that fails leaves them
+  // that way for this mount.
+  useEffect(() => {
+    if (loadHints === undefined) return
+    let live = true
+    void loadHints().then(
+      (rows) => {
+        if (live) setHints(new Map(rows.map(hint => [hintKey(hint.provider, hint.model), hint.lines])))
+      },
+      () => { /* the contributor owns its own failure reporting; an unannotated row is the fallback */ },
+    )
+    return () => { live = false }
+  }, [loadHints])
 
   useEffect(() => {
     if (!open) return
@@ -291,12 +324,15 @@ export function ModelSelect(
                       <div className={css.groupTitle} id={headingId}>{group.name}</div>
                       {group.models.map((model) => {
                         const selected = state.current?.provider === group.id && state.current.model === model.id
-                        return (
+                        const lines = hints.get(hintKey(group.id, model.id))
+                        const hintId = `${id}-hint-${group.id}-${model.id}`
+                        const row = (
                           <button
                             ref={itemRef()}
                             type="button"
                             role="menuitemradio"
                             aria-checked={selected}
+                            aria-describedby={lines === undefined ? undefined : hintId}
                             className={clsx(css.option, selected && css.selected)}
                             key={model.id}
                             title={model.name}
@@ -313,6 +349,28 @@ export function ModelSelect(
                               {selected ? <IconCheckOutline16 /> : null}
                             </span>
                           </button>
+                        )
+                        // Every row is anchored, hinted or not: a hint that
+                        // lands while the menu is open must reach the row that
+                        // is already there, and Tooltip's disabled anchor is
+                        // the same element with the same DOM. The described-by
+                        // target sits outside the button, where the same text
+                        // does not also join the row's accessible name, which
+                        // is the model rather than its price.
+                        return (
+                          <Fragment key={model.id}>
+                            <Tooltip
+                              label={lines === undefined ? '' : lines.join('\n')}
+                              side="top"
+                              delayMs={HINT_DELAY_MS}
+                              disabled={lines === undefined}
+                            >
+                              {row}
+                            </Tooltip>
+                            {lines !== undefined && (
+                              <span id={hintId} className={css.visuallyHidden}>{lines.join(' ')}</span>
+                            )}
+                          </Fragment>
                         )
                       })}
                     </section>
