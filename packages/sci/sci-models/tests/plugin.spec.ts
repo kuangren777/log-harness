@@ -5,6 +5,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
+import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import * as SciModels from '../src/index.ts'
 import { Config } from '../src/config.ts'
 import { CAMEL_API_PROVIDER, CAMEL_API_PROVIDER_NAME } from '../src/adapter.ts'
@@ -71,7 +72,12 @@ function withEnvironment(values: Record<string, string | undefined>): void {
 async function boot(
   models: unknown[],
   overrides: Partial<Config> = {},
-): Promise<{ ctx: Context; calls: string[]; fiber: Awaited<ReturnType<Context['plugin']>> }> {
+): Promise<{
+  ctx: Context
+  calls: string[]
+  logs: string[]
+  fiber: Awaited<ReturnType<Context['plugin']>>
+}> {
   const calls: string[] = []
   vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
     calls.push(urlOf(input))
@@ -79,9 +85,16 @@ async function boot(
   })
   const ctx = new Context()
   contexts.push(ctx)
+  const logs: string[] = []
+  // The default exporter threshold is INFO, which drops `warn`.
+  ctx.logger.exporter({
+    colors: false,
+    levels: { default: 3 },
+    export: (message) => { logs.push(message.args.map(arg => String(arg)).join(' ')) },
+  })
   await ctx.plugin(LlmRuntime)
   const fiber = await ctx.plugin(SciModels, Config(overrides as Config))
-  return { ctx, calls, fiber }
+  return { ctx, calls, logs, fiber }
 }
 
 /**
@@ -98,16 +111,30 @@ async function until(predicate: () => boolean, label: string): Promise<void> {
 }
 
 describe('mounting sci-models', () => {
-  it.each([
-    { label: 'the gate VM token', missing: 'SCI_GATE_VM_TOKEN', pattern: /SCI_GATE_VM_TOKEN must carry/ },
-    { label: 'the CaMeL Hub endpoint', missing: 'CAMEL_API_BASE_URL', pattern: /CAMEL_API_BASE_URL must carry/ },
-  ])('fails the load when the environment does not carry $label', async ({ missing, pattern }) => {
-    withEnvironment({ ...ENVIRONMENT, [missing]: undefined })
+  it('fails the load when the environment does not carry the gate VM token', async () => {
+    withEnvironment({ ...ENVIRONMENT, SCI_GATE_VM_TOKEN: undefined })
     const ctx = new Context()
     contexts.push(ctx)
     await ctx.plugin(LlmRuntime)
 
-    await expect(ctx.plugin(SciModels, Config({} as Config))).rejects.toThrow(pattern)
+    await expect(ctx.plugin(SciModels, Config({} as Config))).rejects.toThrow(/SCI_GATE_VM_TOKEN must carry/)
+  })
+
+  it('still enforces without the CaMeL Hub endpoint, registering no route and saying so once', async () => {
+    withEnvironment({ ...ENVIRONMENT, CAMEL_API_BASE_URL: undefined })
+    const booted = await boot([HUB_ROW, DEEPSEEK_ROW])
+    await until(() => booted.calls.length === 1, 'the catalog read')
+
+    expect(booted.ctx.llm.listProviders()).toEqual([])
+    expect(booted.logs.filter(line => line.includes('CAMEL_API_BASE_URL'))).toHaveLength(1)
+    // The catalogued camel-api model is still the tenant's to call: the route
+    // is what is missing, so the call fails at dispatch rather than at the gate.
+    const chunks: StreamChunk[] = []
+    for await (const chunk of booted.ctx.llm.stream({
+      provider: CAMEL_API_PROVIDER, model: 'kimi-k2', messages: [],
+    })) chunks.push(chunk)
+
+    expect(chunks[0]).toMatchObject({ reason: { kind: 'error', failure: { code: 'NO_ADAPTER' } } })
   })
 
   it('reads the catalog with the token the environment names and opens the CaMeL Hub route', async () => {

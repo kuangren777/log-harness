@@ -84,31 +84,47 @@ export const name = 'sci-models'
 export const inject = ['llm']
 
 /**
- * Read one required environment value.
+ * Read one environment value the configuration pointed at.
  * @param ctx - the mounting context, whose launcher owns this run's environment.
- * @param key - the environment name the configuration pointed at.
- * @param purpose - what the value is for, named in the failure.
- * @returns the value.
- * @throws Error when the environment does not carry it, which no later step can repair.
+ * @param key - the environment name to read.
+ * @returns the value, or `undefined` when the environment does not carry it.
  */
-function requiredEnv(ctx: Context, key: string, purpose: string): string {
+function environmentValue(ctx: Context, key: string): string | undefined {
   const value = launchEnvironmentOf(ctx).get(key)?.value
-  if (value === undefined || value.length === 0) {
-    throw new Error(`sci-models: ${key} must carry ${purpose}; set it in this VM's environment`)
-  }
-  return value
+  return value === undefined || value.length === 0 ? undefined : value
 }
 
 /**
  * Register the model catalog, the CaMeL Hub route, and the whitelist.
+ *
+ * The gate token is required: it names whose catalog is served, and without it
+ * this plugin has nothing to read and nothing to enforce. The CaMeL Hub
+ * endpoint is not. A deployment whose institutions buy only the built-in
+ * DeepSeek models never sets it, and one that has not set it yet still gets the
+ * whitelist over the models it does have; the `camel-api` route is simply never
+ * registered, so a catalogued model on it fails its call with `NO_ADAPTER`
+ * instead of taking the whole VM down at boot.
  * @param ctx - the mounting context, carrying `llm`.
  * @param config - the resolved deployment configuration.
- * @throws Error when the gate token or the CaMeL Hub endpoint is absent from
- *   the environment, neither of which any later step can supply.
+ * @throws Error when the environment carries no gate token, which no later step
+ *   can supply.
  */
 export function apply(ctx: Context, config: Config): void {
-  const vmToken = requiredEnv(ctx, config.vmTokenEnv, 'the gate VM token this tenant is identified by')
-  const baseURL = requiredEnv(ctx, config.apiBaseEnv, 'the CaMeL Hub endpoint the camel-api route posts to')
+  const vmToken = environmentValue(ctx, config.vmTokenEnv)
+  if (vmToken === undefined) {
+    throw new Error(
+      `sci-models: ${config.vmTokenEnv} must carry the gate VM token this tenant is identified by;`
+      + " set it in this VM's environment",
+    )
+  }
+  const baseURL = environmentValue(ctx, config.apiBaseEnv)
+  if (baseURL === undefined) {
+    ctx.logger.warn(
+      'sci-models: %s is unset, so no camel-api route is registered; a catalogued camel-api model'
+      + ' stays in the whitelist and fails its call with NO_ADAPTER',
+      config.apiBaseEnv,
+    )
+  }
   const apiKeyEnv: CredentialRef = credentialRef(config.apiKeyEnv)
 
   const client = new GateCatalogClient({
@@ -118,17 +134,16 @@ export function apply(ctx: Context, config: Config): void {
   })
 
   const catalog = new ModelCatalog(ctx, client, config.refreshMs, {
-    onChange: () => { route.sync(catalog.modelsOn(CAMEL_API_PROVIDER).length > 0) },
+    onChange: () => { route?.sync(catalog.modelsOn(CAMEL_API_PROVIDER).length > 0) },
   })
-  const route = new CamelApiRoute(ctx, new CamelApiAdapter(camelApiAdapterOptions(
-    ctx,
-    () => camelApiConnection(baseURL, apiKeyEnv, catalog.modelsOn(CAMEL_API_PROVIDER)),
-  )))
+  const route = baseURL === undefined ? undefined : new CamelApiRoute(ctx, new CamelApiAdapter(
+    camelApiAdapterOptions(ctx, () => camelApiConnection(baseURL, apiKeyEnv, catalog.modelsOn(CAMEL_API_PROVIDER))),
+  ))
 
   installEnforcement(ctx, catalog, config.failMode)
   ctx.effect(() => () => {
     catalog.dispose()
-    route.dispose()
+    route?.dispose()
   }, 'sci-models.dispose')
   catalog.start()
 }

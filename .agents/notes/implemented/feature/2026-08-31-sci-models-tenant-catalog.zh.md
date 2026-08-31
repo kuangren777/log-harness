@@ -16,7 +16,7 @@ Status: implemented
 
 它在启动时、以及此后每 `refreshMs`（默认 5 分钟）带 VM bearer token 读一次 `GET /gate/api/credit/models`。每行带 `model`、`displayName`、`providerLabel` 与 `route`，其中 `route` 是 `deepseek-official` 或 `camel-api` —— 与 `ctx.llm` 的供应商路由用同一批字符串，于是 gate 的路由决定与 harness 的适配器选择是同一套词汇，而不是两套要靠人手对齐的。读取失败保留上一份目录，因为清空它等于在 gate 抖动的一瞬间收回机构开放的全部模型；第一次读成功之前目录是 `undefined`，这与空目录是两个不同的答案。
 
-`camel-api` 路由上的行由 `CamelApiAdapter` 承接，它就是只覆写了一处的 `DeepSeekAdapter`。CaMeL Hub 说的是同一套 OpenAI 兼容 chat-completions 协议，连 SSE 分帧与 `dsh-sci-credit` 计价所读的 usage 字段都一样；而端点、凭据、目录与请求上限本来就都是该适配器按操作读取的输入，经本包提供的 `options()` thunk 解析。只有 `providerInfo` 必须改：基类写死了它当初面向的供应商，若在机构认作 CaMeL Hub 的路由上显示 "DeepSeek"，会把这条路由上的每个模型都归错供应商。端点与密钥来自 `apiBaseEnv`、`apiKeyEnv` 指名的环境变量；密钥按请求经 `ctx.credentials` 解析、回落到启动环境，端点与 gate token 在加载时读取、缺失即加载失败。目录里有该路由的模型时路由才注册，没有了就摘掉，于是不会有一个点开却是空的选择器条目；又因为适配器按操作重读目录，在已注册的路由上增删模型不需要重新注册。
+`camel-api` 路由上的行由 `CamelApiAdapter` 承接，它就是只覆写了一处的 `DeepSeekAdapter`。CaMeL Hub 说的是同一套 OpenAI 兼容 chat-completions 协议，连 SSE 分帧与 `dsh-sci-credit` 计价所读的 usage 字段都一样；而端点、凭据、目录与请求上限本来就都是该适配器按操作读取的输入，经本包提供的 `options()` thunk 解析。只有 `providerInfo` 必须改：基类写死了它当初面向的供应商，若在机构认作 CaMeL Hub 的路由上显示 "DeepSeek"，会把这条路由上的每个模型都归错供应商。端点与密钥来自 `apiBaseEnv`、`apiKeyEnv` 指名的环境变量；密钥按请求经 `ctx.credentials` 解析、回落到启动环境。只有 gate token 缺失即加载失败，因为它决定服务的是谁的目录，没有它本包既无可读也无可拦。端点缺失只报一条日志并且不注册路由，白名单照常在这个租户确实有的模型上生效。目录里有该路由的模型时路由才注册，没有了就摘掉，于是不会有一个点开却是空的选择器条目；又因为适配器按操作重读目录，在已注册的路由上增删模型不需要重新注册。
 
 鉴权是一个 `llm/stream` waterfall 监听器。目录没有开放的 `(provider, model)` 在 `next()` 之前就被拒绝，给出点名该模型的双语 `MODEL_NOT_ALLOWED` 错误 finish，因此这次拒绝不花任何供应商 token。比较里包含路由而不只是模型名：在 `camel-api` 上开放的模型不等于在 `deepseek-official` 上也开放，因为那是价格不同的两个端点。DeepSeek 内建模型同受此规则 —— 机构取消勾选某个模型，就是决定了成员不得在它上面花钱，而这条路由恰好由 harness 自己注册并不改变这一点。任何目录都还没读到时发生的调用，在默认 `failMode: 'open'` 下放行，在 `closed` 下以专用的 `MODEL_CATALOG_UNAVAILABLE` 拒绝。
 
@@ -36,7 +36,7 @@ Status: implemented
 
 ## Consequences
 
-机构的模型勾选现在落到了请求上：它关掉的模型会在模型边界被拒，句子里点名该模型与两条能解开它的动作；它在 CaMeL Hub 上开放的模型，会在一个刷新周期内变成一个背后有可用路由的选择器条目。挂载本包的部署必须在 VM 环境里提供 `CAMEL_API_BASE_URL` 与 `CAMEL_API_KEY`，否则插件加载失败；这是刻意的，因为一份调不动的目录比一个拒绝启动的容器更糟。
+机构的模型勾选现在落到了请求上：它关掉的模型会在模型边界被拒，句子里点名该模型与两条能解开它的动作；它在 CaMeL Hub 上开放的模型，会在一个刷新周期内变成一个背后有可用路由的选择器条目。挂载本包的部署必须提供 `SCI_GATE_VM_TOKEN`；`CAMEL_API_BASE_URL` 与 `CAMEL_API_KEY` 是可选的，没有它们的 VM 仍会在 DeepSeek 路由上按目录鉴权，只是不注册 CaMeL Hub 路由。此时目录里的 `camel-api` 模型调用以 `NO_ADAPTER` 失败 —— 一个模型体验不好，好过一个起不来的容器，这是共用生产机应得的取舍。
 
 取消勾选 DeepSeek 内建模型不会把它藏起来。`dsh-llm-deepseek` 注册自己的三个模型，本包不去改别的插件的注册，所以被关掉的内建模型仍会出现在选择器里、选中后才失败。README 记下了这个缺口与另外三条边界：目录改动在 `refreshMs` 之内而非立刻到达运行中的 VM；一个 bearer token 意味着一个租户的所有 VM 看到同一份目录；以及若某个 gate 供了目录却没供价目表，这里不会察觉。
 

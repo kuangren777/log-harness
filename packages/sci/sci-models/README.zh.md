@@ -16,7 +16,7 @@
 
 `camel-api` 路由上的行由 `CamelApiAdapter` 承接 —— 即挂着 `CaMeL Hub` 选择器名的 `DeepSeekAdapter`。之所以复用而不是重写，是因为 CaMeL Hub 说的是同一套 OpenAI 兼容 chat-completions 协议，连 SSE 分帧与计费所读的 usage 字段都一样；不同的只有端点、凭据、目录与展示名，而这四样本来就是该适配器按操作读取的输入。`providerInfo` 是唯一的覆写：基类写死了它当初面向的供应商，若在机构认作 CaMeL Hub 的路由上显示 "DeepSeek"，会把这条路由上的每个模型都归错供应商。
 
-端点取自 `apiBaseEnv` 指名的环境变量（默认 `CAMEL_API_BASE_URL`），密钥取自 `apiKeyEnv`（默认 `CAMEL_API_KEY`），按请求经 `ctx.credentials` 解析、回落到启动环境。gate token 与端点都在加载时读取，**缺失即加载失败**，因为后面没有任何一步能补上它们。
+端点取自 `apiBaseEnv` 指名的环境变量（默认 `CAMEL_API_BASE_URL`），密钥取自 `apiKeyEnv`（默认 `CAMEL_API_KEY`），按请求经 `ctx.credentials` 解析、回落到启动环境。只有 gate token **缺失即加载失败**：它决定服务的是谁的目录，没有它本插件既无可读也无可拦。端点缺失只在加载时报一条日志并且不注册路由，白名单照常在这个租户确实有的模型上生效 —— 机构只买内建 DeepSeek 模型的部署根本不会设它。
 
 目录里有该路由的模型时路由才注册，没有了就摘掉，于是选择器不会出现一个点开却是空的条目。适配器按操作重读目录，所以在已注册的路由上增删模型不需要重新注册。
 
@@ -44,5 +44,6 @@ None, as the plugin registers no prompt, tool, or context of its own: the catalo
 
 - **取消勾选 DeepSeek 内建模型不会把它藏起来，只会拦住调用。** `@deepseek-ai/dsh-llm-deepseek` 注册自己的三个模型，本包不去改别的插件的注册，所以机构关掉的模型仍会出现在选择器里、选中后才失败。要藏起来需要 `ctx.llm` 提供一个它现在没有的供应商目录过滤接缝。
 - **目录改动在 `refreshMs` 之内、而不是立刻到达运行中的 VM。** 机构后台新增或收回的模型，最迟一个刷新周期后才可调用或被拒；gate 不推送变更通知，缩短这个窗口的代价是每 VM 每周期多一个请求。
+- **端点未设时，目录里的 `camel-api` 模型会在派发阶段失败。** 没有 `CAMEL_API_BASE_URL` 就不注册路由，于是这类模型仍可被选中、仍在白名单里，调用以 `NO_ADAPTER` 收场，而不是一句点名缺了什么配置的话。加载时那条日志才是信号；要让拒绝本身说清原因，本包就得去占一条它刻意不注册的路由。
 - **一个租户的所有 VM 看到同一份目录。** bearer token 标识的是租户而不是成员，按人分配模型需要在这次读取上换一种凭据。
 - **价格由别的消费者读取，不在这里。** 若某个 gate 供了这份目录却没供对应的价目表，鉴权仍然正确，而 `dsh-sci-credit` 会拿它价目表里最贵的一行给这个查不到的模型计价，并把扣费标记为 `unknownModel` —— 内建官方价目表只有三个 DeepSeek 模型，CaMeL Hub 的模型永远不在其中。本包不会察觉这两者不一致；账本里的 `unknownModel` 标记才是它显形的地方。
