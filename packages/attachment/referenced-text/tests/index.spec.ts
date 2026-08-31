@@ -217,3 +217,20 @@ describe('ReferencedTextRegistry.resolveMessages', () => {
       .rejects.toMatchObject({ code: 'DIGEST_MISMATCH' })
   })
 })
+
+describe('ReferencedTextRegistry live stores', () => {
+  it('returns a live store\'s current text when the digest no longer matches', async () => {
+    const ctx = await mount({ mode: 'live', read: () => Promise.resolve('Updated body.') })
+    expect(await ctx.referencedText.read(refTo('deploy', SKILL_BODY))).toBe('Updated body.')
+  })
+
+  it('resolves message references through a live store to its current text', async () => {
+    const ctx = await mount({ mode: 'live', read: () => Promise.resolve('Updated body.') })
+    const messages: readonly Message[] = [createUserMessage({
+      source: { kind: 'user' },
+      content: [{ type: 'referenced-text', ...refTo('deploy', SKILL_BODY) }],
+    })]
+    const resolved = await ctx.referencedText.resolveMessages(messages)
+    expect(resolved[0]?.content).toEqual([{ type: 'text', text: 'Updated body.' }])
+  })
+})

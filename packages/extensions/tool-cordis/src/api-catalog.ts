@@ -1153,10 +1153,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async read(ref: ReferencedTextRef, signal?: AbortSignal): Promise<string>',
-        description: 'Read one reference and verify the returned text against its recorded digest.',
+        description: 'Read one reference: the verified recorded text from an `\'immutable\'` store, the current text from a `\'live\'` store.',
         parameters: [{ name: 'ref', description: 'the logged reference to resolve.' }, { name: 'signal', description: 'optional cancellation passed to the owning store.' }],
-        returns: 'the exact stored text.',
-        throws: ['{ReferencedTextError} `STORE_MISSING` when no store owns `ref.store`, `DIGEST_MISMATCH` when the returned text hashes to another digest, or the store\'s own failure, such as `NOT_FOUND`.'],
+        returns: 'the resolved text.',
+        throws: ['{ReferencedTextError} `STORE_MISSING` when no store owns `ref.store`, `DIGEST_MISMATCH` when an immutable store\'s text hashes to another digest, or the store\'s own failure, such as `NOT_FOUND`.'],
       },
       {
         signature: 'async resolveMessages(messages: readonly Message[], signal?: AbortSignal): Promise<readonly Message[]>',
@@ -4525,7 +4525,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ReferencedTextStore',
-    declaration: 'export interface ReferencedTextStore {\n    readonly read: (ref: ReferencedTextRef, signal?: AbortSignal) => Promise<string>;\n}',
+    declaration: 'export interface ReferencedTextStore {\n    readonly mode?: \'immutable\' | \'live\';\n    readonly read: (ref: ReferencedTextRef, signal?: AbortSignal) => Promise<string>;\n}',
   },
   {
     name: 'RemoteHost',

@@ -18,9 +18,9 @@ import {
   type SkillUsageRecord,
 } from '@deepseek-ai/dsh-sci-skills'
 
-/** Body loader for the provider tests: the body is `# <name>`, keyed by name. */
-const loadSkillBody = (name: string): Promise<{ content: string; sha256: string }> => {
-  const content = `# ${name}`
+/** Body loader for the provider tests: the body is `# <name>`, keyed by the entry's name. */
+const loadSkillBody = (entry: { name: string }): Promise<{ content: string; sha256: string }> => {
+  const content = `# ${entry.name}`
   return Promise.resolve({ content, sha256: createHash('sha256').update(content, 'utf8').digest('hex') })
 }
 

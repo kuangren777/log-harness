@@ -13,6 +13,7 @@ The fifteen skill bundles ship in `skills/`. They must live inside this package 
 | Skill listing provider | `ctx.skills.registerProvider()`, provider name `sci` | `providerName` (default `sci`) |
 | Sandbox copy of the tree | `ctx.fs`, under `sandboxRoot` | `skillRoot`, `sandboxRoot`, `syncOnStart` |
 | Digest manifest | `<sandboxRoot>/.sci/skills.json` | — |
+| Skill body referenced-text store (`mode: 'live'`) | `ctx.referencedText.registerStore()`, store name `sci` | `providerName` (default `sci`) |
 | `sci_skill_usage` projection | `ctx.storageDomain`, domain `sci_skills` | `skillToolName` (default `skill`) |
 | `sci_skill_lifecycle` projection | `ctx.storageDomain`, domain `sci_skills` | `staleAfterDays` (default `90`), `pinned` |
 | Session event `sci/skills-synced` | appended to every session opened after a sync round | — |
@@ -55,7 +56,7 @@ A curation state change rewrites the catalog block, so that assembly pays one KV
 
 #### What the model sees
 
-Loading a skill returns its `<skill_content>` with `$SCI_SKILL_ROOT` already expanded to `sandboxRoot`, and `resourceBase` names the sandbox copy, so every path the model reads out of a body is one it can open. The `sci/skills-synced` record of a sync round is log-only and never enters model history.
+Loading a skill returns its `<skill_content>` with `$SCI_SKILL_ROOT` already expanded to `sandboxRoot`, and `resourceBase` names the sandbox copy, so every path the model reads out of a body is one it can open. The body rides a `referenced-text` block backed by a live store: every request re-resolves it to the catalog's current body, so updating a skill reaches old sessions instead of stranding them on a digest mismatch, and a skill the catalog no longer lists falls back to the recorded raw body fetched from the source's permanent object store. The `sci/skills-synced` record of a sync round is log-only and never enters model history.
 
 #### Token effect
 
@@ -63,10 +64,11 @@ A body is charged only on the turn the model loads it. A sync round costs nothin
 
 #### KV Cache effect
 
-A loaded body appends to history and disturbs no earlier prefix. The sync record carries the envelope's `ignorable: true`, so it stays out of model context entirely and a build without this plugin skips it instead of refusing to reconstruct the log.
+A loaded body appends to history and disturbs no earlier prefix while its content is stable; publishing a new body re-resolves every request position that carries the reference, one full cache miss per session that loaded it. The sync record carries the envelope's `ignorable: true`, so it stays out of model context entirely and a build without this plugin skips it instead of refusing to reconstruct the log.
 
 ## Known Limitations and Deferred Work
 
 - **Binary skill resources are not synced.** `ctx.fs` exposes `writeText` only, so a skill bundle carrying an image or an archive cannot be published. Every shipped bundle is text (Markdown, Python, XSD, XML, HTML, plain text); `__pycache__` and `.git` are excluded from both hashing and publication.
 - **The in-house skill bodies still describe the studied platform's mechanisms.** Only the mechanical fixes are applied so far (S3–S5: descriptions, `$SCI_SKILL_ROOT` paths, `deliver_files` and chapter-title citations). The behavioural rewrites 07-skills-plan specifies per skill — `sci-recall` reading the dsh session store instead of Claude Code JSONL, `sci-plot --dry-run`, `sci canvas lint`, `sci paper archive` — are a later stage, as is the sixteenth bundle `sci-references`.
+- **A retired skill body that used `$SCI_SKILL_ROOT` is unrecoverable by reference.** The logged `sha256` covers the expanded body while the object store is keyed by the raw body's digest, so the fallback for a skill absent from the catalog only resolves bodies that contained no `$SCI_SKILL_ROOT`; others fail the read with the chained source error.
 - **Usage is projected live, not rebuilt.** The listener folds `session/event` as it arrives; rebuilding both tables from a cold log is `sci-audit`'s `rebuild` path (spec P9).

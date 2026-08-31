@@ -2,13 +2,13 @@
 
 [English](README.md) | 中文
 
-内容寻址文本服务边界。`ctx.referencedText` 拥有 `referenced-text` 内容块、可产出其文本的具名 store 注册表，以及证明已记录引用仍指向同一段文本的摘要校验。
+内容寻址文本服务边界。`ctx.referencedText` 拥有 `referenced-text` 内容块、可产出其文本的具名 store 注册表，以及（对不可变 store）证明已记录引用仍指向同一段文本的摘要校验。
 
 `ReferencedTextRef` 记录 store 名称、store 内部 id，以及该文本 UTF-8 编码的小写十六进制 SHA-256。生产方记录 `{ type: 'referenced-text', store, id, sha256 }` 而不是文本本身，于是会话日志保存引用、模型请求保存文本——这与 [`ImageBlock`](../attachment/README.zh.md) 对持久图片采用的拆分方式相同，也是本包满足[可重建请求契约](../../../.agents/notes/implemented/architecture/2026-07-05-reconstructable-requests.zh.md)的方式。
 
-`registerStore(name, store)` 以唯一名称登记一个借用的同进程 store 并返回 disposer；重名会抛错，登记方 fiber 被释放时该 store 被移除。`read(ref, signal)` 找到归属 store，等待 `store.read(ref, signal)`，对返回文本求哈希，只有摘要匹配引用时才返回该文本。`resolveMessages(messages, signal)` 遍历已组装的请求，把每个 `referenced-text` 块——包括嵌套在 `tool-result` 内容中的块——替换为校验通过的 `{ type: 'text', text }` 块，其余块保持日志记录的原样。不含引用的消息按原对象透传，整个输入数组不含任何引用时原样返回，因此调用方可用引用相等判断“没有解析任何内容”。输入消息绝不被修改；它们可能已被深度冻结。每个不同的引用在一次 `resolveMessages` 调用内只读取一次。
+`registerStore(name, store)` 以唯一名称登记一个借用的同进程 store 并返回 disposer；重名会抛错，登记方 fiber 被释放时该 store 被移除。`read(ref, signal)` 找到归属 store 并等待 `store.read(ref, signal)`。store 通过 `mode` 声明自身语义：`'immutable'`（缺省默认值）承诺同一引用永远对应逐字节相同的文本，注册表对返回文本求哈希，只有摘要匹配引用时才返回；`'live'` store 返回该 id 当前的文本，注册表不做摘要校验，记录下的 `sha256` 只说明引用被记入日志时模型看到的文本。`resolveMessages(messages, signal)` 遍历已组装的请求，把每个 `referenced-text` 块——包括嵌套在 `tool-result` 内容中的块——替换为校验通过的 `{ type: 'text', text }` 块，其余块保持日志记录的原样。不含引用的消息按原对象透传，整个输入数组不含任何引用时原样返回，因此调用方可用引用相等判断“没有解析任何内容”。输入消息绝不被修改；它们可能已被深度冻结。每个不同的引用在一次 `resolveMessages` 调用内只读取一次。
 
-`ReferencedTextError.code` 使用封闭的 `ReferencedTextErrorCode` 联合类型。没有 store 拥有 `ref.store` 时注册表抛出 `STORE_MISSING`，返回文本哈希与引用不符时抛出 `DIGEST_MISMATCH`；store 内容不再包含该 id 时由 store 抛出 `NOT_FOUND`。任何一处失败都会中止整次解析：`resolveMessages` 不返回部分结果。
+`ReferencedTextError.code` 使用封闭的 `ReferencedTextErrorCode` 联合类型。没有 store 拥有 `ref.store` 时注册表抛出 `STORE_MISSING`，不可变 store 的返回文本哈希与引用不符时抛出 `DIGEST_MISMATCH`；store 内容不再包含该 id 时由 store 抛出 `NOT_FOUND`。任何一处失败都会中止整次解析：`resolveMessages` 不返回部分结果。
 
 ## 模型体验
 
@@ -16,7 +16,7 @@
 
 #### 模型看到什么
 
-store 返回的确切 UTF-8 文本，作为普通 `text` 块出现在原 `referenced-text` 块所在位置。模型看不到 store 名称、id 或摘要；校验失败的引用产生错误，而不是替代文本。
+store 返回的确切 UTF-8 文本，作为普通 `text` 块出现在原 `referenced-text` 块所在位置。模型看不到 store 名称、id 或摘要；校验失败的引用产生错误，而不是替代文本；`live` store 的引用解析为该 store 当前为此 id 持有的文本。
 
 #### Token 影响
 
@@ -24,7 +24,7 @@ store 返回的确切 UTF-8 文本，作为普通 `text` 块出现在原 `refere
 
 #### KV 缓存影响
 
-在被引用文本稳定期间是追加式的，因为解析是确定性的：同一引用在每次请求中产出逐字节相同的请求文本，保留已可复用的前缀。修改已存文本会改变其摘要，从而让旧引用校验失败，而不是悄悄改写更早的请求位置。
+在被引用文本稳定期间是追加式的，因为解析是确定性的：同一引用在每次请求中产出逐字节相同的请求文本，保留已可复用的前缀。修改不可变 store 的文本会改变其摘要，从而让旧引用校验失败，而不是悄悄改写更早的请求位置。`live` store 以这份稳定性换取新鲜度：其文本变化时，仍携带该引用的每个请求位置都重新解析为新文本，以一次完整 cache miss 为代价改写前缀。
 
 ## 已知限制与待完成工作
 

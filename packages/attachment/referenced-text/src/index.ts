@@ -73,13 +73,14 @@ export class ReferencedTextRegistry extends Service {
   }
 
   /**
-   * Read one reference and verify the returned text against its recorded digest.
+   * Read one reference: the verified recorded text from an `'immutable'`
+   * store, the current text from a `'live'` store.
    * @param ref - the logged reference to resolve.
    * @param signal - optional cancellation passed to the owning store.
-   * @returns the exact stored text.
+   * @returns the resolved text.
    * @throws {ReferencedTextError} `STORE_MISSING` when no store owns `ref.store`,
-   *   `DIGEST_MISMATCH` when the returned text hashes to another digest, or the
-   *   store's own failure, such as `NOT_FOUND`.
+   *   `DIGEST_MISMATCH` when an immutable store's text hashes to another
+   *   digest, or the store's own failure, such as `NOT_FOUND`.
    */
   async read(ref: ReferencedTextRef, signal?: AbortSignal): Promise<string> {
     const store = this.stores.get(ref.store)
@@ -90,6 +91,7 @@ export class ReferencedTextRegistry extends Service {
       )
     }
     const text = await store.read(ref, signal)
+    if (store.mode === 'live') return text
     const digest = createHash('sha256').update(text, 'utf8').digest('hex')
     if (digest !== ref.sha256) {
       throw new ReferencedTextError(

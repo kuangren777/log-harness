@@ -257,23 +257,36 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const pinned = new Set(config.pinned)
 
   /**
-   * Fetch one skill's body and expand its sandbox-root variable. The digest is
-   * over the expanded text the model actually receives, so the referenced-text
-   * resolver verifies exactly what it substitutes.
-   * @param skillName - the skill to load.
+   * Fetch one catalog entry's body and expand its sandbox-root variable. The
+   * digest is over the expanded text the model actually receives, recording
+   * exactly what the reference substituted when it was logged.
+   * @param entry - the catalog entry to load.
    * @param signal - cancels the fetch.
    * @returns the expanded body and its digest.
    */
-  const loadSkillBody = async (skillName: string, signal?: AbortSignal): Promise<{ content: string; sha256: string }> => {
-    const entry = byName.get(skillName)
-    if (entry === undefined) throw new Error(`sci-skills: unknown skill "${skillName}"`)
+  const loadSkillBody = async (entry: SkillCatalogEntry, signal?: AbortSignal): Promise<{ content: string; sha256: string }> => {
     const raw = await source.object(entry.bodySha256, signal)
     const content = expandSkillRoot(raw, config.sandboxRoot)
     return { content, sha256: createHash('sha256').update(content, 'utf8').digest('hex') }
   }
 
+  // A live store: a logged reference follows the catalog's current body, so a
+  // skill update never strands the sessions that loaded an earlier version.
+  // The recorded sha256 is the digest of the expanded body the model first
+  // saw; for a skill the catalog no longer lists, it recovers the recorded
+  // raw body from the source's permanent object store — exact only while the
+  // body contains no `$SCI_SKILL_ROOT`, since expansion moves the digest.
   ctx.referencedText.registerStore(config.providerName, {
-    read: async (ref, signal) => (await loadSkillBody(ref.id, signal)).content,
+    mode: 'live',
+    read: async (ref, signal) => {
+      const entry = byName.get(ref.id)
+      if (entry !== undefined) return (await loadSkillBody(entry, signal)).content
+      try {
+        return expandSkillRoot(await source.object(ref.sha256, signal), config.sandboxRoot)
+      } catch (cause) {
+        throw new Error(`sci-skills: unknown skill "${ref.id}" and no stored body ${ref.sha256}`, { cause })
+      }
+    },
   })
 
   const domain = await ctx.storageDomain.open(sciSkillsDomainSpec)

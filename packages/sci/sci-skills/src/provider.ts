@@ -46,12 +46,12 @@ export interface SciSkillProviderOptions {
    */
   readonly lifecycleStates: () => ReadonlyMap<string, SkillLifecycleState>
   /**
-   * Fetch and expand one skill's body.
-   * @param name - the skill whose body to load.
+   * Fetch and expand one catalog entry's body.
+   * @param entry - the catalog entry whose body to load.
    * @param signal - cancels the fetch.
    * @returns the expanded body and its digest.
    */
-  readonly loadSkillBody: (name: string, signal?: AbortSignal) => Promise<LoadedSkillBody>
+  readonly loadSkillBody: (entry: SkillCatalogEntry, signal?: AbortSignal) => Promise<LoadedSkillBody>
 }
 
 /** Locator handed back to {@link SciSkillProvider.get}. */
@@ -114,7 +114,7 @@ export class SciSkillProvider implements SkillProvider {
     if (entry === undefined) return undefined
     const description = visibleDescription(entry, this.options.lifecycleStates().get(entry.name) ?? 'active')
     if (description === undefined) return undefined
-    const body = await this.options.loadSkillBody(entry.name, options.signal)
+    const body = await this.options.loadSkillBody(entry, options.signal)
     return {
       ...this.summary(entry, description),
       content: body.content,

@@ -13,6 +13,7 @@
 | skill 列表 provider | `ctx.skills.registerProvider()`，provider 名 `sci` | `providerName`（默认 `sci`） |
 | 树在沙箱中的副本 | `ctx.fs`，位于 `sandboxRoot` 下 | `skillRoot`、`sandboxRoot`、`syncOnStart` |
 | 摘要清单 | `<sandboxRoot>/.sci/skills.json` | — |
+| skill 正文 referenced-text store（`mode: 'live'`） | `ctx.referencedText.registerStore()`，store 名 `sci` | `providerName`（默认 `sci`） |
 | `sci_skill_usage` 投影 | `ctx.storageDomain`，domain `sci_skills` | `skillToolName`（默认 `skill`） |
 | `sci_skill_lifecycle` 投影 | `ctx.storageDomain`，domain `sci_skills` | `staleAfterDays`（默认 `90`）、`pinned` |
 | 会话事件 `sci/skills-synced` | 追加到同步之后打开的每个会话 | — |
@@ -55,7 +56,7 @@
 
 #### 模型看到什么
 
-加载一个 skill 返回它的 `<skill_content>`，其中 `$SCI_SKILL_ROOT` 已展开为 `sandboxRoot`，`resourceBase` 指向沙箱副本，因此模型从正文里读到的每个路径都是它能打开的路径。一轮同步的 `sci/skills-synced` 记录只进日志，不进模型历史。
+加载一个 skill 返回它的 `<skill_content>`，其中 `$SCI_SKILL_ROOT` 已展开为 `sandboxRoot`，`resourceBase` 指向沙箱副本，因此模型从正文里读到的每个路径都是它能打开的路径。正文以 `referenced-text` 块承载，背后是 `live` store：每次请求都重新解析为目录当前的正文，因此更新 skill 会惠及旧会话，而不是让它们困在摘要不匹配上；目录不再列出的 skill 回退为从源的永久对象存储取回记录时的原始正文。一轮同步的 `sci/skills-synced` 记录只进日志，不进模型历史。
 
 #### token 影响
 
@@ -63,10 +64,11 @@
 
 #### KV Cache 影响
 
-被加载的正文追加到历史，不扰动任何更早的前缀。同步记录带信封的 `ignorable: true`，因此完全不进入模型上下文；未挂载本插件的构建会跳过它，而不是拒绝重建日志。
+正文内容稳定期间，被加载的正文追加到历史、不扰动任何更早的前缀；发布新正文会让携带该引用的每个请求位置重新解析，每个加载过它的会话付一次完整 cache miss。同步记录带信封的 `ignorable: true`，因此完全不进入模型上下文；未挂载本插件的构建会跳过它，而不是拒绝重建日志。
 
 ## Known Limitations and Deferred Work
 
 - **不同步二进制 skill 资源。** `ctx.fs` 只提供 `writeText`，因此携带图片或压缩包的 skill bundle 无法发布。目前所有内置 bundle 都是文本（Markdown、Python、XSD、XML、HTML、纯文本）；`__pycache__` 与 `.git` 在哈希与发布两侧都被排除。
 - **自研 skill 正文仍在描述被研究平台的机制。** 目前只应用了机械修正（S3–S5：description、`$SCI_SKILL_ROOT` 路径、`deliver_files` 与章名引用）。07-skills-plan 为每个 skill 规定的行为重写 —— `sci-recall` 改读 dsh session store 而非 Claude Code 的 JSONL、`sci-plot --dry-run`、`sci canvas lint`、`sci paper archive` —— 属于后续阶段，第十六个 bundle `sci-references` 亦然。
+- **用过 `$SCI_SKILL_ROOT` 的已下架 skill 正文无法按引用恢复。** 日志里的 `sha256` 覆盖展开后的正文，而对象存储按原始正文的摘要索引，因此目录缺失 skill 的回退只能解析不含 `$SCI_SKILL_ROOT` 的正文；其余读取失败并链上源错误。
 - **用量是实时投影，不是重建。** 监听器在 `session/event` 到达时折叠它；从冷日志重建两张表是 `sci-audit` 的 `rebuild` 路径（规格 P9）。

@@ -374,6 +374,24 @@ describe('sci-skills composition', () => {
     await expect(ctx.referencedText.read({ store: 'sci', id: 'absent', sha256: '0'.repeat(64) }))
       .rejects.toThrow(/unknown skill "absent"/)
   })
+
+  it('serves the current body for a reference whose digest is outdated', async () => {
+    const { ctx } = await boot({
+      'sci-plot': skillFile('sci-plot', DESCRIPTION, 'Current body.'),
+    })
+    await expect(ctx.referencedText.read({ store: 'sci', id: 'sci-plot', sha256: '0'.repeat(64) }))
+      .resolves.toBe('Current body.')
+  })
+
+  it('falls back to the recorded body for a skill absent from the catalog', async () => {
+    const body = 'Retired body.'
+    const { ctx } = await boot({
+      'sci-plot': skillFile('sci-plot', DESCRIPTION, 'Retired body.'),
+    })
+    const digest = createHash('sha256').update(body, 'utf8').digest('hex')
+    await expect(ctx.referencedText.read({ store: 'sci', id: 'sci-gone', sha256: digest }))
+      .resolves.toBe(body)
+  })
 })
 
 describe('sci-skills http source', () => {
