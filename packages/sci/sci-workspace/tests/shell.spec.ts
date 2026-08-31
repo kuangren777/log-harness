@@ -2,8 +2,8 @@
 // its operands LAND, not by how they were written, so the relative form, the
 // parent-traversal form, and the quoted form all have to reach the same answer.
 import { describe, expect, it } from 'vitest'
-import { RULE_BUNDLE_RECURSIVE_DELETE, recursiveDeleteOperands, screenShellCommand, tokenizeCommand } from '@deepseek-ai/dsh-sci-workspace'
-import type { ShellScreenConfig } from '@deepseek-ai/dsh-sci-workspace'
+import { RULE_BUNDLE_RECURSIVE_DELETE, delegationScopeOperand, recursiveDeleteOperands, screenShellCommand, tokenizeCommand } from '@deepseek-ai/dsh-sci-workspace'
+import type { PathLayout, ShellScreenConfig } from '@deepseek-ai/dsh-sci-workspace'
 
 const CONFIG: ShellScreenConfig = {
   cwd: '/sci/projects/p1',
@@ -114,5 +114,45 @@ describe('recursiveDeleteOperands', () => {
 
   it('keeps the stdin marker as an operand rather than reading it as an option', () => {
     expect(recursiveDeleteOperands(['rm', '-r', '-'])).toEqual(['-'])
+  })
+})
+
+describe('delegationScopeOperand', () => {
+  const CWD = '/sci/projects/p1'
+  const LAYOUT: PathLayout = {
+    projectRoot: '/sci/projects',
+    deliveryDir: 'workspace',
+    scratchDir: 'tmp',
+    bundleDirs: { papers: 'papers', sciplots: 'sciplots' },
+    skillsDir: 'skills',
+    privateDir: '.sci',
+    spoolPendingDir: '.sci/spool/pending',
+  }
+
+  it('lets a command that stays inside the project through, options and bare words included', () => {
+    expect(delegationScopeOperand('grep -rn --include=*.py torch tmp/ workspace/report.md && ls -la', CWD, LAYOUT)).toBeUndefined()
+  })
+
+  it('names the first operand that resolves into a sibling project', () => {
+    expect(delegationScopeOperand('cat ../p2/tmp/notes.txt', CWD, LAYOUT)).toBe('/sci/projects/p2/tmp/notes.txt')
+    expect(delegationScopeOperand('ls /sci/projects/p2', CWD, LAYOUT)).toBe('/sci/projects/p2')
+  })
+
+  it('refuses walking up to the project root or the sandbox home', () => {
+    expect(delegationScopeOperand('cd .. && ls', CWD, LAYOUT)).toBe('/sci/projects')
+    expect(delegationScopeOperand('ls ~', CWD, LAYOUT)).toBe('/sci')
+    expect(delegationScopeOperand('cat ~/.claude/settings.json', CWD, LAYOUT)).toBe('/sci/.claude/settings.json')
+  })
+
+  it('screens every command of a list, not only the first', () => {
+    expect(delegationScopeOperand('ls tmp; cat /sci/projects/p2/x', CWD, LAYOUT)).toBe('/sci/projects/p2/x')
+  })
+
+  it('lets the shared regions and the rest of the machine through', () => {
+    expect(delegationScopeOperand('cat ~/skills/sci-plot/SKILL.md /usr/share/dict/words /tmp/x', CWD, LAYOUT)).toBeUndefined()
+  })
+
+  it('does not read a URL or a bare word as a path outside the project', () => {
+    expect(delegationScopeOperand('curl https://example.com/a/b -o tmp/a.html', CWD, LAYOUT)).toBeUndefined()
   })
 })

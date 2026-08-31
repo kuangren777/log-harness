@@ -54,7 +54,7 @@ const CHARTER_EXTENSION = '.md'
 export const BUNDLED_AGENTS_ROOT: string = fileURLToPath(new URL('../config/agents', import.meta.url))
 
 /**
- * Absolute path of the two shipped agent presets.
+ * Absolute path of the three shipped agent presets.
  *
  * The directory `cordis.patch.yml` declares as the roster's only configured
  * root, through the launcher's `dshBundlePath`: only a resolver that can find
@@ -62,8 +62,8 @@ export const BUNDLED_AGENTS_ROOT: string = fileURLToPath(new URL('../config/agen
  */
 export const BUNDLED_PRESET_ROOT: string = fileURLToPath(new URL('../config/agent-presets', import.meta.url))
 
-/** Directory names of the two presets this bundle ships, in roster order. */
-export const SCI_PRESETS: readonly string[] = ['sci-balanced', 'sci-cluster']
+/** Directory names of the three presets this bundle ships, in roster order. */
+export const SCI_PRESETS: readonly string[] = ['sci-balanced', 'sci-auto', 'sci-cluster']
 
 /** Deployment-varying choices for the persona roster. */
 export interface Config {

@@ -89,6 +89,10 @@ export interface AgentCall {
   status: AgentCallStatus
   /** Output tokens, absent unless the settlement carried usage. */
   outputTokens?: number
+  /** Web retrievals the child made, absent while its log was unreadable. */
+  retrievalCalls?: number
+  /** Retrievals that repeated an earlier one verbatim — the redundancy figure. */
+  retrievalRepeats?: number
 }
 
 /** One model in the host's catalog. */

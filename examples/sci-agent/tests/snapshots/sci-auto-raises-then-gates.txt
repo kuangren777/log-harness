@@ -1,0 +1,44 @@
+isError: true
+---
+Error: workflow is refused: this session was resolved to the balanced tier, which has no subagent orchestration. Do the work directly in this thread; if it has turned out to need a swarm, call resolve_tier again with cluster and the reason, declare a plan, then call workflow. Never stand in a large-looking result whose numbers no real run produced.
+---
+isError: true
+---
+Error: workflow is refused: declare_research_plan has not been called in this session. Declare the swarm first — name each parallel line of work and what it produces — then call workflow again.
+---
+sci events: [
+  {
+    "type": "sci/tier-resolved",
+    "data": {
+      "tier": "balanced",
+      "presetName": "sci-auto",
+      "resolvedBy": "model",
+      "reason": "One pass covers the literature scan."
+    }
+  },
+  {
+    "type": "sci/tool-denied",
+    "data": {
+      "toolName": "workflow",
+      "rule": "tier",
+      "reason": "workflow is refused: this session was resolved to the balanced tier, which has no subagent orchestration. Do the work directly in this thread; if it has turned out to need a swarm, call resolve_tier again with cluster and the reason, declare a plan, then call workflow. Never stand in a large-looking result whose numbers no real run produced."
+    }
+  },
+  {
+    "type": "sci/tier-resolved",
+    "data": {
+      "tier": "cluster",
+      "presetName": "sci-auto",
+      "resolvedBy": "model",
+      "reason": "The scan turned up six corpora that need parallel close reading."
+    }
+  },
+  {
+    "type": "sci/tool-denied",
+    "data": {
+      "toolName": "workflow",
+      "rule": "plan",
+      "reason": "workflow is refused: declare_research_plan has not been called in this session. Declare the swarm first — name each parallel line of work and what it produces — then call workflow again."
+    }
+  }
+]

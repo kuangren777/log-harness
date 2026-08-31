@@ -15,6 +15,7 @@
 import type { CallId } from '@deepseek-ai/dsh-llm'
 import type { SciPlanIdType } from '@deepseek-ai/dsh-sci-plan'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SciTier } from './types.ts'
 // Type-only: merges `sci/plan-declared` into the event map this module reads.
 import type {} from '@deepseek-ai/dsh-sci-plan'
 
@@ -88,6 +89,47 @@ export function denyConsumed(toolName: string): string {
  */
 export function denyBalanced(toolName: string): string {
   return `${toolName} is refused: this session runs in Solo mode, which has no subagent orchestration. `
-    + 'Do the work directly in this thread; if it genuinely needs a swarm, deliver what one pass covers '
-    + 'and call suggest_tier_upgrade with one sentence on what the swarm would add.'
+    + 'Do the work directly in this thread; if it genuinely needs a swarm, deliver what one pass honestly covers '
+    + '(a real smaller pilot, its reduced scope stated) and call suggest_tier_upgrade with one sentence on what the '
+    + 'swarm would add. Never stand in a large-looking result whose numbers no real run produced.'
+}
+
+/**
+ * Recover one session's resolved tier from its log: the LAST `sci/tier-resolved`
+ * record, since the auto composition appends one per resolution and a raise
+ * supersedes the resolution before it.
+ * @param events - the session's events in log order.
+ * @returns the latest resolved tier, or `undefined` when none was recorded.
+ */
+export function rebuildResolvedTier(events: readonly SessionEvent[]): SciTier | undefined {
+  let tier: SciTier | undefined
+  for (const event of events) {
+    if (event.type === 'sci/tier-resolved') tier = event.data.tier
+  }
+  return tier
+}
+
+/**
+ * The refusal an auto-composition fan-out reads before the tier is resolved.
+ * @param toolName - the fan-out tool that was called.
+ * @returns the refusal text, naming the tool that resolves the session.
+ */
+export function denyUnresolved(toolName: string): string {
+  return `${toolName} is refused: this session runs in Auto mode and its tier is not resolved yet. `
+    + 'Judge the task first and call resolve_tier — cluster for a real experiment, reproduction, or '
+    + `systematic multi-source research; balanced for what one pass covers — then call ${toolName} again `
+    + 'after declaring a plan.'
+}
+
+/**
+ * The refusal an auto-composition fan-out reads after the model resolved the
+ * session to the balanced tier.
+ * @param toolName - the fan-out tool that was called.
+ * @returns the refusal text, naming the tool that raises the tier.
+ */
+export function denyResolvedBalanced(toolName: string): string {
+  return `${toolName} is refused: this session was resolved to the balanced tier, which has no subagent orchestration. `
+    + 'Do the work directly in this thread; if it has turned out to need a swarm, call resolve_tier again with '
+    + `cluster and the reason, declare a plan, then call ${toolName}. Never stand in a large-looking result whose `
+    + 'numbers no real run produced.'
 }

@@ -8,6 +8,7 @@ import {
   delegationCalls,
   metaOutputTokens,
   monthStart,
+  retrievalFigures,
   summarizeCalls,
 } from '@deepseek-ai/dsh-sci-agents'
 import type { AgentCall } from '@deepseek-ai/dsh-sci-agents'
@@ -114,7 +115,7 @@ describe('delegationCalls', () => {
 describe('childRun', () => {
   it('folds a continuable child to its label, charter, and settled turn time', () => {
     expect(childRun(childLog('Find the methods file', 'CHARTER', [{ start: 1_000, end: 3_500 }])))
-      .toEqual({ label: 'Find the methods file', persona: 'CHARTER', durationMs: 2_500 })
+      .toEqual({ label: 'Find the methods file', persona: 'CHARTER', durationMs: 2_500, retrieval: { calls: 0, repeats: 0 } })
   })
 
   it('adds the open turn of a child that is still working', () => {
@@ -132,7 +133,24 @@ describe('childRun', () => {
 
   it('reports a one-shot child without a charter', () => {
     const run = childRun(childLog('One shot', undefined, [{ start: 1_000, end: 1_200 }]))
-    expect(run).toEqual({ label: 'One shot', durationMs: 200 })
+    expect(run).toEqual({ label: 'One shot', durationMs: 200, retrieval: { calls: 0, repeats: 0 } })
+  })
+
+  // The studied platform's literature subagent searched 29 times over one paper
+  // set (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §5 row 9); the run now counts
+  // its retrievals and the repeats among them.
+  it('counts the child\'s web retrievals and the ones that repeat an earlier call verbatim', () => {
+    const log = [
+      ...childLog('Survey', 'CHARTER', [{ start: 1_000, end: 2_000 }]),
+      toolCall(10, 1_100, 'web_search', { query: 'agent fuzzing' }),
+      toolCall(11, 1_200, 'web_fetch', { url: 'https://a.example' }),
+      toolCall(12, 1_300, 'web_search', { query: 'agent fuzzing' }),
+      toolCall(13, 1_400, 'web_search', { query: 'fuzzing agents' }),
+      toolCall(14, 1_500, 'read', { file_path: 'x' }),
+    ]
+
+    expect(childRun(log, ['web_search', 'web_fetch'])?.retrieval).toEqual({ calls: 4, repeats: 1 })
+    expect(retrievalFigures(log, ['web_search'])).toEqual({ calls: 3, repeats: 1 })
   })
 
   it('identifies no child in a log with no descriptor', () => {
@@ -150,6 +168,9 @@ describe('childRun', () => {
   })
 })
 
+/** A child that retrieved nothing. */
+const NONE = { calls: 0, repeats: 0 }
+
 describe('attachChildTimings', () => {
   const call = (callId: string, task: string, status: AgentCall['status'] = 'ok'): AgentCall =>
     ({ ts: 1, sessionId: 's1', callId, task, status })
@@ -157,30 +178,39 @@ describe('attachChildTimings', () => {
   it('joins a delegation to the child its label named', () => {
     const joined = attachChildTimings(
       [call('c1', 'Find it')],
-      [{ label: 'Find it', persona: 'CHARTER', durationMs: 2_500 }],
+      [{ label: 'Find it', persona: 'CHARTER', durationMs: 2_500, retrieval: NONE }],
       'CHARTER',
     )
     expect(joined[0]?.durationMs).toBe(2_500)
   })
 
+  it('carries the matched child\'s retrieval figures onto the delegation row', () => {
+    const joined = attachChildTimings(
+      [call('c1', 'Survey')],
+      [{ label: 'Survey', persona: 'CHARTER', durationMs: 10, retrieval: { calls: 29, repeats: 21 } }],
+      'CHARTER',
+    )
+    expect(joined[0]).toMatchObject({ retrievalCalls: 29, retrievalRepeats: 21 })
+  })
+
   it('leaves a still-running delegation untimed', () => {
     const joined = attachChildTimings(
       [call('c1', 'Find it', 'running')],
-      [{ label: 'Find it', durationMs: 2_500 }],
+      [{ label: 'Find it', durationMs: 2_500, retrieval: NONE }],
       'CHARTER',
     )
     expect(joined[0]).not.toHaveProperty('durationMs')
   })
 
   it('leaves a delegation whose label matches no child untimed', () => {
-    const joined = attachChildTimings([call('c1', 'Find it')], [{ label: 'Other', durationMs: 9 }], undefined)
+    const joined = attachChildTimings([call('c1', 'Find it')], [{ label: 'Other', durationMs: 9, retrieval: NONE }], undefined)
     expect(joined[0]).not.toHaveProperty('durationMs')
   })
 
   it('does not lend a sibling persona\'s timing to this one', () => {
     const joined = attachChildTimings(
       [call('c1', 'Same task')],
-      [{ label: 'Same task', persona: 'OTHER-CHARTER', durationMs: 2_500 }],
+      [{ label: 'Same task', persona: 'OTHER-CHARTER', durationMs: 2_500, retrieval: NONE }],
       'CHARTER',
     )
     expect(joined[0]).not.toHaveProperty('durationMs')
@@ -189,7 +219,7 @@ describe('attachChildTimings', () => {
   it('consumes each child once when two calls share a label', () => {
     const joined = attachChildTimings(
       [call('c1', 'Same task'), call('c2', 'Same task')],
-      [{ label: 'Same task', durationMs: 100 }, { label: 'Same task', durationMs: 900 }],
+      [{ label: 'Same task', durationMs: 100, retrieval: NONE }, { label: 'Same task', durationMs: 900, retrieval: NONE }],
       undefined,
     )
     expect(joined.map(entry => entry.durationMs)).toEqual([100, 900])

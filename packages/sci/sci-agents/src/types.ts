@@ -93,6 +93,15 @@ export interface AgentCall {
   readonly status: AgentCallStatus
   /** Output tokens, absent unless the settlement carried usage. */
   readonly outputTokens?: number
+  /** Web retrievals (searches and fetches) the child made, when its log was readable. */
+  readonly retrievalCalls?: number
+  /**
+   * Retrievals that repeated an earlier one of the same tool and arguments —
+   * the same query searched again, the same page fetched again. The studied
+   * platform's literature subagent searched 29 times over one paper set
+   * (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §5 row 9); this is that figure.
+   */
+  readonly retrievalRepeats?: number
 }
 
 /** One model in the host's catalog. */

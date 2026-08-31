@@ -28,6 +28,7 @@ import type { CallId } from '@deepseek-ai/dsh-llm'
 import type { InvariantFailure, InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import { DEFAULT_FANOUT_TOOLS } from './config.ts'
+import { rebuildResolvedTier } from './latch.ts'
 // Type-only: merges the tier events this companion reads.
 import type {} from './types.ts'
 
@@ -42,12 +43,15 @@ export const inject = ['invariants']
 const FANOUT_TOOLS: ReadonlySet<string> = new Set(DEFAULT_FANOUT_TOOLS)
 
 /**
- * Whether one session was resolved to the balanced tier.
+ * Whether one session is currently resolved to the balanced tier: its LAST
+ * `sci/tier-resolved` names `balanced`. The last record decides because the
+ * auto composition raises a session from balanced to cluster by appending a
+ * second one, after which a fan-out is exactly what the session may do.
  * @param events - the session's events in log order.
- * @returns whether a `sci/tier-resolved` naming `balanced` is in the log.
+ * @returns whether the latest resolution is `balanced`.
  */
 function isBalanced(events: readonly SessionEvent[]): boolean {
-  return events.some(event => event.type === 'sci/tier-resolved' && event.data.tier === 'balanced')
+  return rebuildResolvedTier(events) === 'balanced'
 }
 
 /**

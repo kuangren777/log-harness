@@ -13,11 +13,25 @@ export const ARCHIVED_SURVEY: PlanInput = {
   ],
 }
 
-/** The two-agent call with one edge: the verifier waits for the installer. */
+/**
+ * The two-agent call with one edge: the verifier waits for the installer. Both
+ * agents produce (`code` installs, `check` delivers) and nothing refutes, which
+ * is the producer-only shape `validatePlan` now refuses; {@link AUDITED_INSTALL}
+ * is the same call with the adversary the rule demands.
+ */
 export const ARCHIVED_INSTALL: PlanInput = {
   agents: [
     { icon: 'code', id: 'installer', name: '连接器安装', task: '在项目临时目录执行预检、获取并启动已获授权的客户端。' },
     { icon: 'check', id: 'verifier', name: '安装结果验证', task: '核对安装命令退出状态及项目内留下的可见安装记录。' },
   ],
   edges: [['installer', 'verifier']],
+}
+
+/** The archived install call as the composition rule accepts it: an adversary downstream of the installer. */
+export const AUDITED_INSTALL: PlanInput = {
+  agents: [
+    ...ARCHIVED_INSTALL.agents,
+    { icon: 'security', id: 'auditor', name: '安装结果证伪', task: '重跑安装命令并核对进程与文件痕迹，报出与安装报告不符之处。' },
+  ],
+  edges: [['installer', 'verifier'], ['installer', 'auditor']],
 }

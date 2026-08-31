@@ -24,7 +24,7 @@
 
 只读 session log。`tools/post-execute`、`workflow/end` 以及其余仅存在于 cordis 的事件一律不看：从它们折出来的行无法被冷重放复现，而那正是本包存在的唯一保证。
 
-`AuditFold` 承载单条事件决定不了的那一点点状态。今天恰好只有一条关系——一次 workflow run 属于它之前声明的那个 plan，而 `tool-workflow/run-start` 只带 run 的身份——所以 fold 记住尚未被认领的声明，并只认领一次。`projectLog` 用一个全新的 fold 跑完整条 log，也正是 `rebuild` 重放的东西。
+`AuditFold` 承载单条事件决定不了的那一点点状态。今天恰好只有一条关系——一次 workflow run 属于它之前声明的那个 plan，而 `tool-workflow/run-start` 只带 run 的身份——所以 fold 记住尚未被认领的声明，并只认领一次。`projectLog` 用一个全新的 fold 跑完整条 log，也正是 `rebuild` 重放的东西。 2026-08-30 起 fold 还承载第二种关系：最近一次 `sci/plan-declared` 之后的每次 `subagent_<persona>` 调用与每个 `tool-workflow/agent-start`（直到下一次声明）都会重发该 `sci_plan` 行，带上 `spawnedAgents`、`spawnedPersonasJson`（workflow agent 记为 `workflow:<label>`）与 `reconciled`（相对 `declaredAgents` 的 `fewer` / `match` / `more`）。被研究平台画了计划卡、却跑脚本里写的任何东西，没有人比对两者（`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §5 第 8 行）；这一行就是那次比对，`planRecords` 返回一份日志里每次声明的最终记录。
 
 `sci/authorized`、`sci/tool-denied`、`sci/tier-resolved`、`sci/tier-upgrade-suggested` 按事件类型字符串匹配、按结构读取字段，因为 `sci-guard` 与 `sci-tier` 排在本包之后落地。每一处都带 `TODO(sci-audit)` 注明将来要导入的 payload 类型；payload 缺字段时对应列留空，而不是写一个空值。
 
@@ -40,7 +40,7 @@
 
 `summarize(sessionId)` 返回拒绝数（`tool-denied` 加 `fs-denied` 行）、交付数、显式批准的授权数、挂了 memory 索引时的写入时序分，以及本次会话是否漏引。计数取自已提交的行而非 log，这样调用方看到的就是投影真正提交的数字；两者若不一致，正是 `rebuild` 要暴露的东西。
 
-`citationMissing` 在「本次会话查了网，最终回答却没有内联 Markdown 链接」时为真。只有一次 web 工具**调用**不算——失败或被拒的调用没产生任何可引的事实——所以被度量的条件是拿到了结果，并通过 `callId` 与调用配对，因为 `tool/result` 不重复工具名。它只度量，不设门禁。
+`citationMissing` 在「本次会话查了网，最终回答却没有内联 Markdown 链接」时为真。只有一次 web 工具**调用**不算——失败或被拒的调用没产生任何可引的事实——所以被度量的条件是拿到了结果，并通过 `callId` 与调用配对，因为 `tool/result` 不重复工具名。它只度量，不设门禁。 摘要另有 `planMismatches`（已启动 agent 始终没对上名册的声明数）与 `deliveriesWithoutExecution`（会话里任何 `execToolNames` 调用返回之前就做出的交付数——没有执行在前的交付物正是被研究平台伪造复现的形状，分析 §3；只计量不门禁）。
 
 ## Config
 
@@ -61,3 +61,5 @@ No direct invalidation; this package contributes no request tokens, and neither 
 - **没有 `subagent:<id>` 这种 actor。** 安全模型的 actor 词表里有委派出去的 subagent，但本投影获准读取的 log 记录（`02-w0-adversary-resolution.md`，M6）只涵盖 workflow run 及其成员，因此一次委派调用记在发起它的 session 名下。
 - **四个 `sci/*` 类型按结构读取。** 在 `sci-guard` 与 `sci-tier` 导出各自 payload 类型之前，这两个包里的一次改名会让本包相应列静默停止填写，而不是让构建失败。
 - **重建不清理别家的孤儿行。** memory 节点被删后留在 `sci_memory_index` 里的陈旧行归 `sci-memory` 修；本包既不拥有那张表，也无法重放它。
+- **provenance 只量到会话，量不到数字。** `deliveriesWithoutExecution` 只回答「交付之前有没有任何执行返回过」，不把交付物里的某个数字追溯到产出它的那条 `tool/result`。更细的投影得先定义「交付物里的一个数字」是什么（`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §5 第 4 行）；在此之前 `@deepseek-ai/dsh-sci-plan` 强制的 adversary 是对伪造结果的防线，这个数字是审计侧的信号。
+- **检索冗余是下界。** `@deepseek-ai/dsh-sci-agents` 只在子会话以相同参数文本调用同一 web 工具时计一次重复；对同一批论文换个措辞再搜不会被识别（§5 第 9 行）。

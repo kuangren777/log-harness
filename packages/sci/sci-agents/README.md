@@ -60,6 +60,8 @@ Nothing on a card is estimated. `monthCalls` is the count of `sci_audit` rows wi
 
 `durationMs` is the CHILD's own turn time, folded from its log with `@deepseek-ai/dsh-subagent`'s `subagentTiming` projection — deliberately not the parent's call-to-result interval, which for a `continuable` delegation is milliseconds while the child works for minutes. A call is joined to its child by the creation label the two share (`tool/call.arguments.description` becomes the descriptor's `label`), narrowed to children carrying this persona's charter, and each child is consumed once so two calls with the same label do not both claim the first.
 
+`retrievalCalls` and `retrievalRepeats` come from the same child log: every call to a `webTools` name, and how many of them repeated an earlier call of the same tool with the same arguments text. The studied platform's literature subagent searched 29 times over one paper set (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §5 row 9); the figure is a floor, since a re-worded query over the same set is not a repeat.
+
 `outputTokens` and `monthTokens` appear only when a settlement carried `meta.usage.outputTokens`. Nothing in this repository attaches one today, so the column is normally absent rather than zero.
 
 ## Model Experience

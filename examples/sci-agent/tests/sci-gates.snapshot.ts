@@ -24,7 +24,7 @@ afterEach(async () => {
 })
 
 /** Boot one tier and register it for teardown. */
-async function open(tier: 'balanced' | 'cluster'): Promise<BootedExample> {
+async function open(tier: 'balanced' | 'cluster' | 'auto'): Promise<BootedExample> {
   const example = await bootExample(tier)
   booted.push(example)
   return example
@@ -69,6 +69,32 @@ describe('sci-cluster-requires-plan', () => {
 
     expect(result.isError).toBe(true)
     await record('sci-cluster-requires-plan', example, resultText(example, result))
+  }, 60_000)
+})
+
+describe('sci-auto-requires-resolution', () => {
+  it('denies the first fan-out of an auto session the model has not resolved', async () => {
+    const example = await open('auto')
+
+    const result = await call(example, 'workflow', { script: 'await agent("do the work")' })
+
+    expect(result.isError).toBe(true)
+    await record('sci-auto-requires-resolution', example, resultText(example, result))
+  }, 60_000)
+})
+
+describe('sci-auto-raises-then-gates', () => {
+  it('refuses a fan-out after a balanced resolution, admits the raise, then meets the latch', async () => {
+    const example = await open('auto')
+
+    await call(example, 'resolve_tier', { tier: 'balanced', reason: 'One pass covers the literature scan.' })
+    const balanced = await call(example, 'workflow', { script: 'await agent("do the work")' })
+    await call(example, 'resolve_tier', { tier: 'cluster', reason: 'The scan turned up six corpora that need parallel close reading.' })
+    const undeclared = await call(example, 'workflow', { script: 'await agent("do the work")' })
+
+    expect(balanced.isError).toBe(true)
+    expect(undeclared.isError).toBe(true)
+    await record('sci-auto-raises-then-gates', example, `${resultText(example, balanced)}\n---\n${resultText(example, undeclared)}`)
   }, 60_000)
 })
 

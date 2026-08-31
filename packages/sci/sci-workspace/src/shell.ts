@@ -11,7 +11,8 @@
  */
 
 import { RULE_BUNDLE_RECURSIVE_DELETE } from './decide.ts'
-import { pathSegments, resolveAgainst, segmentsUnder } from './paths.ts'
+import { isOutsideDelegationScope, pathSegments, resolveAgainst, sandboxHomeSegments, segmentsUnder } from './paths.ts'
+import type { PathLayout } from './paths.ts'
 import type { ShellDenial } from './types.ts'
 
 /** What one screening pass needs to resolve and place an operand. */
@@ -200,6 +201,53 @@ export function screenShellCommand(command: string, config: ShellScreenConfig): 
         rule: RULE_BUNDLE_RECURSIVE_DELETE,
         reason: `refusing a recursive delete of "${path}": papers/ and sciplots/ bundles are append-only version stores owned by the render user, so remove intermediate files under tmp/ instead or ask the user to drop the bundle.`,
       }
+    }
+  }
+  return undefined
+}
+
+/**
+ * Whether a token can name a location: it has a path separator, walks up a
+ * directory, or starts at the home directory. Bare words are left alone — a
+ * command's own arguments and flags outnumber its paths.
+ * @param token - one command-line token.
+ * @returns whether the token is read as a path operand.
+ */
+function looksLikePath(token: string): boolean {
+  return token.includes('/') || token === '..' || token === '~'
+}
+
+/**
+ * Expand a leading `~` to the sandbox home, which is where the shell would
+ * take it; every other token is returned unchanged.
+ * @param token - one command-line token.
+ * @param layout - the configured region layout.
+ * @returns the token with the home directory spelled out.
+ */
+function expandHome(token: string, layout: PathLayout): string {
+  if (token !== '~' && !token.startsWith('~/')) return token
+  return `/${sandboxHomeSegments(layout).join('/')}${token.slice(1)}`
+}
+
+/**
+ * The first path operand of a command line that a delegated agent may not reach.
+ *
+ * Every non-option token of every command in the line is read as a possible
+ * path, resolved against the working directory, and tested with
+ * {@link isOutsideDelegationScope}. The screen over-approximates on purpose,
+ * as the recursive-delete screen does: a wrongly refused command costs one
+ * rephrasing, while a missed one lets a delegation read a sibling project.
+ * @param command - the command line the tool call carries.
+ * @param cwd - the delegated session's working directory, which is its project.
+ * @param layout - the configured region layout.
+ * @returns the first resolved path outside the delegation's scope, or `undefined` when every operand is in scope.
+ */
+export function delegationScopeOperand(command: string, cwd: string, layout: PathLayout): string | undefined {
+  for (const tokens of tokenizeCommand(command)) {
+    for (const token of tokens.slice(1)) {
+      if (isOption(token) || !looksLikePath(token)) continue
+      const path = resolveAgainst(cwd, expandHome(token, layout))
+      if (isOutsideDelegationScope(path, cwd, layout)) return path
     }
   }
   return undefined

@@ -76,6 +76,7 @@ export {
   delegationCalls,
   metaOutputTokens,
   monthStart,
+  retrievalFigures,
   summarizeCalls,
 } from './stats.ts'
 export type { ChildRun } from './stats.ts'
@@ -385,7 +386,7 @@ export class AgentsRuntime extends TypertRemoteService {
       logs.push({ sessionId: String(record.header.id), events })
       const parent = record.header.parentSession
       if (parent === undefined) continue
-      const run = childRun(events)
+      const run = childRun(events, this.config.webTools)
       if (run === undefined) continue
       const siblings = children.get(String(parent))
       if (siblings === undefined) children.set(String(parent), [run])

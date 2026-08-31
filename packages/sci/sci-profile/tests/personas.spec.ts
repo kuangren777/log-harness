@@ -141,8 +141,8 @@ describe('the sci-profile plugin', () => {
       .rejects.toThrow(/the persona roster is missing "writer"/)
   })
 
-  it('names the two presets the bundle ships', () => {
-    expect(SciProfile.SCI_PRESETS).toEqual(['sci-balanced', 'sci-cluster'])
+  it('names the three presets the bundle ships', () => {
+    expect(SciProfile.SCI_PRESETS).toEqual(['sci-balanced', 'sci-auto', 'sci-cluster'])
     expect(SciProfile.BUNDLED_PRESET_ROOT.endsWith('agent-presets')).toBe(true)
   })
 })

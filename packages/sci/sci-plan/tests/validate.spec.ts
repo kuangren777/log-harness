@@ -3,11 +3,11 @@
 import { describe, expect, it } from 'vitest'
 import { validatePlan } from '@deepseek-ai/dsh-sci-plan'
 import type { PlanInput, PlanValidation } from '@deepseek-ai/dsh-sci-plan'
-import { ARCHIVED_INSTALL, ARCHIVED_SURVEY } from './archived-calls.ts'
+import { ARCHIVED_INSTALL, ARCHIVED_SURVEY, AUDITED_INSTALL } from './archived-calls.ts'
 
-/** One well-formed agent, so a case only has to state the field it is testing. */
+/** One well-formed agent — an adversary, so the composition rule holds by default and a case only has to state the field it is testing. */
 function agent(id: string, overrides: Partial<PlanInput['agents'][number]> = {}): PlanInput['agents'][number] {
-  return { id, name: `card ${id}`, icon: 'code', task: `do ${id}`, ...overrides }
+  return { id, name: `card ${id}`, icon: 'security', task: `do ${id}`, ...overrides }
 }
 
 /** The refusal messages of a plan expected to be rejected. */
@@ -34,7 +34,7 @@ describe('sci-plan validatePlan', () => {
 
     expect(result.ok).toBe(true)
     if (!result.ok) throw new Error('expected the plan to validate')
-    expect(result.plan.agents[0]).toEqual({ id: 'a', name: 'card', icon: 'code', task: 'work' })
+    expect(result.plan.agents[0]).toEqual({ id: 'a', name: 'card', icon: 'security', task: 'work' })
     expect(result.plan.edges).toEqual([['a', 'b']])
   })
 
@@ -121,7 +121,7 @@ describe('sci-plan validatePlan', () => {
 
   it.each([
     { label: 'the three-agent survey', input: ARCHIVED_SURVEY, ids: ['repo-inspector', 'environment-checker', 'safety-reviewer'], edges: [] },
-    { label: 'the two-agent install', input: ARCHIVED_INSTALL, ids: ['installer', 'verifier'], edges: [['installer', 'verifier']] },
+    { label: 'the audited install', input: AUDITED_INSTALL, ids: ['installer', 'verifier', 'auditor'], edges: [['installer', 'verifier'], ['installer', 'auditor']] },
   ])('accepts the archived real call: $label', ({ input, ids, edges }) => {
     const result = validatePlan(input)
 
@@ -129,5 +129,66 @@ describe('sci-plan validatePlan', () => {
     if (!result.ok) throw new Error('expected the archived call to validate')
     expect(result.order.map(entry => entry.id)).toEqual(ids)
     expect(result.plan.edges).toEqual(edges)
+  })
+})
+
+// A swarm whose every node produces ships whatever its producers believe: the
+// studied platform's fabricated reproduction left a producer-only DAG with no
+// node asked to break it (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §3, §6.2).
+describe('sci-plan validatePlan composition rule', () => {
+  it('refuses a plan with no adversary, naming the icon to add', () => {
+    expect(errorsOf(validatePlan({ agents: [agent('a', { icon: 'web' }), agent('b', { icon: 'search' })] }))).toEqual([
+      'no agent carries icon "security"; every plan needs at least one adversary that tries to break what the others produce — a swarm of producers alone is refused',
+    ])
+  })
+
+  it('refuses the archived two-agent install, which produced and delivered with nothing refuting', () => {
+    expect(errorsOf(validatePlan(ARCHIVED_INSTALL))).toEqual([
+      'no agent carries icon "security"; every plan needs at least one adversary that tries to break what the others produce — a swarm of producers alone is refused',
+    ])
+  })
+
+  it('refuses a producer whose adversary runs beside it instead of after it', () => {
+    expect(errorsOf(validatePlan({ agents: [agent('build', { icon: 'code' }), agent('audit')] }))).toEqual([
+      'no edge leads from a producing agent ("build") into the adversary ("audit"); add an edge so the adversary runs after the artifact exists and checks the artifact itself',
+    ])
+  })
+
+  it('names every producer and every adversary when the edge is missing', () => {
+    const errors = errorsOf(validatePlan({
+      agents: [agent('build', { icon: 'code' }), agent('ship', { icon: 'check' }), agent('audit'), agent('refute')],
+      edges: [['build', 'ship']],
+    }))
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('("build", "ship")')
+    expect(errors[0]).toContain('("audit", "refute")')
+  })
+
+  it('accepts a producer once one adversary depends on one producer', () => {
+    const result = validatePlan({
+      agents: [agent('build', { icon: 'code' }), agent('ship', { icon: 'check' }), agent('audit')],
+      edges: [['build', 'ship'], ['ship', 'audit']],
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected the audited plan to validate')
+    expect(result.order.map(entry => entry.id)).toEqual(['build', 'ship', 'audit'])
+  })
+
+  it('accepts a read-only swarm whose adversary runs in parallel, since there is no artifact to wait for', () => {
+    expect(validatePlan({ agents: [agent('a', { icon: 'web' }), agent('b', { icon: 'search' }), agent('audit')] }).ok).toBe(true)
+  })
+
+  it('reports the missing adversary together with field and reference problems, before the cycle check', () => {
+    const errors = errorsOf(validatePlan({
+      agents: [agent('a', { icon: 'code', name: '' }), agent('b', { icon: 'code' })],
+      edges: [['a', 'b'], ['b', 'a']],
+    }))
+
+    expect(errors).toEqual([
+      'agents[0].name is empty; it is the card title the user reads',
+      'no agent carries icon "security"; every plan needs at least one adversary that tries to break what the others produce — a swarm of producers alone is refused',
+    ])
   })
 })

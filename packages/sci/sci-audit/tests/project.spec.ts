@@ -8,7 +8,7 @@ import { ApprovalRequestId } from '@deepseek-ai/dsh-user-approval/types'
 import { CallId, createAssistantMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionEventMap, SessionEventType } from '@deepseek-ai/dsh-session'
-import { AuditFold, MAIN_ACTOR, auditKey, project, projectLog } from '@deepseek-ai/dsh-sci-audit'
+import { AuditFold, MAIN_ACTOR, auditKey, planRecords, project, projectLog } from '@deepseek-ai/dsh-sci-audit'
 import type { ProjectedRow } from '@deepseek-ai/dsh-sci-audit'
 
 const SESSION = SessionId('11111111-2222-3333-4444-555555555555')
@@ -259,6 +259,10 @@ describe('project', () => {
           sessionId: SESSION,
           agentsJson: '[{"id":"a","name":"Scout","icon":"search","task":"find sources"}]',
           edgesJson: '[]',
+          declaredAgents: 1,
+          spawnedAgents: 0,
+          spawnedPersonasJson: '[]',
+          reconciled: 'fewer',
           ts: TIME + 15,
         },
       },
@@ -369,6 +373,55 @@ describe('AuditFold', () => {
     const second = fold.step(event(3, 'tool-workflow/run-start', { runId: 'r-2', name: 'again' } as SessionEventMap['tool-workflow/run-start']))
 
     expect(second.filter(row => row.table === 'sci_plan')).toEqual([])
+  })
+
+  // The studied platform drew a plan card and ran whatever the Workflow script
+  // did; nothing compared the two (`clawsgo-analysis/CLAWSGO-SCHEDULING.md`
+  // §5 row 8). The row now carries the comparison.
+  it('counts every persona delegation after a declaration against its roster', () => {
+    const rows = projectLog(SESSION, [
+      event(1, 'sci/plan-declared', {
+        planId: 'p-1',
+        agents: [{ id: 'a', name: 'A', icon: 'search', task: 'find' }, { id: 'b', name: 'B', icon: 'security', task: 'break' }],
+        edges: [],
+      } as unknown as SessionEventMap['sci/plan-declared']),
+      event(2, 'tool/call', { turn: 1, step: 1, callId: CallId('c1'), name: 'subagent_scout', arguments: '{}' }),
+      event(3, 'tool/call', { turn: 1, step: 1, callId: CallId('c2'), name: 'read', arguments: '{}' }),
+      event(4, 'tool/call', { turn: 1, step: 2, callId: CallId('c3'), name: 'subagent_adversary', arguments: '{}' }),
+    ])
+
+    const plans = rows.filter(row => row.table === 'sci_plan').map(row => row.value)
+    expect(plans.map(plan => [plan.spawnedAgents, plan.reconciled])).toEqual([[0, 'fewer'], [1, 'fewer'], [2, 'match']])
+    expect(plans.at(-1)).toMatchObject({ declaredAgents: 2, spawnedPersonasJson: '["scout","adversary"]' })
+  })
+
+  it('reports more once the fan-outs start an agent the declaration never named, counting workflow agents by label', () => {
+    const rows = projectLog(SESSION, [
+      event(1, 'sci/plan-declared', {
+        planId: 'p-1', agents: [{ id: 'a', name: 'A', icon: 'security', task: 'break' }], edges: [],
+      } as unknown as SessionEventMap['sci/plan-declared']),
+      event(2, 'tool-workflow/run-start', { runId: 'r-1', name: 'survey' } as SessionEventMap['tool-workflow/run-start']),
+      event(3, 'tool-workflow/agent-start', { runId: 'r-1', label: 'review:bugs', childId: CHILD } as unknown as SessionEventMap['tool-workflow/agent-start']),
+      event(4, 'tool-workflow/agent-start', { runId: 'r-1', label: 'review:perf', childId: CHILD } as unknown as SessionEventMap['tool-workflow/agent-start']),
+    ])
+
+    const last = rows.filter(row => row.table === 'sci_plan').at(-1)?.value
+    expect(last).toMatchObject({
+      workflowRunId: 'r-1', declaredAgents: 1, spawnedAgents: 2, reconciled: 'more',
+      spawnedPersonasJson: '["workflow:review:bugs","workflow:review:perf"]',
+    })
+  })
+
+  it('closes a declaration at the next one, so later starts count against the new roster', () => {
+    const records = planRecords(SESSION, [
+      event(1, 'sci/plan-declared', { planId: 'p-1', agents: [{ id: 'a', name: 'A', icon: 'security', task: 'x' }], edges: [] } as unknown as SessionEventMap['sci/plan-declared']),
+      event(2, 'tool/call', { turn: 1, step: 1, callId: CallId('c1'), name: 'subagent_adversary', arguments: '{}' }),
+      event(3, 'sci/plan-declared', { planId: 'p-2', agents: [{ id: 'a', name: 'A', icon: 'security', task: 'x' }], edges: [] } as unknown as SessionEventMap['sci/plan-declared']),
+      event(4, 'tool/call', { turn: 2, step: 1, callId: CallId('c2'), name: 'subagent_adversary', arguments: '{}' }),
+      event(5, 'tool/call', { turn: 2, step: 1, callId: CallId('c3'), name: 'subagent_writer', arguments: '{}' }),
+    ])
+
+    expect(records.map(plan => [plan.planId, plan.spawnedAgents, plan.reconciled])).toEqual([['p-1', 1, 'match'], ['p-2', 2, 'more']])
   })
 
   it('leaves an unplanned run unattributed', () => {

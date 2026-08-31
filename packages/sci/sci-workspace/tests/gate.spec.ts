@@ -81,13 +81,28 @@ function denials(): SciFsDeniedData[] {
 
 /** Dispatch one call through the real registry as the session's agent. */
 function call(name: string, args: unknown, withAgent = true): Promise<ToolExecutionResult> {
+  return callAs(withAgent ? session : undefined, name, args)
+}
+
+/** Dispatch one call through the real registry as a given session's agent. */
+function callAs(caller: Session | undefined, name: string, args: unknown): Promise<ToolExecutionResult> {
   return ctx.tools.execute({
     callId: CallId(`call-${++callCounter}`),
     name,
     arguments: args,
-    ...withAgent ? { agent: { session } as never } : {},
+    ...caller === undefined ? {} : { agent: { session: caller } as never },
     signal: new AbortController().signal,
   })
+}
+
+/** The `sci/fs-denied` records a given session's log holds, in order. */
+function denialsOf(target: Session): SciFsDeniedData[] {
+  return target.events.flatMap((event: SessionEvent) => event.type === 'sci/fs-denied' ? [event.data] : [])
+}
+
+/** A subagent session delegated into project `p1`, one level below the top. */
+function delegatedSession(id: string): Session {
+  return ctx.sessions.create(SessionId(id), { meta: { cwd: join(root, 'projects/p1'), origin: 'subagent', delegationDepth: 1 } })
 }
 
 /** The text a tool result carries. */
@@ -389,5 +404,63 @@ describe('plugin lifecycle', () => {
     await fiber.dispose()
     expect((await call('write', { file_path: 'papers/nn/versions/v1/main.tex', content: 'tampered' })).isError).toBe(false)
     expect(ran).toEqual(['write'])
+  })
+})
+
+// The delegation bound holds THROUGH the registry for the file tools and the
+// shell alike; the top-level session keeps its unbounded reads, so the rule
+// changes nothing for the thread that holds the user.
+describe('the delegation scope through the tool registry', () => {
+  beforeEach(async () => {
+    await mkdir(join(root, 'projects/p2/workspace'), { recursive: true })
+    await writeFile(join(root, 'projects/p2/workspace/other.md'), 'a sibling project\'s deliverable\n')
+  })
+
+  it('refuses a delegated read of a sibling project and logs the rule', async () => {
+    const child = delegatedSession('child-read')
+
+    const result = await callAs(child, 'read', { file_path: join(root, 'projects/p2/workspace/other.md') })
+
+    expect(ran).toEqual([])
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('outside the project this delegation was scoped to')
+    const [denial] = denialsOf(child)
+    expect(denial).toMatchObject({ op: 'read', path: join(root, 'projects/p2/workspace/other.md'), rule: 'delegation-scope' })
+    expect(denial?.reason).toContain('only its own project, the skill tree, and the delivery spool')
+  })
+
+  it('refuses a delegated write above the project and a shell command reaching a sibling', async () => {
+    const child = delegatedSession('child-write')
+
+    const write = await callAs(child, 'write', { file_path: join(root, 'projects/notes.md'), content: 'x' })
+    const shell = await callAs(child, 'bash', { command: 'cat ../p2/workspace/other.md' })
+
+    expect(ran).toEqual([])
+    expect(write.isError).toBe(true)
+    expect(shell.isError).toBe(true)
+    expect(denialsOf(child).map(denial => [denial.op, denial.path])).toEqual([
+      ['write', join(root, 'projects/notes.md')],
+      ['shell', join(root, 'projects/p2/workspace/other.md')],
+    ])
+  })
+
+  it('lets a delegated agent read its own project, the skill tree, and the spool', async () => {
+    const child = delegatedSession('child-own')
+
+    await callAs(child, 'read', { file_path: join(root, 'projects/p1/workspace/report.md') })
+    await callAs(child, 'read', { file_path: join(root, 'skills/sci-plot/SKILL.md') })
+    await callAs(child, 'read', { file_path: join(root, '.sci/spool/pending/queued.json') })
+    await callAs(child, 'bash', { command: 'ls workspace tmp && grep -rn draft papers/nn/src' })
+
+    expect(ran).toEqual(['read', 'read', 'read', 'bash'])
+    expect(denialsOf(child)).toEqual([])
+  })
+
+  it('leaves the top-level session unbounded, since it holds the user', async () => {
+    await call('read', { file_path: join(root, 'projects/p2/workspace/other.md') })
+    await call('bash', { command: 'cat ../p2/workspace/other.md' })
+
+    expect(ran).toEqual(['read', 'bash'])
+    expect(denials()).toEqual([])
   })
 })

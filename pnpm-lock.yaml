@@ -6795,6 +6795,9 @@ importers:
       '@deepseek-ai/dsh-sci-skills':
         specifier: workspace:^
         version: link:../sci-skills
+      '@deepseek-ai/dsh-sci-tier':
+        specifier: workspace:^
+        version: link:../sci-tier
       '@deepseek-ai/dsh-sci-workspace':
         specifier: workspace:^
         version: link:../sci-workspace

@@ -19,7 +19,8 @@ Replaces the studied platform's `mcp__clawsgo__declare_workflow_plan` MCP tool (
 1. Every text field is trimmed, and edges are matched against the trimmed ids, so surrounding whitespace never becomes a dangling reference.
 2. `id`, `name`, and `task` are non-empty, ids are unique, and the plan declares at least one agent.
 3. Each edge holds exactly two endpoints, does not point an agent at itself, and names declared agents on both ends.
-4. Only once no field or reference error remains does the cycle check run — a graph with an unresolvable endpoint has no meaningful cycle to report — and a cycle names every agent it traps.
+4. At least one agent carries the `security` icon, so every swarm contains an `adversary` asked to break what the others produce; and when the plan declares a `code` or `check` agent — one that leaves code, results, or delivered files behind — an edge leads from one of them into an adversary, so the check runs on the artifact rather than on the producer's own account of it. A read-only swarm (`web` and `search` agents only) satisfies the rule with a parallel adversary. The studied platform's fabricated reproduction shipped because its DAG held producers only (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §3).
+5. Only once no field, reference, or composition error remains does the cycle check run — a graph with an unresolvable endpoint has no meaningful cycle to report — and a cycle names every agent it traps.
 
 `topologicalSort` is index-based Kahn ordering: ids were already resolved by `validatePlan`, so its only failure mode is a cycle. Ready nodes keep declaration order, which makes the run order reproducible from the log, and a dependency declared twice counts once rather than blocking its target forever.
 
@@ -66,6 +67,6 @@ Append-only; a declaration adds a tool call and its result and disturbs no earli
 ## Known Limitations and Deferred Work
 
 - **Declaring is not enforcing.** This package records the authorization; the G1 gate that consumes it lives in `@deepseek-ai/dsh-sci-tier`, and nothing here refuses a fan-out. A profile that mounts `sci-plan` without `sci-tier` gets validated, logged plans and unconstrained fan-out.
-- **Nothing reconciles the declared plan against the agents that actually ran.** The plan is what the model announced, not a record of the cluster; an agent declared and never spawned, or a subagent spawned under no declared id, is visible only to a reader comparing `sci/plan-declared` with the `tool-workflow/*` records — which is `@deepseek-ai/dsh-sci-audit`'s job, not this package's.
+- **This package declares; it does not reconcile.** The plan is what the model announced, not a record of the cluster. The comparison against the agents that actually started lives in `@deepseek-ai/dsh-sci-audit`'s `sci_plan` row (`spawnedAgents`, `spawnedPersonasJson`, `reconciled`) and its `planMismatches` summary figure; nothing here refuses a fan-out whose roster drifts from the declaration.
 - **`plotter` is unreachable from any icon.** Figure work is not distinguishable at the card level — a plotting step reads as `code` to a user watching the plan — so the sixth persona is selected only from an agent's `task` text by the orchestrating thread. Adding a sixth icon would change a schema a user interface draws its artwork from.
 - **The summary line counts declared dependencies, not distinct ones.** A pair declared twice is drawn once but counted twice in the header, because the count describes what the model wrote.

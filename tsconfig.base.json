@@ -97,6 +97,7 @@
       "@deepseek-ai/dsh-tool-subagent-control/list-agents": ["./packages/subagent/tool-subagent-control/src/list-agents.ts"],
       "@deepseek-ai/dsh-sci-literature/types": ["./packages/sci/sci-literature/src/types.ts"],
       "@deepseek-ai/dsh-sci-tier/suggest": ["./packages/sci/sci-tier/src/suggest.ts"],
+      "@deepseek-ai/dsh-sci-tier/resolve": ["./packages/sci/sci-tier/src/resolve.ts"],
       "@deepseek-ai/dsh-sci-tier/fork": ["./packages/sci/sci-tier/src/fork.ts"],
       "@deepseek-ai/dsh-user-approval/types": ["./packages/interaction/user-approval/src/types.ts"],
       "@deepseek-ai/dsh-user-questions/types": ["./packages/interaction/user-questions/src/types.ts"],

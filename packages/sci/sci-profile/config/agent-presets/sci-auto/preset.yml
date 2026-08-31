@@ -1,0 +1,3 @@
+name: 自动 / Auto
+description: 由任务决定档位：模型先用 resolve_tier 判定单体还是蜂群，中途可升；蜂群规则与 Swarm 相同。
+order: 15

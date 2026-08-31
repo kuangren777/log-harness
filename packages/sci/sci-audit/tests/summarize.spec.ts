@@ -7,7 +7,7 @@ import { CallId, createAssistantMessage, createToolResultMessage } from '@deepse
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionEventMap, SessionEventType } from '@deepseek-ai/dsh-session'
 import type { MemoryIndexRecord } from '@deepseek-ai/dsh-sci-memory'
-import { citationMissing, summarizeSession } from '@deepseek-ai/dsh-sci-audit'
+import { citationMissing, deliveriesWithoutExecution, summarizeSession } from '@deepseek-ai/dsh-sci-audit'
 import type { AuditRecord } from '@deepseek-ai/dsh-sci-audit'
 
 const SESSION = SessionId('11111111-2222-3333-4444-555555555555')
@@ -15,6 +15,8 @@ const TIME = 1_700_000_000_000
 
 // The registered names `@deepseek-ai/dsh-tool-web` composes (packages/web/tool-web).
 const WEB_TOOLS = ['web_search', 'web_fetch']
+// The registered name `@deepseek-ai/dsh-tool-bash` composes.
+const EXEC_TOOLS = ['bash']
 
 /**
  * Build one typed log record.
@@ -143,6 +145,7 @@ describe('summarizeSession', () => {
       events: [],
       memoryRows: [MEMORY],
       webToolNames: WEB_TOOLS,
+      execToolNames: EXEC_TOOLS,
     })
 
     expect(summary).toEqual({
@@ -151,6 +154,8 @@ describe('summarizeSession', () => {
       delivered: 1,
       authorized: 1,
       memoryTimingScore: 0.75,
+      planMismatches: 0,
+      deliveriesWithoutExecution: 0,
       citationMissing: false,
     })
   })
@@ -162,9 +167,69 @@ describe('summarizeSession', () => {
       events: [call(1, 'web_search', 'c-1'), result(2, 'c-1'), answer(3, 'no link here')],
       memoryRows: [],
       webToolNames: WEB_TOOLS,
+      execToolNames: EXEC_TOOLS,
     })
 
     expect(summary).not.toHaveProperty('memoryTimingScore')
     expect(summary).toMatchObject({ denied: 0, delivered: 0, authorized: 0, citationMissing: true })
+  })
+})
+
+describe('summarizeSession planMismatches', () => {
+  const declared = (seq: number, planId: string) => event(seq, 'sci/plan-declared', {
+    planId, agents: [{ id: 'a', name: 'A', icon: 'security', task: 'break' }], edges: [],
+  } as unknown as SessionEventMap['sci/plan-declared'])
+
+  it('counts the declarations whose started agents never matched the roster', () => {
+    const summary = summarizeSession({
+      sessionId: SESSION,
+      auditRows: [],
+      events: [
+        declared(1, 'p-1'), call(2, 'subagent_adversary', 'c1'),
+        declared(3, 'p-2'),
+        declared(4, 'p-3'), call(5, 'subagent_adversary', 'c2'), call(6, 'subagent_scout', 'c3'),
+      ],
+      memoryRows: [],
+      webToolNames: WEB_TOOLS,
+      execToolNames: EXEC_TOOLS,
+    })
+
+    expect(summary.planMismatches).toBe(2)
+  })
+
+  it('is zero for a session that declared nothing', () => {
+    const summary = summarizeSession({
+      sessionId: SESSION, auditRows: [], events: [], memoryRows: [], webToolNames: WEB_TOOLS, execToolNames: EXEC_TOOLS,
+    })
+    expect(summary.planMismatches).toBe(0)
+  })
+})
+
+// A deliverable that no run preceded is the shape of the studied platform's
+// fabricated reproduction (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §3): the
+// figure counts it; the adversary the plan tool requires is what refuses it.
+describe('deliveriesWithoutExecution', () => {
+  const delivered = (seq: number) => event(seq, 'sci/delivered', {
+    deliveryId: `d-${seq}`,
+    path: '/p/workspace/r.md',
+    sha256: 'a'.repeat(64),
+    size: 1,
+    title: 'R',
+    kind: 'file',
+    via: 'tool',
+  } as SessionEventMap['sci/delivered'])
+
+  it('counts a delivery made before any execution returned, and not one made after', () => {
+    expect(deliveriesWithoutExecution([
+      delivered(1), call(2, 'bash', 'c1'), delivered(3), result(4, 'c1'), delivered(5),
+    ], EXEC_TOOLS)).toBe(2)
+  })
+
+  it('does not count a run of a tool outside the execution set as execution', () => {
+    expect(deliveriesWithoutExecution([call(1, 'read', 'c1'), result(2, 'c1'), delivered(3)], EXEC_TOOLS)).toBe(1)
+  })
+
+  it('is zero for a session that delivered nothing', () => {
+    expect(deliveriesWithoutExecution([call(1, 'bash', 'c1')], EXEC_TOOLS)).toBe(0)
   })
 })

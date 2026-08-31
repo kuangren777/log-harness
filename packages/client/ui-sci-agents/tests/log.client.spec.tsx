@@ -57,9 +57,9 @@ describe('the log table', () => {
     render(<LogPage {...pageProps().props} />)
     expect(screen.getByText('进行中')).toBeTruthy()
     expect(screen.getByText('运行中')).toBeTruthy()
-    // The two settled calls of this fixture carry no usage, so their cells
-    // read as absent instead of as zero tokens.
-    expect(screen.getAllByText('—')).toHaveLength(2)
+    // The other two calls of this fixture carry neither usage nor retrieval
+    // figures, so both of those cells read as absent instead of as zero.
+    expect(screen.getAllByText('—')).toHaveLength(4)
   })
 
   it('shows a settled call with no timing row as no duration, never as in flight', () => {
@@ -72,8 +72,20 @@ describe('the log table', () => {
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1)
   })
 
+  it('counts a child\'s retrievals and the repeats among them beside its tokens', () => {
+    render(<LogPage {...pageProps().props} />)
+    expect(screen.getByRole('columnheader', { name: '检索' })).toBeTruthy()
+    expect(screen.getByText('29（重复 21）')).toBeTruthy()
+  })
+
+  it('drops the retrieval column when no child reported retrievals', () => {
+    const calls = CALLS.map(({ retrievalCalls: _calls, retrievalRepeats: _repeats, ...rest }) => rest)
+    render(<LogPage {...pageProps({ calls }).props} />)
+    expect(screen.queryByRole('columnheader', { name: '检索' })).toBeNull()
+  })
+
   it('drops the token column when no settlement carried usage', () => {
-    const calls = CALLS.map(({ outputTokens: _ignored, ...rest }) => rest)
+    const calls = CALLS.map(({ outputTokens: _ignored, retrievalCalls: _calls, retrievalRepeats: _repeats, ...rest }) => rest)
     render(<LogPage {...pageProps({ calls }).props} />)
 
     expect(screen.queryByRole('columnheader', { name: 'token' })).toBeNull()

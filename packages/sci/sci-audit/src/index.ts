@@ -50,7 +50,7 @@ import { summarizeSession } from './summarize.ts'
 import type { AuditRecord, AuditSummary, DeliveryRecord, PlanRecord, ProjectedRow, RebuildReport } from './types.ts'
 
 export type * from './types.ts'
-export { AuditFold, MAIN_ACTOR, auditKey, project, projectLog } from './project.ts'
+export { AuditFold, MAIN_ACTOR, auditKey, planRecords, project, projectLog } from './project.ts'
 export {
   AUDIT_KINDS,
   AUDIT_TABLE,
@@ -62,7 +62,7 @@ export {
   planRecordSchema,
   sciAuditDomainSpec,
 } from './spec.ts'
-export { citationMissing, summarizeSession } from './summarize.ts'
+export { citationMissing, deliveriesWithoutExecution, summarizeSession } from './summarize.ts'
 export type { SummaryInput } from './summarize.ts'
 
 /** Cordis service key this package publishes itself under. */
@@ -80,14 +80,24 @@ export interface Config {
    * so the names cannot be fixed in this package.
    */
   webToolNames: string[]
+  /**
+   * Registered names of the tools that execute code or commands, used by the
+   * deliveries-without-execution figure of a summary. Configurable for the same
+   * reason as `webToolNames`: which tool runs a command is a composition choice.
+   */
+  execToolNames: string[]
 }
 
 /** Registered names of the web tools `@deepseek-ai/dsh-tool-web` composes by default. */
 const DEFAULT_WEB_TOOL_NAMES = ['web_search', 'web_fetch']
 
+/** Registered name of the shell tool `@deepseek-ai/dsh-tool-bash` composes by default. */
+const DEFAULT_EXEC_TOOL_NAMES = ['bash']
+
 /** Schemastery schema for the science-research audit projection. */
 export const Config: z<Config> = z.object({
   webToolNames: z.array(z.string()).default(DEFAULT_WEB_TOOL_NAMES),
+  execToolNames: z.array(z.string()).default(DEFAULT_EXEC_TOOL_NAMES),
 })
 
 declare module '@deepseek-ai/cordis' {
@@ -116,6 +126,7 @@ export class SciAuditService extends Service {
   static Config: z<Config> = Config
 
   private readonly webToolNames: readonly string[]
+  private readonly execToolNames: readonly string[]
   /** One fold per session seen live, so the live path replays a log exactly as {@link projectLog} does. */
   private readonly folds = new Map<SessionId, AuditFold>()
   /**
@@ -139,6 +150,7 @@ export class SciAuditService extends Service {
   constructor(ctx: Context, config: Config) {
     super(ctx, SERVICE_KEY)
     this.webToolNames = config.webToolNames
+    this.execToolNames = config.execToolNames
   }
 
   /** Open the projection, attach the log observer, and register the command. */
@@ -212,6 +224,7 @@ export class SciAuditService extends Service {
       events: snapshot.events,
       memoryRows,
       webToolNames: this.webToolNames,
+      execToolNames: this.execToolNames,
     })
   }
 

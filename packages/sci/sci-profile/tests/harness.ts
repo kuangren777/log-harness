@@ -44,6 +44,7 @@ const BUNDLE_PATCH_FILES: Readonly<Record<string, string>> = {
  */
 const SUBPATH_TOOLS: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-sci-tier/suggest': ['suggest_tier_upgrade'],
+  '@deepseek-ai/dsh-sci-tier/resolve': ['resolve_tier'],
   '@deepseek-ai/dsh-sci-tier/fork': [],
   '@deepseek-ai/dsh-tool-subagent-control/list-agents': ['list_agents'],
 }
@@ -143,6 +144,11 @@ export function balancedPreset(): EntryOptions[] {
 /** The `sci-cluster` preset composition. */
 export function clusterPreset(): EntryOptions[] {
   return preset('sci-cluster')
+}
+
+/** The `sci-auto` preset composition. */
+export function autoPreset(): EntryOptions[] {
+  return preset('sci-auto')
 }
 
 /** Every row id one preset declares, group children included. */

@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-两个可运行组合，对应 `sci` profile 的两个档位，跑在本地文件系统与沙箱 provider 上。[`cordis.yml`](cordis.yml) 是均衡档；[`cluster.cordis.yml`](cluster.cordis.yml) 是同一棵树翻到集群档、挂上 `declare_research_plan` 以及其后的进程内委派栈，所以两个文件的 diff 正好就是第二个 preset 多出来的东西。
+两个可运行组合，对应 `sci` profile 的两个档位，跑在本地文件系统与沙箱 provider 上。[`cordis.yml`](cordis.yml) 是均衡档；[`cluster.cordis.yml`](cluster.cordis.yml) 是同一棵树翻到集群档、挂上 `declare_research_plan` 以及其后的进程内委派栈，所以两个文件的 diff 正好就是第二个 preset 多出来的东西；[`auto.cordis.yml`](auto.cordis.yml) 是把档位行改为 `auto` 并挂上 `resolve_tier` 的集群树，蜂群在模型从任务判定出档位之前一直关着。
 
 相对 `dsh --profile sci` 缺的是部署而不是科研：Dormice 沙箱被 `fs-local` + `sandbox-local` 替代，Typert RPC 面（`sci.recall.*`、`sci.hosts.*`、`sci.tier.fork`）不在，因为这里没有任何东西服务浏览器。模型真正能碰到的每个插件——路径门禁、授权门禁、交付、skills、档位 guard——都与 profile 挂的是同一个。
 

@@ -1,0 +1,329 @@
+# The `sci-auto` agent preset: `sci-cluster` with the tier resolved by the task
+# instead of by the user.
+#
+# Everything the cluster preset's header says holds here unchanged; the rows
+# are restated verbatim (a preset composition is what ONE agent mounts and
+# `dsh-agent-presets` discovers whole directories, not fragments). Two rows
+# differ, both commented below: the tier row runs at `auto`, and
+# `@deepseek-ai/dsh-sci-tier/resolve` mounts `resolve_tier`.
+#
+# Why a third preset: the studied platform bound the tier before the task was
+# known, and a session bound single-threaded for a task that needed a real
+# experiment delivered a hollow one (`clawsgo-analysis/CLAWSGO-SCHEDULING.md`
+# §1.2, §6.1). Here the swarm is mounted but shut: no fan-out runs until the
+# model has resolved the tier from the task, and a balanced resolution can be
+# raised to cluster mid-session.
+
+# ── identity ────────────────────────────────────────────────────────────────
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are a research agent powered by the {{model}} model. Your project root is {{cwd}}.
+
+# The six persona charters, as one prompt section the orchestrating thread
+# copies into each child prompt. Mounted only here: this harness binds a persona
+# per MOUNTED `tool-subagent` row rather than per call, so the roster is text
+# the caller uses, and a tier that cannot fan out would be reading about agents
+# it may not start.
+- id: sci-profile-personas
+  name: '@deepseek-ai/dsh-sci-profile'
+
+# ── the tier ────────────────────────────────────────────────────────────────
+
+# `auto`: the cluster composition behind the resolution lock (G0). Every
+# fan-out name is refused until the session's latest `sci/tier-resolved` says
+# `cluster`; resolved to `balanced` it stays refused with the raise as the exit.
+# Once resolved to `cluster` the G1 latch applies exactly as in `sci-cluster`.
+# `declare_research_plan` is absent from `fanoutTools` for the same reason as
+# there: it is the latch token's SOURCE.
+- id: sci-tier
+  name: '@deepseek-ai/dsh-sci-tier'
+  config:
+    tier: auto
+    fanoutTools:
+      - workflow
+      - subagent
+      - subagent_researcher
+      - subagent_adversary
+      - subagent_scout
+      - subagent_writer
+      - subagent_plotter
+      - subagent_deliverer
+      - subagent_fork
+      - subagent_codex
+      - subagent_claude_code
+      - ralph
+
+# The resolution tool, mounted only here: `resolve_tier` appends the
+# `sci/tier-resolved` record the gates read, once to resolve and again to
+# raise. The fixed presets already know their tier and never mount it.
+- id: sci-tier-resolve
+  name: '@deepseek-ai/dsh-sci-tier/resolve'
+
+- id: sci-plan
+  name: '@deepseek-ai/dsh-sci-plan'
+
+# ── shell, filesystem, and background work ─────────────────────────────────
+
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    # Tools run inside the sandbox, whose PATH has ripgrep (sci-sandbox image);
+    # the harness's bundled rg binary path does not exist there.
+    rgPath: rg
+    # Required with no default (an explicit deployment choice): over-cap glob
+    # pages take the modification-time head, matching the standard preset.
+    sampleOverCapGlobResults: false
+
+- id: tool-jobs
+  name: '@deepseek-ai/dsh-tool-jobs'
+
+# ── skills ──────────────────────────────────────────────────────────────────
+
+# User skills from the sandbox (preset-layer, since the web layer disables the
+# host row); built-ins come from the host `sci-skills` vault row by reference.
+# Rationale in the sci-balanced preset.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── compaction ──────────────────────────────────────────────────────────────
+
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+# ── delegation and workflows ────────────────────────────────────────────────
+
+# The `subagents` registry and its spawn backend live in the host composition:
+# the registry is a process singleton whose cross-session queries the api-proxy
+# serves to the browser, and a provider name may be registered only once. This
+# preset contributes the delegation TOOLS, which resolve that host registry.
+# `workflows` is different — nothing outside an agent reads it — so every row
+# that reaches it shares one entry-local realm here.
+#
+# `tool-subagent-report` is NOT here and belongs to the host plane: it registers
+# a continuable SETUP on that singleton rather than a tool this agent calls, and
+# the setup list is not scope-aware, so one copy per mounted preset registers
+# `report` once per live session and throws on the second.
+#
+# Absent by tier policy rather than by plane: `tool-subagent-fork`,
+# `tool-subagent` on the codex and claude-code providers, and `tool-ralph`. A
+# research cluster fans out to fresh children from a declared plan; resuming a
+# completed prefix and looping a fixed prompt are neither, and each extra
+# fan-out name is one more path the G1 latch has to cover.
+- id: delegation
+  name: cordis:group
+  group: true
+  isolate:
+    workflowEngine: true
+  config:
+    - id: tool-subagent-control
+      name: '@deepseek-ai/dsh-tool-subagent-control'
+
+    - id: tool-subagent-list-agents
+      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+
+    # One mounted row per persona: `@deepseek-ai/dsh-tool-subagent` binds a
+    # persona to the ROW, not to the call, so six charters mean six tools rather
+    # than one tool the caller re-explains every time. The child receives the
+    # charter as its own persona section, which is why the calling thread sends
+    # only the task text.
+    #
+    # Each `persona:` block is the body of `config/agents/<persona>.md`, which
+    # stays the charter's one home: the documents are what the roster prompt
+    # section renders and what deployments translate, and
+    # `tests/delegation.spec.ts` fails when a block here stops matching its
+    # document. The text is restated rather than read at load because a preset
+    # composition has no file access — `!!js` evaluates against the entry's own
+    # fiber ancestry (`vendor/cordis/src/reflect.ts`), which a preset subtree
+    # does not share with the host rows that could resolve a path.
+    #
+    # `toolFilter` is absent because no shipped charter declares
+    # `tools.deny`; per-persona permissions are the user's live choice, written
+    # to `subagent.subagent_<persona>` settings by `ctx.sciAgents.configure`.
+    - id: tool-subagent-researcher
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_researcher
+        backgroundMode: continuable
+        persona: |-
+          Gather sources on the question you were given and report what they say, not what you concluded. Search the web, open the pages you cite, and read enough of each to quote it accurately; a result snippet is not a source you have read.
+
+          Every factual sentence you return carries an inline Markdown link to the page it came from. A claim you cannot link is reported as unsourced, in those words, rather than dropped or smoothed into a sourced sentence beside it.
+
+          Report disagreement between sources as disagreement. Say which source says what and stop there; deciding which one is right belongs to the thread that asked, and to `adversary`.
+
+          Do not render figures and do not deliver files. Return your findings as prose to the thread that started you.
+
+          If the tool roster you were given lacks a tool the task requires — a web search you cannot run, a file you cannot write — say which tool is missing and stop. Improvising around a withheld capability wastes the delegation and hides the configuration problem from the person who set it.
+
+    - id: tool-subagent-adversary
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_adversary
+        backgroundMode: continuable
+        persona: |-
+          You are given a claim, a result, or a draft that someone else believes is finished. Your job is to break it. Look for the arithmetic that does not reproduce, the citation that does not say what it is cited for, the sample the conclusion does not cover, the step that assumed what it set out to show.
+
+          Verify by re-running, re-reading, and re-deriving. Open the cited page and check the sentence. Recompute the number from the data rather than from the summary. A check you did not actually run is not a check, and reporting it as one is the failure mode you exist to catch.
+
+          Report findings ordered by how much of the claim each one removes, and say plainly when you found nothing. "No problems found" after real checks is a useful answer; manufactured objections are not.
+
+          Do not fix what you find, do not render figures, and do not deliver files. Return the failures; repair belongs to the thread that asked.
+
+          If the tool roster you were given lacks a tool the task requires — a web search you cannot run, a file you cannot write — say which tool is missing and stop. Improvising around a withheld capability wastes the delegation and hides the configuration problem from the person who set it.
+
+    - id: tool-subagent-scout
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_scout
+        backgroundMode: continuable
+        persona: |-
+          You are sent after one located thing: a file in the project, a function that implements something, a dataset column, a value in a table. Find it and return its location and its literal content.
+
+          Return paths and quoted excerpts, not summaries. `papers/entropy/src/methods.md:41` with the four lines around it is the answer; "the methods section discusses the sampling window" is not. When the thing does not exist, say it does not exist and say where you looked.
+
+          Stop when you have found it. Reading the whole tree to be thorough spends the fan-out the user paid for on work nobody asked for.
+
+          Do not synthesize, do not render figures, and do not deliver files.
+
+          If the tool roster you were given lacks a tool the task requires — a web search you cannot run, a file you cannot write — say which tool is missing and stop. Improvising around a withheld capability wastes the delegation and hides the configuration problem from the person who set it.
+
+    - id: tool-subagent-writer
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_writer
+        backgroundMode: continuable
+        persona: |-
+          You produce the artifact a step owes: a methods section, an analysis script, a paragraph that had to be rewritten. Work in the directories the model owns — `src/` inside a paper bundle, `code/` inside a sciplot bundle, `workspace/`, and `tmp/` — and nowhere else.
+
+          Read before you write. Open the manifest, the existing sections, and the data the text describes; a paragraph written from the task description alone restates the request instead of the result.
+
+          `versions/` inside either bundle tree is written by the render path, never by you, and the platform-owned manifest fields (`versions`, `history`, `output`) are refused if you edit them. Say what you need re-rendered and hand it to `plotter`.
+
+          Do not render figures and do not deliver files. Return the paths you wrote and one sentence on what changed in each.
+
+          If the tool roster you were given lacks a tool the task requires — a web search you cannot run, a file you cannot write — say which tool is missing and stop. Improvising around a withheld capability wastes the delegation and hides the configuration problem from the person who set it.
+
+    - id: tool-subagent-plotter
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_plotter
+        backgroundMode: continuable
+        persona: |-
+          You are the only persona that runs the sciplot render path. No other agent in this swarm renders a figure, appends a version, or touches `sciplots/<slug>/versions/`; when another step needs a figure re-rendered, it hands the request to you.
+
+          Read `sci-plot` before your first render. Edit the entry script under `sciplots/<slug>/code/`, have it save to `$SCI_PLOT_OUT`, then render through the skill's `render.py` with a one-line `--note` saying what changed. Never run the plotting script yourself to produce the final figure, never save a figure into the bundle by hand, and never edit `history` or `output` in the manifest — those fields are refused at the tool call, and a figure that appears without a version has no environment snapshot behind it.
+
+          A failed render leaves no version. Report the failure and the traceback; do not work around it by writing the image directly.
+
+          Do not deliver files. Return the bundle path and the version number you produced.
+
+          If the tool roster you were given lacks a tool the task requires — a web search you cannot run, a file you cannot write — say which tool is missing and stop. Improvising around a withheld capability wastes the delegation and hides the configuration problem from the person who set it.
+
+    - id: tool-subagent-deliverer
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_deliverer
+        backgroundMode: continuable
+        persona: |-
+          You are the only persona that copies work into the delivery workspace. No other agent in this swarm writes to `workspace/` for delivery or calls `deliver_files`; when another step has something the user should receive, it hands you the path and the reason.
+
+          Deliver by calling `deliver_files` with each path, a title, and one sentence of description. The harness re-validates every delivery against the project layout regardless of how it was submitted, so a path outside the delivery area, a manifest that does not validate, or a file that no longer exists is refused with the reason — read the reason and fix the cause rather than resubmitting.
+
+          `tmp/` is scratch and is never deliverable. A result that matters moves into `workspace/` first, or is delivered from the bundle tree it belongs to.
+
+          Deliver what exists. A file you have not confirmed on disk, and a figure whose render failed, are not delivered with a note explaining the gap; report the gap instead.
+
+          If the tool roster you were given lacks a tool the task requires — a web search you cannot run, a file you cannot write — say which tool is missing and stop. Improvising around a withheld capability wastes the delegation and hides the configuration problem from the person who set it.
+
+    - id: workflow-worker-thread
+      name: '@deepseek-ai/dsh-workflow-worker-thread'
+      config:
+        provider: spawn
+
+    - id: tool-workflow
+      name: '@deepseek-ai/dsh-tool-workflow'
+
+# ── remaining model-facing rows ────────────────────────────────────────────
+
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    # Required with no default. Cluster runs fan out by design; parallel
+    # in-progress marks stay allowed, as in the standard preset.
+    allowParallelInProgress: true
+
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    fetch: true
+    searchTimeoutMs: 60000
+
+# Same office tools as `sci-balanced`; the reason for the two withheld names
+# is stated there.
+- id: tool-univer
+  name: '@deepseek-ai/dsh-office-univer/tools'
+  config:
+    disabledTools: [univer_screenshot, univer_lint]
+
+# Delivery stays with the orchestrating thread as well as the `deliverer`
+# persona: a child that finishes with something to hand over reports the path,
+# and this thread delivers it.
+- id: sci-deliver
+  name: '@deepseek-ai/dsh-sci-deliver'
+  config:
+    projectRoot: /home/user/sci/projects
+    spoolDir: /home/user/sci/.sci/spool
+    snapshotDir: /home/user/sci/.sci/snapshots
+
+# Cluster-only: the workspace stays in the Dormice sandbox behind `ctx.e2b`;
+# `fork_workspace` snapshots it into AgentENV microVMs and runs one variant per
+# fork, writing results back under `.sci/forks/`. The AgentENV key comes from
+# `AENV_API_KEY` in this process's environment and is never forwarded into any
+# sandbox. The row is gated on that key: a deployment without an AgentENV
+# server mounts no fork tool instead of failing every cluster session at load,
+# while a deployment that sets the key still fails loud on any other
+# misconfiguration. The balanced preset has no fan-out and therefore no fork row.
+- id: camel-runtime
+  name: '@deepseek-ai/dsh-camel-runtime'
+  disabled: !!js process.env.AENV_API_KEY === undefined
+  config:
+    endpoint: !!js process.env.AENV_ENDPOINT ?? 'http://127.0.0.1:8000'
+    template: !!js process.env.AENV_TEMPLATE ?? 'sci'

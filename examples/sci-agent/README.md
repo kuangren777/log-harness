@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Two runnable compositions, one per tier of the `sci` profile, over local filesystem and sandbox providers. [`cordis.yml`](cordis.yml) is the balanced tier; [`cluster.cordis.yml`](cluster.cordis.yml) is the same tree with the tier flipped, `declare_research_plan` mounted, and the in-process delegation stack behind it, so a diff between the two files is exactly what the second preset adds.
+Three runnable compositions, one per tier of the `sci` profile, over local filesystem and sandbox providers. [`cordis.yml`](cordis.yml) is the balanced tier; [`cluster.cordis.yml`](cluster.cordis.yml) is the same tree with the tier flipped, `declare_research_plan` mounted, and the in-process delegation stack behind it, so a diff between the two files is exactly what the second preset adds; [`auto.cordis.yml`](auto.cordis.yml) is the cluster tree with the tier row at `auto` and `resolve_tier` mounted, so the swarm stays shut until the model resolves the tier from the task.
 
 What is missing relative to `dsh --profile sci` is deployment, not science: the Dormice sandbox is replaced by `fs-local` over `sandbox-local`, and the Typert RPC surfaces (`sci.recall.*`, `sci.hosts.*`, `sci.tier.fork`) are absent because nothing here serves a browser. Every plugin a model can actually reach — the path gate, the authorization gate, delivery, skills, the tier guard — is the one the profile mounts.
 

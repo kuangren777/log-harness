@@ -60,6 +60,8 @@ settings 段属于已挂载的 `tool-subagent` 行，而一个预设是由第一
 
 `durationMs` 是**子代理自己**的 turn 时长，用 `@deepseek-ai/dsh-subagent` 的 `subagentTiming` 投影在子日志上折叠得到——刻意不用父会话的 call→result 间隔，因为对 `continuable` 委派而言那是毫秒级的派发时间，而子代理要干上几分钟。一次调用与它的子代理靠两者共享的创建标签配对（`tool/call.arguments.description` 就是 descriptor 的 `label`），并被收窄到携带该 persona charter 的子代理；每个子代理只被认领一次，所以两次同标签的调用不会都去认领第一个。
 
+`retrievalCalls` 与 `retrievalRepeats` 来自同一份子日志：对 `webTools` 里任一名字的每次调用，以及其中有多少次以相同参数文本重复了同一工具的更早一次调用。被研究平台的文献子代理对同一批论文搜了 29 次（`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §5 第 9 行）；这个数是下界，因为对同一批结果换个措辞再搜不算重复。
+
 `outputTokens` 与 `monthTokens` 只在结算携带了 `meta.usage.outputTokens` 时出现。本仓库目前没有任何东西附上这份 meta，所以这一列通常是缺席而不是零。
 
 ## 模型体验

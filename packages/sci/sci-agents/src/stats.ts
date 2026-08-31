@@ -117,6 +117,31 @@ export interface ChildRun {
   readonly persona?: string
   /** Milliseconds of the child's own turns, open turn included. */
   readonly durationMs: number
+  /** Web retrievals the child made, and how many repeated an earlier one. */
+  readonly retrieval: { readonly calls: number; readonly repeats: number }
+}
+
+/**
+ * Count one child's web retrievals and the repeats among them. Two calls repeat
+ * when they name the same tool with the same arguments text; the arguments are
+ * compared as the model wrote them, so a re-ordered JSON object counts as new —
+ * the figure is a floor, never an overstatement.
+ * @param events - the child session's raw log, in ascending seq order.
+ * @param webTools - registered names of the tools that consult the web.
+ * @returns the call count and the repeat count.
+ */
+export function retrievalFigures(events: readonly SessionEvent[], webTools: readonly string[]): ChildRun['retrieval'] {
+  const seen = new Set<string>()
+  let calls = 0
+  let repeats = 0
+  for (const event of events) {
+    if (event.type !== 'tool/call' || !webTools.includes(event.data.name)) continue
+    calls += 1
+    const key = `${event.data.name}\u0000${event.data.arguments}`
+    if (seen.has(key)) repeats += 1
+    else seen.add(key)
+  }
+  return { calls, repeats }
 }
 
 /**
@@ -126,9 +151,10 @@ export interface ChildRun {
  * applied here rather than re-derived: it is the definition that knows a fork
  * seed's ancestor turns are not this child's work.
  * @param events - the child session's raw log, in ascending seq order.
+ * @param webTools - registered names of the tools that consult the web, for the retrieval figures.
  * @returns the run, or `undefined` when the log carries no usable descriptor.
  */
-export function childRun(events: readonly SessionEvent[]): ChildRun | undefined {
+export function childRun(events: readonly SessionEvent[], webTools: readonly string[] = []): ChildRun | undefined {
   let descriptor: ReturnType<typeof foldSubagentDescriptor>
   try {
     descriptor = foldSubagentDescriptor(events)
@@ -148,6 +174,7 @@ export function childRun(events: readonly SessionEvent[]): ChildRun | undefined 
       ? { persona: descriptor.persona }
       : {},
     durationMs: view.settledMs + open,
+    retrieval: retrievalFigures(events, webTools),
   }
 }
 
@@ -163,7 +190,7 @@ export function childRun(events: readonly SessionEvent[]): ChildRun | undefined 
  * @param calls - one persona's delegations, in log order.
  * @param runs - the delegating session's children, in creation order.
  * @param charter - the persona text the mounted row binds, when one is known.
- * @returns the same rows, with `durationMs` where a child was matched.
+ * @returns the same rows, with `durationMs` and the retrieval figures where a child was matched.
  */
 export function attachChildTimings(
   calls: readonly AgentCall[],
@@ -179,7 +206,8 @@ export function attachChildTimings(
     if (index === -1) return call
     taken.add(index)
     // `unclaimed[index]` exists: findIndex returned its position.
-    return { ...call, durationMs: (unclaimed[index] as ChildRun).durationMs }
+    const run = unclaimed[index] as ChildRun
+    return { ...call, durationMs: run.durationMs, retrievalCalls: run.retrieval.calls, retrievalRepeats: run.retrieval.repeats }
   })
 }
 

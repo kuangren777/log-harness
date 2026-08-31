@@ -15,6 +15,23 @@ import type { PersonaName, PlanIcon } from './types.ts'
 export const PLAN_ICONS: readonly PlanIcon[] = ['web', 'search', 'security', 'code', 'check']
 
 /**
+ * The one icon whose persona refutes rather than produces. Every declared plan
+ * must carry at least one agent with this icon: a swarm of producers alone
+ * ships whatever its producers believe, and the studied platform's fabricated
+ * reproduction (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §3) left the swarm
+ * precisely because no node in the DAG was asked to break it.
+ */
+export const VERIFIER_ICON: PlanIcon = 'security'
+
+/**
+ * The icons whose personas leave an artifact behind — written code, rendered
+ * results, delivered files. When a plan declares one of these, its verifier must
+ * sit downstream of one by an edge, so the adversary reads the artifact and the
+ * log that produced it rather than the producer's own account of it.
+ */
+export const PRODUCER_ICONS: readonly PlanIcon[] = ['code', 'check']
+
+/**
  * The six subagent personas of the science-research profile. `sci-tier` asserts
  * that the persona files it installs cover exactly this set, so a renamed agent
  * definition fails at load rather than at the first fan-out.

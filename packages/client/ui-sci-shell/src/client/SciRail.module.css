@@ -2,6 +2,10 @@
    what AppFrame measures for the first grid track, so it is stated here once. */
 
 .root {
+  /* border-box, or the vertical padding rides ON TOP of the 100% height and
+     pushes the footer avatar past the viewport (the workbench views hit the
+     same trap in 7731130b00; this rail was the remaining case). */
+  box-sizing: border-box;
   display: flex;
   flex: none;
   flex-direction: column;

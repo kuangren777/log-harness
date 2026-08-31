@@ -40,7 +40,7 @@ describe('05-T5 · the upgrade fork over the shipped presets', () => {
   it('names a preset directory this bundle ships', async () => {
     const roster = await discoverPresets([{ path: BUNDLED_PRESET_ROOT, trust: 'system' }])
 
-    expect(roster.map(entry => entry.id).sort()).toEqual([...SCI_PRESETS])
+    expect(roster.map(entry => entry.id).sort()).toEqual([...SCI_PRESETS].sort())
     for (const entry of roster) expect(entry, entry.id).not.toHaveProperty('reason')
     for (const tier of ['balanced', 'cluster'] as const) {
       expect(SCI_PRESETS, tier).toContain(PRESET_NAMES[tier])

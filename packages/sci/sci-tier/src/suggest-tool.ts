@@ -31,8 +31,10 @@ export function describeSuggestTool(): string {
   return 'Tell the user this task would be better served by Swarm mode, which fans the work out '
     + 'across parallel subagents. This does not change the current session: it records the suggestion so '
     + 'the user can decide, and they continue in a new session if they accept. Call it only after you have '
-    + 'delivered what a single honest pass covers, and say in one sentence what the swarm would add that '
-    + 'this pass could not — which angles stay uncovered, which sources stay unread.'
+    + 'delivered what a single honest pass covers — a real smaller pilot with its reduced scope stated, never '
+    + 'a large-looking result whose numbers no real run produced — and say in one sentence what the swarm '
+    + 'would add that this pass could not: which angles stay uncovered, which sources stay unread, which '
+    + 'experiment stays unrun at full scale.'
 }
 
 /**

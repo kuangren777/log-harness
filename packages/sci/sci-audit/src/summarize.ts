@@ -13,6 +13,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { memoryTimingScore } from '@deepseek-ai/dsh-sci-memory'
 import type { MemoryIndexRecord } from '@deepseek-ai/dsh-sci-memory'
+import { planRecords } from './project.ts'
 import type { AuditRecord, AuditSummary } from './types.ts'
 
 /**
@@ -34,6 +35,29 @@ export interface SummaryInput {
   readonly memoryRows: readonly MemoryIndexRecord[]
   /** Registered names of the tools that consult the web. */
   readonly webToolNames: readonly string[]
+  /** Registered names of the tools that execute code or commands. */
+  readonly execToolNames: readonly string[]
+}
+
+/**
+ * Count the deliveries no execution preceded: `sci/delivered` records before
+ * the first returned call of an execution tool. A call alone does not count —
+ * a refused or failed run produced nothing a deliverable could rest on — so the
+ * condition is a returned result, paired to its call by `callId`.
+ * @param events - the session's raw log, in ascending seq order.
+ * @param execToolNames - registered names of the tools that execute code or commands.
+ * @returns how many deliveries came before any execution returned.
+ */
+export function deliveriesWithoutExecution(events: readonly SessionEvent[], execToolNames: readonly string[]): number {
+  const execCalls = new Set<string>()
+  let executed = false
+  let count = 0
+  for (const event of events) {
+    if (event.type === 'tool/call' && execToolNames.includes(event.data.name)) execCalls.add(String(event.data.callId))
+    else if (event.type === 'tool/result' && execCalls.has(String(event.data.message.source.callId))) executed = true
+    else if (event.type === 'sci/delivered' && !executed) count += 1
+  }
+  return count
 }
 
 /**
@@ -103,5 +127,7 @@ export function summarizeSession(input: SummaryInput): AuditSummary {
     authorized,
     ...score === undefined ? {} : { memoryTimingScore: score },
     citationMissing: citationMissing(input.events, input.webToolNames),
+    planMismatches: planRecords(input.sessionId, input.events).filter(plan => plan.reconciled !== 'match').length,
+    deliveriesWithoutExecution: deliveriesWithoutExecution(input.events, input.execToolNames),
   }
 }

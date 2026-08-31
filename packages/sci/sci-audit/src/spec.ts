@@ -88,6 +88,10 @@ export const planRecordSchema = z.object({
   agentsJson: nonEmpty,
   edgesJson: nonEmpty,
   workflowRunId: nonEmpty.optional(),
+  declaredAgents: z.number().int().min(0).optional(),
+  spawnedAgents: z.number().int().min(0).optional(),
+  spawnedPersonasJson: nonEmpty.optional(),
+  reconciled: z.enum(['fewer', 'match', 'more']).optional(),
   ts: epochMillis,
 }) as unknown as z.ZodType<PlanRecord>
 

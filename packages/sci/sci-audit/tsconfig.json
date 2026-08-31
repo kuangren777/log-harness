@@ -20,6 +20,7 @@
     { "path": "../sci-memory" },
     { "path": "../sci-plan" },
     { "path": "../sci-skills" },
+    { "path": "../sci-tier" },
     { "path": "../sci-workspace" },
     { "path": "../../runtime-diagnostics/invariants" }
   ]

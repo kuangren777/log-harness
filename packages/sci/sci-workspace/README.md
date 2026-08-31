@@ -28,7 +28,9 @@ This is the outer of two layers. The inner one is the sandbox image, where `pape
 | `private` | the rest of `.sci/**` | ✓ | ✗ `sci-private` | ✗ |
 | `other` | everything else, including `memory/` | ✓ | ✓ | ✓ |
 
-Reads are allowed everywhere: the contract restricts what the agent may change, not what it may look at. The one refusal a read can earn depends on its bytes, not its location.
+Reads are allowed everywhere for the top-level session: the contract restricts what the agent may change, not what it may look at. The one refusal a read can earn depends on its bytes, not its location.
+
+A **delegated** session (header `delegationDepth` ≥ 1) is bounded by location before the table is consulted: any path inside the sandbox home but outside the session's own project — a sibling project, the project root, a dot-directory such as `.claude/` — is refused for read, write, and edit under `delegation-scope`, and every path-looking operand of a shell command (`../p2/x`, `~/.claude/...`, `cd ..`) meets the same rule. The skill tree, the delivery spool, and the rest of `.sci/` stay reachable, and paths outside the sandbox home (`/usr`, `/tmp`) are left to the sandbox's own permissions. The studied platform bounded subagents by prose alone, and one still cited four sibling projects as evidence (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §2.2).
 
 A create-only write whose target already exists is refused under its class's own rule, so a refusal reads the same whether the write was never allowed or only arrived second.
 

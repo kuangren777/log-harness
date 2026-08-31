@@ -41,6 +41,13 @@ function check(live: Session, event: SessionEvent): string[] {
 }
 
 describe('the balanced-tier invariant', () => {
+  it('reads the last resolution, so an auto session raised to cluster may fan out', () => {
+    const live = session('balanced')
+    live.append('sci/tier-resolved', { tier: 'cluster', presetName: 'sci-auto', resolvedBy: 'model', reason: 'the sweep needs a swarm' })
+
+    expect(check(live, dispatched(live, 'workflow', 'c0', false))).toEqual([])
+  })
+
   it('reports a fan-out that succeeded in a balanced session', () => {
     const live = session('balanced')
 
