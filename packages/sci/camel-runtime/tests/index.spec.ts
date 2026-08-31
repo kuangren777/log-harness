@@ -1,8 +1,9 @@
 // The plugin is Loader-composable configuration, not a hand-wired object: a
 // cordis.yml naming the tool registry, a `ctx.e2b` provider, and camel-runtime
-// mounts `fork_workspace` with the deployment's text, and a misconfiguration
-// fails at load. The engine end of the composition is proven by driving one
-// call whose AgentENV is a local HTTP server and whose sandboxes are fakes.
+// mounts the five variant tools with the deployment's cap, and a
+// misconfiguration fails at load. The engine end of the composition is proven
+// by driving a full slot lifecycle — create up to the cap, refuse, delete,
+// create again, run, collect — against a local AgentENV with fake sandboxes.
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
@@ -18,13 +19,13 @@ import Include from '@deepseek-ai/cordis-plugin-include'
 import { CallId } from '@deepseek-ai/dsh-llm'
 import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { E2BRuntime } from '@deepseek-ai/dsh-e2b'
+import { E2BRuntime, FileNotFoundError } from '@deepseek-ai/dsh-e2b'
 import type { Sandbox } from '@deepseek-ai/dsh-e2b'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SessionStore from '@deepseek-ai/dsh-session'
 import * as CamelRuntime from '@deepseek-ai/dsh-camel-runtime'
-import { Config, FORK_TOOL, describeForkTool, validateConfig } from '@deepseek-ai/dsh-camel-runtime'
+import { COLLECT_TOOL, CREATE_TOOL, Config, DELETE_TOOL, LIST_TOOL, RUN_TOOL, validateConfig } from '@deepseek-ai/dsh-camel-runtime'
 
 const sdk = vi.hoisted(() => ({ connect: vi.fn() }))
 
@@ -39,20 +40,37 @@ vi.mock('@deepseek-ai/dsh-e2b', async (importOriginal) => {
   return { ...actual, Sandbox: FakeSandbox }
 })
 
-const ARCHIVE = Buffer.from('ws').toString('base64')
+const ARCHIVE = Buffer.from('proj').toString('base64')
 
-/** A sandbox whose tar export answers with a fixed archive and whose other commands echo themselves. */
-function fakeSandbox(tag: string): { sandbox: Sandbox; run: ReturnType<typeof vi.fn>; write: ReturnType<typeof vi.fn> } {
+interface Fake { sandbox: Sandbox; run: ReturnType<typeof vi.fn>; files: Map<string, string> }
+
+/** A sandbox with an in-memory file store; tar exports answer with a fixed archive, other commands echo. */
+function fakeSandbox(tag: string): Fake {
+  const files = new Map<string, string>()
   const run = vi.fn().mockImplementation((command: string) => Promise.resolve(
     command.startsWith('tar -czf')
       ? { exitCode: 0, stdout: ARCHIVE, stderr: '' }
-      : { exitCode: 0, stdout: `${tag}: ${command}`, stderr: '' },
+      : command.startsWith('find ')
+        ? { exitCode: 0, stdout: '1\n', stderr: '' }
+        : { exitCode: 0, stdout: `${tag}: ${command}`, stderr: '' },
   ))
-  const write = vi.fn().mockResolvedValue(undefined)
-  return { sandbox: { commands: { run }, files: { write } } as unknown as Sandbox, run, write }
+  const sandbox = {
+    commands: { run },
+    files: {
+      read: (path: string) => {
+        const text = files.get(path)
+        return text === undefined ? Promise.reject(new FileNotFoundError(path)) : Promise.resolve(text)
+      },
+      write: (path: string, data: string | ArrayBuffer) => {
+        files.set(path, typeof data === 'string' ? data : Buffer.from(data).toString('utf8'))
+        return Promise.resolve(undefined)
+      },
+    },
+  } as unknown as Sandbox
+  return { sandbox, run, files }
 }
 
-const workspace = fakeSandbox('workspace')
+let workspace = fakeSandbox('workspace')
 
 /** A `ctx.e2b` provider standing in for Dormice: one fixed workspace sandbox. */
 class FakeWorkspaceRuntime extends E2BRuntime {
@@ -66,9 +84,10 @@ class FakeWorkspaceRuntime extends E2BRuntime {
   }
 }
 
-/** A local AgentENV: numbered sandboxes, one snapshot, deletions recorded. */
+/** A local AgentENV: numbered sandboxes with running/paused state, deletions recorded. */
 class MockAgentEnv {
   readonly calls: string[] = []
+  readonly alive = new Map<string, 'running' | 'paused'>()
   endpoint = ''
   private created = 0
   private server: Server | undefined
@@ -79,17 +98,30 @@ class MockAgentEnv {
       request.on('end', () => {
         const line = `${request.method} ${request.url}`
         this.calls.push(line)
-        if (request.headers['x-api-key'] !== 'key-from-env') {
-          response.writeHead(401).end('{"message":"unauthorized"}')
-          return
+        const json = (status: number, body: unknown): void => {
+          response.writeHead(status, { 'content-type': 'application/json' })
+          response.end(JSON.stringify(body))
         }
+        if (request.headers['x-api-key'] !== 'key-from-env') { json(401, { message: 'unauthorized' }); return }
+        const match = /^(GET|POST|DELETE) \/sandboxes(?:\/([^/]+))?(?:\/(connect|snapshots))?$/.exec(line)
         if (line === 'POST /sandboxes') {
           this.created++
-          response.writeHead(201, { 'content-type': 'application/json' })
-          response.end(JSON.stringify({ sandboxID: `sb-${this.created}`, templateID: 't', clientID: '', envdVersion: '0' }))
-        } else if (line.endsWith('/snapshots')) {
-          response.writeHead(201, { 'content-type': 'application/json' })
-          response.end(JSON.stringify({ snapshotID: 'snap-1', names: [] }))
+          const id = `sb-${this.created}`
+          this.alive.set(id, 'running')
+          json(201, { sandboxID: id, templateID: 't' })
+        } else if (match?.[1] === 'POST' && match[3] === 'connect') {
+          if (!this.alive.has(match[2]!)) { json(404, { message: 'gone' }); return }
+          this.alive.set(match[2]!, 'running')
+          json(200, { sandboxID: match[2], templateID: 't' })
+        } else if (match?.[1] === 'POST' && match[3] === 'snapshots') {
+          json(201, { snapshotID: `snap-${match[2]}`, names: [] })
+        } else if (match?.[1] === 'GET' && match[2] !== undefined) {
+          const state = this.alive.get(match[2])
+          if (state === undefined) { json(404, { message: 'gone' }); return }
+          json(200, { sandboxID: match[2], templateID: 't', state, endAt: 'later' })
+        } else if (match?.[1] === 'DELETE' && match[2] !== undefined) {
+          this.alive.delete(match[2])
+          response.writeHead(204).end()
         } else {
           response.writeHead(204).end()
         }
@@ -111,8 +143,7 @@ let agentenv: MockAgentEnv
 beforeEach(async () => {
   sdk.connect.mockReset()
   sdk.connect.mockImplementation((id: string) => Promise.resolve(fakeSandbox(id).sandbox))
-  workspace.run.mockClear()
-  workspace.write.mockClear()
+  workspace = fakeSandbox('workspace')
   vi.unstubAllEnvs()
   agentenv = new MockAgentEnv()
   await agentenv.start()
@@ -193,63 +224,51 @@ function rootCause(error: unknown): Error {
   return current instanceof Error ? current : new Error(String(current))
 }
 
+async function call(ctx: Context, agent: Agent, name: string, args: Record<string, unknown>): Promise<string> {
+  const result = await ctx.tools.execute({ signal: new AbortController().signal, callId: CallId(name), name, arguments: args, agent })
+  return result.content.filter(block => block.type === 'text').map(block => block.text).join('')
+}
+
 describe('camel-runtime through the Loader', () => {
-  it('mounts fork_workspace with the deployment text and runs one fork end to end (T7)', async () => {
+  it('mounts the five tools with the deployment cap and drives a whole slot lifecycle (T7)', async () => {
     vi.stubEnv('AENV_API_KEY', 'key-from-env')
-    const { ctx, agent } = await boot([`    endpoint: ${JSON.stringify(agentenv.endpoint)}`, '    template: sci', '    concurrency: 1'])
-    expect(ctx.tools.get(FORK_TOOL)?.description).toBe(describeForkTool('.sci/forks', 8))
+    const { ctx, agent } = await boot([`    endpoint: ${JSON.stringify(agentenv.endpoint)}`, '    template: sci', '    maxVariants: 2'])
+    for (const name of [CREATE_TOOL, RUN_TOOL, COLLECT_TOOL, DELETE_TOOL, LIST_TOOL]) expect(ctx.tools.get(name)).toBeDefined()
+    expect(ctx.tools.get(CREATE_TOOL)?.description).toContain('Up to 2 variants per workspace')
 
-    const result = await ctx.tools.execute({
-      signal: new AbortController().signal,
-      callId: CallId('fork'),
-      name: FORK_TOOL,
-      arguments: { variants: [{ name: 'a', command: 'echo a' }, { name: 'b', command: 'echo b' }], timeoutSeconds: 5 },
-      agent,
-    })
+    expect(await call(ctx, agent, LIST_TOOL, {})).toBe('no variants; 0/2 slots used')
+    expect(await call(ctx, agent, CREATE_TOOL, { name: 'a', project: 'projects/p1' })).toBe('variant a created, copied from projects/p1; 1/2 slots used')
+    expect(await call(ctx, agent, CREATE_TOOL, { name: 'b', project: 'projects/p1', from: 'a' })).toBe('variant b created, forked from variant a (projects/p1); 2/2 slots used')
+    expect(await call(ctx, agent, CREATE_TOOL, { name: 'c', project: 'projects/p1' }))
+      .toContain('variant limit reached: 2/2 slots are in use (a, b); delete one with delete_variant before creating another')
+    expect(await call(ctx, agent, DELETE_TOOL, { name: 'b' })).toBe('variant b deleted; 1/2 slots used')
+    expect(await call(ctx, agent, CREATE_TOOL, { name: 'c', project: 'projects/p1' })).toBe('variant c created, copied from projects/p1; 2/2 slots used')
+    expect(await call(ctx, agent, RUN_TOOL, { name: 'c', command: 'echo hi', timeoutSeconds: 5 })).toMatch(/^variant c: exit 0 \(\d+ ms\)\nsb-3: echo hi$/)
+    expect(await call(ctx, agent, COLLECT_TOOL, { name: 'c', path: 'out' })).toBe('collected 1 file from variant c:out into /home/user/sci/.sci/variants/c/collect/out')
+    expect((await call(ctx, agent, LIST_TOOL, {})).split('\n').slice(0, 2)).toEqual(['2/2 slots used', expect.stringMatching(/^- a: projects\/p1, running, last used /)])
 
-    expect(result.isError).toBe(false)
-    const text = result.content.filter(block => block.type === 'text').map(block => block.text).join('')
-    const forkId = /^fork (\S+):/.exec(text)?.[1]
-    expect(forkId).toMatch(/^\d{14}-[0-9a-f]{8}$/)
-    expect(text.split('\n')).toEqual([
-      `fork ${forkId}: 2 variants`,
-      `- a: exit 0, results in /home/user/sci/.sci/forks/${forkId}/a`,
-      '    sb-2: echo a',
-      `- b: exit 0, results in /home/user/sci/.sci/forks/${forkId}/b`,
-      '    sb-3: echo b',
-    ])
     expect(agentenv.calls).toEqual([
       'POST /sandboxes',
+      'POST /sandboxes/sb-1/connect',
       'POST /sandboxes/sb-1/snapshots',
       'POST /sandboxes',
-      'POST /sandboxes',
-      'DELETE /sandboxes/sb-1',
       'DELETE /sandboxes/sb-2',
-      'DELETE /sandboxes/sb-3',
-      'DELETE /templates/snap-1',
+      'DELETE /templates/snap-sb-1',
+      'POST /sandboxes',
+      'POST /sandboxes/sb-3/connect',
+      'POST /sandboxes/sb-3/connect',
+      'GET /sandboxes/sb-1',
+      'GET /sandboxes/sb-3',
     ])
-    expect(workspace.write.mock.calls.map(([entries]) => (entries as { path: string }[]).map(entry => entry.path))).toEqual([
-      expect.arrayContaining([expect.stringMatching(/\/a\/stdout\.txt$/)]),
-      expect.arrayContaining([expect.stringMatching(/\/b\/stdout\.txt$/)]),
-    ])
-    expect(agent.session.events.filter(event => event.type === 'sci/fork-completed')).toHaveLength(1)
+    expect(agent.session.events.filter(event => event.type.startsWith('sci/variant-')).map(event => event.type))
+      .toEqual(['sci/variant-created', 'sci/variant-created', 'sci/variant-deleted', 'sci/variant-created', 'sci/variant-run'])
+    expect(workspace.files.get('/home/user/sci/.sci/variants/registry.json')).toContain('"name": "c"')
   })
 
   it('takes an explicit apiKey over the environment and never forwards it into a sandbox', async () => {
     vi.stubEnv('AENV_API_KEY', 'wrong-key')
-    const { ctx, agent } = await boot([
-      `    endpoint: ${JSON.stringify(agentenv.endpoint)}`,
-      '    apiKey: key-from-env',
-      '    template: sci',
-    ])
-    const result = await ctx.tools.execute({
-      signal: new AbortController().signal,
-      callId: CallId('fork'),
-      name: FORK_TOOL,
-      arguments: { variants: [{ name: 'a', command: 'env' }] },
-      agent,
-    })
-    expect(result.isError).toBe(false)
+    const { ctx, agent } = await boot([`    endpoint: ${JSON.stringify(agentenv.endpoint)}`, '    apiKey: key-from-env', '    template: sci'])
+    expect(await call(ctx, agent, CREATE_TOOL, { name: 'a', project: 'projects/p1' })).toContain('variant a created')
     for (const [, options] of workspace.run.mock.calls as [string, { envs: Record<string, string> }][]) {
       expect(Object.values(options.envs)).not.toContain('key-from-env')
     }
@@ -266,26 +285,23 @@ describe('validateConfig', () => {
 
   it('accepts the defaults', () => {
     expect(() => { validateConfig(base, 'k') }).not.toThrow()
-    expect(base).toMatchObject({ endpoint: 'http://127.0.0.1:8000', forksDir: '.sci/forks', maxVariants: 8, concurrency: 4 })
+    expect(base).toMatchObject({ endpoint: 'http://127.0.0.1:8000', variantsDir: '.sci/variants', maxVariants: 8, sandboxTimeoutSeconds: 1800 })
   })
 
   it.each([
     { label: 'a blank template', patch: { template: ' ' }, failure: 'camel-runtime: template must name an AgentENV template' },
     { label: 'a schemeless endpoint', patch: { endpoint: '127.0.0.1:8000' }, failure: 'camel-runtime: endpoint must be an absolute URL: 127.0.0.1:8000' },
-    { label: 'a zero concurrency', patch: { concurrency: 0 }, failure: 'camel-runtime: concurrency must be a positive integer' },
-    { label: 'a fractional variant cap', patch: { maxVariants: 2.5 }, failure: 'camel-runtime: maxVariants must be a positive integer' },
+    { label: 'a zero cap', patch: { maxVariants: 0 }, failure: 'camel-runtime: maxVariants must be a positive integer' },
+    { label: 'a fractional TTL', patch: { sandboxTimeoutSeconds: 2.5 }, failure: 'camel-runtime: sandboxTimeoutSeconds must be a positive integer' },
     { label: 'a default budget over the cap', patch: { commandTimeoutSeconds: 10, maxCommandTimeoutSeconds: 5 }, failure: 'camel-runtime: commandTimeoutSeconds must not exceed maxCommandTimeoutSeconds' },
-    { label: 'an absolute forksDir', patch: { forksDir: '/tmp/forks' }, failure: 'camel-runtime: forksDir must be a relative path inside the workspace: /tmp/forks' },
-    { label: 'a climbing forksDir', patch: { forksDir: 'a/../../b' }, failure: 'camel-runtime: forksDir must be a relative path inside the workspace: a/../../b' },
+    { label: 'an absolute variantsDir', patch: { variantsDir: '/tmp/v' }, failure: 'camel-runtime: variantsDir must be a relative path inside the workspace: /tmp/v' },
+    { label: 'a climbing variantsDir', patch: { variantsDir: 'a/../../b' }, failure: 'camel-runtime: variantsDir must be a relative path inside the workspace: a/../../b' },
   ])('refuses $label', ({ patch, failure }) => {
     expect(() => { validateConfig({ ...base, ...patch }, 'k') }).toThrow(failure)
   })
 
-  it('refuses an empty key', () => {
+  it('refuses an empty key and requires a template at the schema', () => {
     expect(() => { validateConfig(base, '') }).toThrow('camel-runtime: configure apiKey or set AENV_API_KEY')
-  })
-
-  it('requires a template at the schema', () => {
     expect(() => Config({} as { template: string })).toThrow()
   })
 })

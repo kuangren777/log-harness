@@ -90,6 +90,23 @@ describe('sci-prompt real Loader composition through cordis.yml', () => {
     expect(snapshot).toContain('full spec in the "Reading files" section')
   }, 30_000)
 
+  // Only the gate-backed File reminder keeps an escape clause; the Citation and
+  // Memory reminders are pre-send checks with a stated empty-case outcome, since
+  // a model-only rule with an escape clause is a rule the model sets aside.
+  it('gives an escape clause only to the reminder a gate backs, and makes the other two pre-send checks', async () => {
+    const ctx = await boot([])
+    const snapshot = renderContextSnapshot(await ctx.systemPrompt.assemble())
+
+    expect(snapshot.match(/ignore this reminder/g)).toHaveLength(1)
+    expect(snapshot).toContain('File rule')
+    expect(snapshot).toContain('Citation check')
+    expect(snapshot).toContain('before you send this reply, walk every concrete fact')
+    expect(snapshot).toContain('passes the check with nothing to link')
+    expect(snapshot).toContain('Memory check')
+    expect(snapshot).toContain('a number no run produced or a result no tool call returned is not a fact and never enters memory')
+    expect(snapshot).toContain('passes the check with nothing to write')
+  }, 30_000)
+
   it('includeProseReminder: false drops only the prose reminder, keeping the other three and the chapter', async () => {
     const ctx = await boot(['    includeProseReminder: false'])
     const assembly = await ctx.systemPrompt.assemble()

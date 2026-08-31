@@ -216,3 +216,41 @@ export function classifyPath(path: string, layout: PathLayout): PathClass {
   }
   return 'other'
 }
+
+/**
+ * The sandbox-home regions a delegated agent may still reach outside its own
+ * project: the skill tree it runs from and the harness-private state it may
+ * read and spool into.
+ */
+const DELEGATION_SHARED_CLASSES: ReadonlySet<PathClass> = new Set<PathClass>(['skills', 'spool-pending', 'private'])
+
+/**
+ * The sandbox home: the directory holding the project root, the skill tree,
+ * and the harness-private directory.
+ * @param layout - the configured region layout.
+ * @returns the home's segments.
+ */
+export function sandboxHomeSegments(layout: PathLayout): string[] {
+  return pathSegments(layout.projectRoot).slice(0, -1)
+}
+
+/**
+ * Whether a path lies outside the project a delegated agent was delegated into.
+ *
+ * The check is by location, not by class: a sibling project's `workspace/`
+ * classifies as `workspace` exactly like the agent's own, so the class alone
+ * cannot separate them. A path outside the sandbox home altogether (`/usr`,
+ * `/tmp`) is not this rule's concern; the sandbox's own permissions govern it.
+ * @param path - the resolved path.
+ * @param cwd - the delegated session's working directory, which is its project.
+ * @param layout - the configured region layout.
+ * @returns whether the path is inside the sandbox home but outside both the
+ *   agent's project and the shared regions.
+ */
+export function isOutsideDelegationScope(path: string, cwd: string, layout: PathLayout): boolean {
+  if (!isAbsolutePath(path)) return false
+  const segments = pathSegments(path)
+  if (segmentsUnder(sandboxHomeSegments(layout), segments) === undefined) return false
+  if (segmentsUnder(pathSegments(cwd), segments) !== undefined) return false
+  return !DELEGATION_SHARED_CLASSES.has(classifyPath(path, layout))
+}

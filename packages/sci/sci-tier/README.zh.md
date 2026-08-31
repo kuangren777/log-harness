@@ -8,12 +8,14 @@
 
 | 表面 | 位置 | Config |
 |---|---|---|
-| 档位段 `sci:tier:balanced` / `sci:tier:cluster` | `ctx.systemPrompt.section()`，order `170` | `tier` |
-| G1，先声明再扇出 | `tools/pre-execute`，仅集群档 | `fanoutTools` |
+| 档位段 `sci:tier:balanced` / `sci:tier:cluster` / `sci:tier:auto` | `ctx.systemPrompt.section()`，order `170` | `tier` |
+| G1，先声明再扇出 | `tools/pre-execute`，集群档与自动档 | `fanoutTools` |
 | G2，均衡档二道锁 | `ctx.tools.guard()` 加一次加载期拒绝，仅均衡档 | `fanoutTools` |
+| G0，判定锁 | `tools/pre-execute` 加 `ctx.tools.guard()`，仅自动档 | `fanoutTools` |
 | 工具 `suggest_tier_upgrade` | `./suggest`，只由均衡档 preset 挂载 | — |
+| 工具 `resolve_tier` | `./resolve`，只由自动档 preset 挂载 | — |
 | RPC `sci.tier.fork` | `./fork`，宿主平面 | — |
-| 会话事件 `sci/tier-resolved` | 在 `session/created` 时追加，读端必需 | — |
+| 会话事件 `sci/tier-resolved` | 均衡/集群档在 `session/created` 时追加，自动档由 `resolve_tier` 追加（以最后一条为准），读端必需 | — |
 | 会话事件 `sci/tier-upgrade-suggested`、`sci/tool-denied` | 由该工具与两道门禁追加，可忽略 | — |
 
 本包提供三个可挂载模块，因为它们属于三个不同的位置。入口进入**两个**科研 preset；`./suggest` 只进 `sci-balanced`，在那里建议升档是模型唯一合法的出口；`./fork` 是 Service，因此属于宿主平面 —— 从入口发布服务会在第二个 preset 挂载的那一刻发生冲突。
@@ -29,6 +31,12 @@
 `ctx.tools.restrict()` 在这里不可用。它会把每个名字对照已挂载的 catalog 校验，遇到 preset 从未挂载的名字就抛错（`packages/core/tools/src/index.ts:1088`），而这恰恰是均衡档的处境：它并不挂载那些要被拦的名字。`ctx.tools.guard()` 只拒绝、不校验名字，在整条 `tools/pre-execute` waterfall 之后运行，且无法被某个 listener 强行放行，因此档位能在它所保护的组合中存活。
 
 加载期检查是互补的另一半：本行挂载时 catalog 里**已经**存在的扇出工具是配置错误而非意外，`apply` 会带着它找到的名字抛错。
+
+## G0 · 判定锁
+
+`auto` 组合里扇出工具是挂着的，所以加载期拒绝和静态 guard 都不适用。改由 `tools/pre-execute` 监听器和一道 `ctx.tools.guard()` 同时读会话最新的 `sci/tier-resolved`——本进程按会话缓存，首次使用时从日志重建，以最后一条为准，因为升档会再追加一条。未判定时，每次扇出都以 `unresolved` 规则拒绝，出口是 `resolve_tier`；判定为 `balanced` 时以 `tier` 规则拒绝，出口是升档；判定为 `cluster` 后，调用就和集群档一样过 G1。`resolve_tier` 自己拒绝把集群会话降回均衡：蜂群的开销是用户预留的，已经开了蜂群的会话就在蜂群里做完。自动档会话创建时不追加 `sci/tier-resolved`——模型自己那次调用就是记录。
+
+均衡档文本只给模型两条出口——真正做小的真实结果并写明范围，或 `suggest_tier_upgrade`——并点名封掉第三条：数字并非真实运行产出的「看起来很大」的结果。原平台的文本只在调研类任务上给了诚实出口，复现任务上模型造了空壳（分析 §3）。
 
 ## 升档 fork
 

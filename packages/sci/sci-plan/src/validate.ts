@@ -13,6 +13,7 @@
 
 import { topologicalSort } from './graph.ts'
 import type { EdgeIndices } from './graph.ts'
+import { ICON_PERSONA, PRODUCER_ICONS, VERIFIER_ICON } from './personas.ts'
 import type { PlanAgent, PlanEdge, PlanInput, ResearchPlan } from './types.ts'
 
 /**
@@ -42,6 +43,46 @@ function endpointsOf(edge: readonly string[]): readonly [string, string] {
  */
 function namesOf(agents: readonly PlanAgent[], nodes: readonly number[]): readonly PlanAgent[] {
   return nodes.map(node => agents[node]).filter((agent): agent is PlanAgent => agent !== undefined)
+}
+
+/**
+ * The composition check: a plan is refused when nothing in it refutes.
+ *
+ * Two rules. Every plan declares at least one {@link VERIFIER_ICON} agent, so a
+ * producer-only swarm never reaches the fan-out gate. And when the plan declares
+ * a {@link PRODUCER_ICONS} agent — one that leaves code, results, or delivered
+ * files behind — at least one verifier must depend on one of them by an edge,
+ * so the adversary runs after the artifact exists and reads it, not the
+ * producer's summary of it. Read-only plans (search and web agents only) need
+ * only the first rule: they leave no artifact for a downstream check to open.
+ * @param agents - the declared agents, already trimmed.
+ * @param edges - the resolved dependencies as agent indices.
+ * @returns every composition refusal, each naming what to add.
+ */
+function verifierErrors(agents: readonly PlanAgent[], edges: readonly EdgeIndices[]): readonly string[] {
+  if (agents.length === 0) return []
+  const verifiers = new Set<number>()
+  const producers = new Set<number>()
+  agents.forEach((agent, index) => {
+    if (agent.icon === VERIFIER_ICON) verifiers.add(index)
+    else if (PRODUCER_ICONS.includes(agent.icon)) producers.add(index)
+  })
+  const verifierPersona = ICON_PERSONA[VERIFIER_ICON]
+  if (verifiers.size === 0) {
+    return [
+      `no agent carries icon ${JSON.stringify(VERIFIER_ICON)}; every plan needs at least one ${verifierPersona} `
+      + 'that tries to break what the others produce — a swarm of producers alone is refused',
+    ]
+  }
+  if (producers.size === 0) return []
+  const audited = edges.some(([from, to]) => producers.has(from) && verifiers.has(to))
+  if (audited) return []
+  const producerIds = [...producers].map(index => JSON.stringify(agents[index]?.id)).join(', ')
+  const verifierIds = [...verifiers].map(index => JSON.stringify(agents[index]?.id)).join(', ')
+  return [
+    `no edge leads from a producing agent (${producerIds}) into the ${verifierPersona} (${verifierIds}); `
+    + `add an edge so the ${verifierPersona} runs after the artifact exists and checks the artifact itself`,
+  ]
 }
 
 /**
@@ -97,6 +138,7 @@ export function validatePlan(input: PlanInput): PlanValidation {
     indexEdges.push([fromIndex, toIndex])
   })
 
+  errors.push(...verifierErrors(agents, indexEdges))
   if (errors.length > 0) return { ok: false, errors }
 
   const sorted = topologicalSort(agents.length, indexEdges)

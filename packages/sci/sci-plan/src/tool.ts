@@ -16,7 +16,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView } from '@deepseek-ai/dsh-tools'
-import { ICON_PERSONA, PERSONA_NAMES, PLAN_ICONS } from './personas.ts'
+import { ICON_PERSONA, PERSONA_NAMES, PLAN_ICONS, PRODUCER_ICONS, VERIFIER_ICON } from './personas.ts'
 import { randomPlanId } from './plan-id.ts'
 import { formatPlanResult } from './render.ts'
 import type { RenderedAgent } from './render.ts'
@@ -51,6 +51,8 @@ export function describePlanTool(): string {
     + `Icons select the subagent persona that runs the step: ${PLAN_ICONS.map(icon => `${icon} runs as ${ICON_PERSONA[icon]}`).join(', ')}. `
     + 'Use `edges` only for real ordering constraints — `[["installer", "verifier"]]` means the verifier waits for the installer; '
     + 'agents with no edge between them run in parallel. The plan must be acyclic and every edge must name a declared agent. '
+    + `Every plan must include at least one \`${VERIFIER_ICON}\` agent (the ${ICON_PERSONA[VERIFIER_ICON]}) whose task is to break what the others produce; `
+    + `when a plan has a \`${PRODUCER_ICONS.join('` or `')}\` agent, an edge must lead from it into that ${ICON_PERSONA[VERIFIER_ICON]} so the check runs on the artifact, not on the producer's summary. `
     + 'One declaration authorizes one fan-out: declare again before the next one.'
 }
 

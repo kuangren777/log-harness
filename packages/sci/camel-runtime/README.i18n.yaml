@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/sci/camel-runtime/README.md
-README.md: 69506e5e06bd88593d2fd42a41adefd8931be72d
-README.zh.md: 116147a74ed3ef695e792cf56e961f884bb1a37e
+README.md: 58ac916a333154b7b91a4372de221243ffebc49d
+README.zh.md: 698fbcc40ea0f3b82e68841b799cfba323c361b3

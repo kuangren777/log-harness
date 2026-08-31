@@ -33,6 +33,8 @@ export const RULE_MANIFEST_OWNED_FIELD = 'manifest-owned-field'
 export const RULE_MANIFEST_INVALID = 'manifest-invalid'
 /** Refusal of a manifest change whose result the gate cannot reconstruct. */
 export const RULE_MANIFEST_UNVERIFIABLE = 'manifest-unverifiable'
+/** Refusal of a delegated agent reaching outside the project it was delegated into. */
+export const RULE_DELEGATION_SCOPE = 'delegation-scope'
 
 /**
  * Every rule id this package can attribute a refusal to. The `sci/fs-denied`
@@ -51,6 +53,7 @@ export const FS_DENIAL_RULES: ReadonlySet<string> = new Set([
   RULE_MANIFEST_OWNED_FIELD,
   RULE_MANIFEST_INVALID,
   RULE_MANIFEST_UNVERIFIABLE,
+  RULE_DELEGATION_SCOPE,
 ])
 
 const ALLOW: FsDecision = { kind: 'allow' }
@@ -144,5 +147,26 @@ export function denyExistingCreateOnly(path: string, cls: PathClass): { rule: st
   return {
     rule: RULE_VERSIONS_APPEND_ONLY,
     reason: `"${path}" already exists and versions/ is append-only: compile a new version instead of replacing an archived file.`,
+  }
+}
+
+/**
+ * The refusal a delegated agent reads when a path leaves its project.
+ *
+ * The studied platform bounded its subagents by prose alone — "do not read the
+ * `.claude` directory, stay in your project" — and one environment-check agent
+ * still cited four sibling projects' scratch directories as evidence
+ * (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §2.2). Here the bound is a rule of
+ * this gate: it applies to every filesystem tool and to every path operand of
+ * a shell command, and the sentence tells the agent where the request belongs.
+ * @param path - the resolved path outside the delegation's project.
+ * @returns the rule id and the model-facing sentence.
+ */
+export function denyDelegationScope(path: string): { rule: string; reason: string } {
+  return {
+    rule: RULE_DELEGATION_SCOPE,
+    reason: `"${path}" is outside the project this delegation was scoped to: a delegated agent reads and writes `
+      + 'only its own project, the skill tree, and the delivery spool. If the task needs something from elsewhere, '
+      + 'say so in your report and let the thread that delegated you fetch it.',
   }
 }

@@ -710,25 +710,6 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 来源：[`packages/sci/sci-deliver/src/types.ts:98`](../packages/sci/sci-deliver/src/types.ts)
 
-<a id="scifork-completed--log-only"></a>
-
-#### `sci/fork-completed` — log-only
-
-```ts persistence-catalog
-/**
- * One fork finished: every variant ran and its results are in the
- * workspace. Log-only and non-surface; the tool result already told the
- * model, and nothing later in the log depends on this record.
- * @param forkId - identity of the fork, naming `<forksDir>/<forkId>/`.
- * @param snapshotID - the AgentENV snapshot the variants resumed from.
- * @param variants - name and exit code per variant, in request order.
- * @param durationMs - wall-clock time of the whole fork.
- */
-'sci/fork-completed': SciForkCompletedData
-```
-
-来源：[`packages/sci/camel-runtime/src/types.ts:84`](../packages/sci/camel-runtime/src/types.ts)
-
 <a id="scifs-denied--log-only"></a>
 
 #### `sci/fs-denied` — log-only
@@ -853,19 +834,24 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /**
- * The tier and preset this session runs at, appended as the session's first
- * `sci/*` event. Every later `sci/*` record is read against it: an audit
- * projection counts a denied fan-out differently depending on the tier that
- * denied it, and `./invariant` asserts that a balanced session never
- * reaches a fan-out tool at all. A reader that skipped this event would
- * therefore attribute the rest of the session to no tier, so it is
- * required-on-read and carries no `ignorable` marker.
- * @param data - the tier and the agent preset carrying it.
+ * The tier and preset this session runs at. In the balanced and cluster
+ * compositions it is appended as the session's first `sci/*` event; in the
+ * auto composition it is appended by `resolve_tier`, once when the model
+ * resolves the task and again if it raises the tier, and the LAST record
+ * is the session's tier. Every later `sci/*` record is read against it: an
+ * audit projection counts a denied fan-out differently depending on the
+ * tier that denied it, and `./invariant` asserts that a session whose
+ * latest tier is balanced never reaches a fan-out tool at all. A reader
+ * that skipped this event would therefore attribute the rest of the
+ * session to no tier, so it is required-on-read and carries no
+ * `ignorable` marker.
+ * @param data - the tier, the agent preset carrying it, and for a
+ *   model-resolved tier who resolved it and why.
  */
 'sci/tier-resolved': SciTierResolvedData
 ```
 
-来源：[`packages/sci/sci-tier/src/types.ts:73`](../packages/sci/sci-tier/src/types.ts)
+来源：[`packages/sci/sci-tier/src/types.ts:107`](../packages/sci/sci-tier/src/types.ts)
 
 <a id="scitier-upgrade-suggested--log-only"></a>
 
@@ -883,7 +869,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'sci/tier-upgrade-suggested': SciTierUpgradeSuggestedData
 ```
 
-来源：[`packages/sci/sci-tier/src/types.ts:82`](../packages/sci/sci-tier/src/types.ts)
+来源：[`packages/sci/sci-tier/src/types.ts:116`](../packages/sci/sci-tier/src/types.ts)
 
 <a id="scitool-denied--log-only"></a>
 
@@ -901,7 +887,58 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'sci/tool-denied': SciToolDeniedData
 ```
 
-来源：[`packages/sci/sci-tier/src/types.ts:91`](../packages/sci/sci-tier/src/types.ts)
+来源：[`packages/sci/sci-tier/src/types.ts:125`](../packages/sci/sci-tier/src/types.ts)
+
+<a id="scivariant-created--log-only"></a>
+
+#### `sci/variant-created` — log-only
+
+```ts persistence-catalog
+/**
+ * One variant slot was created. Log-only and non-surface; the registry
+ * file in the workspace is the authoritative slot table, and this record
+ * exists so the session log explains where a sandbox came from.
+ * @param name - slot name.
+ * @param project - workspace-relative project directory copied into it.
+ * @param sandboxID - the AgentENV sandbox holding the copy.
+ * @param from - the variant it was forked from, when any.
+ */
+'sci/variant-created': SciVariantCreatedData
+```
+
+来源：[`packages/sci/camel-runtime/src/types.ts:115`](../packages/sci/camel-runtime/src/types.ts)
+
+<a id="scivariant-deleted--log-only"></a>
+
+#### `sci/variant-deleted` — log-only
+
+```ts persistence-catalog
+/**
+ * One variant slot was deleted and its sandbox killed. Log-only and non-surface.
+ * @param name - slot name.
+ * @param sandboxID - the sandbox that was killed.
+ */
+'sci/variant-deleted': SciVariantDeletedData
+```
+
+来源：[`packages/sci/camel-runtime/src/types.ts:121`](../packages/sci/camel-runtime/src/types.ts)
+
+<a id="scivariant-run--log-only"></a>
+
+#### `sci/variant-run` — log-only
+
+```ts persistence-catalog
+/**
+ * One command ran inside a variant. Log-only and non-surface; the tool
+ * result already told the model.
+ * @param name - slot name.
+ * @param exitCode - the command's exit code.
+ * @param durationMs - wall-clock time of the command.
+ */
+'sci/variant-run': SciVariantRunData
+```
+
+来源：[`packages/sci/camel-runtime/src/types.ts:129`](../packages/sci/camel-runtime/src/types.ts)
 
 ### `session/*`
 

@@ -1,0 +1,247 @@
+# The science-research agent at the AUTO tier: `cluster.cordis.yml` with the
+# tier row at `auto` and `resolve_tier` mounted. Everything else is identical,
+# so a diff against `cluster.cordis.yml` is exactly what the third preset adds.
+#
+# The G0 resolution lock is the point of this file: `workflow` and `subagent`
+# are in the catalog and refused until the model resolves the tier from the
+# task; resolved to `balanced` they stay refused with the raise as the exit,
+# and resolved to `cluster` they meet the G1 latch exactly as in the cluster
+# example.
+
+- id: settings
+  name: '@deepseek-ai/dsh-settings-file'
+
+- id: credentials
+  name: '@deepseek-ai/dsh-credentials-local'
+
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek'
+  config:
+    thinking: enabled
+    reasoningEffort: max
+    models:
+      - id: deepseek-v4-pro
+        contextWindow: 128000
+
+- id: subprocess
+  name: '@deepseek-ai/dsh-subprocess-local'
+
+- id: sandbox
+  name: '@deepseek-ai/dsh-sandbox-local'
+
+- id: sandbox-policy
+  name: '@deepseek-ai/dsh-sandbox-policy'
+  config:
+    mode: workspace-write
+    workspaceRoot: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+
+- id: bash-sandbox
+  name: '@deepseek-ai/dsh-bash-sandbox'
+  config:
+    timeoutMs: 60000
+
+- id: approval
+  name: '@deepseek-ai/dsh-user-approval'
+
+- id: fs-local
+  name: '@deepseek-ai/dsh-fs-local'
+  config:
+    cwd: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+
+- id: fs-observation-policy
+  name: '@deepseek-ai/dsh-fs-observation-policy'
+
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+- id: session-projection
+  name: '@deepseek-ai/dsh-session-projection'
+
+- id: storage
+  name: '@deepseek-ai/dsh-storage'
+
+- id: storage-json
+  name: '@deepseek-ai/dsh-storage-json'
+  config:
+    root: ./.storages
+
+- id: storage-domain
+  name: '@deepseek-ai/dsh-storage-domain'
+  config:
+    backend: json
+
+- id: persistence
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: ./.sessions
+    compression: none
+
+- id: agent-spine
+  name: '@deepseek-ai/dsh-agent-spine-demo'
+  config:
+    agents:
+      - id: main
+        provider: deepseek-official
+        model: deepseek-v4-pro
+        cwd: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+    workspaceContext:
+      maxBytes: 65536
+    persona: |
+      You are sci-agent, a research assistant powered by the {{model}} model.
+
+      Declare a plan before you fan out. One declaration authorizes one fan-out.
+
+# ── delegation ──────────────────────────────────────────────────────────────
+
+# Fresh-child `spawn` through an in-process backend, plus the worker-thread
+# workflow engine. Both fan-out tools are what the G1 latch gates.
+- id: subagent
+  name: '@deepseek-ai/dsh-subagent'
+
+- id: subagent-spawn-in-process
+  name: '@deepseek-ai/dsh-subagent-spawn-in-process'
+  config:
+    providerName: spawn
+
+- id: tool-subagent-control
+  name: '@deepseek-ai/dsh-tool-subagent-control'
+
+- id: tool-subagent-report
+  name: '@deepseek-ai/dsh-tool-subagent-report'
+
+# One delegation tool per persona, the shape `sci-cluster` ships: the persona
+# is bound to the MOUNTED row, so the six names in `fanoutTools` above are what
+# the G1 latch actually gates. The charters here are one-line stand-ins — the
+# shipped preset restates the full documents from
+# `packages/sci/sci-profile/config/agents/`.
+
+- id: tool-subagent-researcher
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_researcher
+    backgroundMode: continuable
+    maxDepth: 1
+    persona: Gather sources and report what they say, with a link behind every claim.
+
+- id: tool-subagent-adversary
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_adversary
+    backgroundMode: continuable
+    maxDepth: 1
+    persona: Attack a finished claim and report only the ways it fails.
+
+- id: tool-subagent-scout
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_scout
+    backgroundMode: continuable
+    maxDepth: 1
+    persona: Locate one file, fact, or dataset and return where it is.
+
+- id: tool-subagent-writer
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_writer
+    backgroundMode: continuable
+    maxDepth: 1
+    persona: Produce the prose or code a step owes, in the directories the model owns.
+
+- id: tool-subagent-plotter
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_plotter
+    backgroundMode: continuable
+    maxDepth: 1
+    persona: Run the sciplot render path; no other persona renders a figure.
+
+- id: tool-subagent-deliverer
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_deliverer
+    backgroundMode: continuable
+    maxDepth: 1
+    persona: Copy finished work into the delivery workspace; no other persona delivers.
+
+- id: workflow-worker-thread
+  name: '@deepseek-ai/dsh-workflow-worker-thread'
+  config:
+    provider: spawn
+
+- id: tool-workflow
+  name: '@deepseek-ai/dsh-tool-workflow'
+
+# ── the science layer ───────────────────────────────────────────────────────
+
+- id: sci-prompt
+  name: '@deepseek-ai/dsh-sci-prompt'
+
+# Content-addressed text references, the seam sci-skills registers its body
+# store on; a standalone example mounts it directly.
+- id: referenced-text
+  name: '@deepseek-ai/dsh-referenced-text'
+
+- id: sci-skills
+  name: '@deepseek-ai/dsh-sci-skills'
+  config:
+    # Deployment reads bodies from the loopback vault; this local example reads a
+    # small fixture tree instead (DSH_SCI_SKILLS_ROOT, set by the snapshot harness).
+    source:
+      kind: directory
+      root: !!js process.env.DSH_SCI_SKILLS_ROOT ?? process.cwd()
+    sandboxRoot: !!js (process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()) + '/skills'
+    syncOnStart: false
+
+- id: sci-workspace
+  name: '@deepseek-ai/dsh-sci-workspace'
+  config:
+    projectRoot: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+
+- id: sci-guard
+  name: '@deepseek-ai/dsh-sci-guard'
+  config:
+    projectRoot: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+
+- id: sci-deliver
+  name: '@deepseek-ai/dsh-sci-deliver'
+  config:
+    projectRoot: !!js process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()
+    spoolDir: !!js (process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()) + '/.sci/spool'
+    snapshotDir: !!js (process.env.DSH_SCI_PROJECT_ROOT ?? process.cwd()) + '/.sci/snapshots'
+
+- id: sci-plan
+  name: '@deepseek-ai/dsh-sci-plan'
+
+- id: sci-tier
+  name: '@deepseek-ai/dsh-sci-tier'
+  config:
+    tier: auto
+    fanoutTools:
+      - workflow
+      - subagent
+      - subagent_researcher
+      - subagent_adversary
+      - subagent_scout
+      - subagent_writer
+      - subagent_plotter
+      - subagent_deliverer
+      - subagent_fork
+      - subagent_codex
+      - subagent_claude_code
+      - ralph
+
+# The auto tier's resolution tool: `resolve_tier` appends the `sci/tier-resolved`
+# record the gates read, once to resolve and again to raise.
+- id: sci-tier-resolve
+  name: '@deepseek-ai/dsh-sci-tier/resolve'

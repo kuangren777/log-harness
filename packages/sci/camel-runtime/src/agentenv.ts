@@ -1,13 +1,13 @@
 /**
- * Thin client for the AgentENV native API — the four calls the fork engine
+ * Thin client for the AgentENV native API — the calls the variant engine
  * needs, and the E2B SDK connection that turns a sandbox id into a command and
  * file surface. Snapshots and templates share one namespace in AgentENV, so a
- * fork is `createSandbox(snapshotID)`.
+ * fork of a variant is `createSandbox(snapshotID)`.
  * @module @deepseek-ai/dsh-camel-runtime/agentenv
  */
 
 import { Sandbox } from '@deepseek-ai/dsh-e2b'
-import type { AgentEnvSandbox, AgentEnvSnapshot } from './types.ts'
+import type { AgentEnvSandbox, AgentEnvSandboxDetail, AgentEnvSnapshot } from './types.ts'
 
 /** Header AgentENV authenticates native API calls with. */
 export const API_KEY_HEADER = 'X-API-Key'
@@ -22,13 +22,19 @@ export interface AgentEnvClientOptions {
   readonly fetch?: typeof fetch
 }
 
-/** The surface the fork engine drives; {@link AgentEnvClient} is the real one. */
+/** The surface the variant engine drives; {@link AgentEnvClient} is the real one. */
 export interface AgentEnvApi {
+  /** Start a sandbox from a template or snapshot; it auto-pauses after `timeoutSeconds` idle. */
   createSandbox(templateID: string, timeoutSeconds: number): Promise<AgentEnvSandbox>
+  /** Resume a paused sandbox (a running one is untouched) and extend its TTL; `undefined` when AgentENV no longer has it. */
+  connect(sandboxID: string, timeoutSeconds: number): Promise<AgentEnvSandbox | undefined>
+  /** Current state of a sandbox; `undefined` when AgentENV no longer has it. */
+  getSandbox(sandboxID: string): Promise<AgentEnvSandboxDetail | undefined>
   snapshot(sandboxID: string, name?: string): Promise<AgentEnvSnapshot>
   kill(sandboxID: string): Promise<void>
   deleteTemplate(templateID: string): Promise<void>
-  connect(sandbox: AgentEnvSandbox): Promise<Sandbox>
+  /** Open the E2B SDK surface of a running sandbox. */
+  open(sandbox: AgentEnvSandbox): Promise<Sandbox>
 }
 
 /**
@@ -58,15 +64,39 @@ export class AgentEnvClient implements AgentEnvApi {
   }
 
   /**
-   * Start one sandbox from a template or snapshot.
+   * Start one sandbox from a template or snapshot. It pauses itself after
+   * `timeoutSeconds` without a `connect`, keeping memory and disk.
    * @param templateID - template or snapshot identifier (or alias).
-   * @param timeoutSeconds - sandbox TTL; AgentENV pauses it when the TTL elapses.
+   * @param timeoutSeconds - idle TTL before the automatic pause.
    * @returns the started sandbox record.
    * @throws when the server answers outside 2xx.
    */
   async createSandbox(templateID: string, timeoutSeconds: number): Promise<AgentEnvSandbox> {
-    const answer = await this.request('POST', '/sandboxes', { templateID, timeout: timeoutSeconds, autoPause: false })
+    const answer = await this.request('POST', '/sandboxes', { templateID, timeout: timeoutSeconds, autoPause: true })
     return (await answer.json()) as AgentEnvSandbox
+  }
+
+  /**
+   * Resume a sandbox if paused and extend its TTL from now.
+   * @param sandboxID - the sandbox to reach.
+   * @param timeoutSeconds - new idle TTL.
+   * @returns the sandbox record, or `undefined` when AgentENV answers 404.
+   */
+  async connect(sandboxID: string, timeoutSeconds: number): Promise<AgentEnvSandbox | undefined> {
+    const answer = await this.request('POST', `/sandboxes/${encodeURIComponent(sandboxID)}/connect`, { timeout: timeoutSeconds }, [404])
+    if (answer.status === 404) return undefined
+    return (await answer.json()) as AgentEnvSandbox
+  }
+
+  /**
+   * Read a sandbox's current state.
+   * @param sandboxID - the sandbox to read.
+   * @returns the detail record, or `undefined` when AgentENV answers 404.
+   */
+  async getSandbox(sandboxID: string): Promise<AgentEnvSandboxDetail | undefined> {
+    const answer = await this.request('GET', `/sandboxes/${encodeURIComponent(sandboxID)}`, undefined, [404])
+    if (answer.status === 404) return undefined
+    return (await answer.json()) as AgentEnvSandboxDetail
   }
 
   /**
@@ -97,12 +127,12 @@ export class AgentEnvClient implements AgentEnvApi {
   }
 
   /**
-   * Open the E2B SDK surface of one started sandbox. The SDK fetches the
+   * Open the E2B SDK surface of one running sandbox. The SDK fetches the
    * sandbox's envd access token itself, so a secure sandbox needs nothing more.
-   * @param sandbox - the record `createSandbox` returned.
+   * @param sandbox - a record `createSandbox` or `connect` returned.
    * @returns the connected SDK handle.
    */
-  connect(sandbox: AgentEnvSandbox): Promise<Sandbox> {
+  open(sandbox: AgentEnvSandbox): Promise<Sandbox> {
     return Sandbox.connect(sandbox.sandboxID, {
       apiKey: this.apiKey,
       apiUrl: this.endpoint,

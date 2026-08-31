@@ -19,6 +19,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { BUNDLED_PRESET_ROOT, SCI_PRESETS } from '../src/index.ts'
 import {
   activeRows,
+  autoPreset,
   balancedPreset,
   clusterPreset,
   presetRowIds,
@@ -121,7 +122,7 @@ describe('the sci bundle patch layer', () => {
 })
 
 describe('the shipped preset directories', () => {
-  it('ships exactly the two presets the bundle names, each with both files', () => {
+  it('ships exactly the three presets the bundle names, each with both files', () => {
     for (const preset of SCI_PRESETS) {
       const dir = join(root, 'packages/sci/sci-profile/config/agent-presets', preset)
       expect(readFileSync(join(dir, 'preset.yml'), 'utf8')).toMatch(/^name: /m)
@@ -129,11 +130,11 @@ describe('the shipped preset directories', () => {
     }
   })
 
-  it('supplies both science presets from the declared root, with system trust, and no dsh preset', async () => {
+  it('supplies the three science presets from the declared root, in roster order, with system trust, and no dsh preset', async () => {
     const presets = await discoverPresets([{ path: BUNDLED_PRESET_ROOT, trust: 'system' }])
 
     expect(presets.map(preset => preset.id)).toEqual([...SCI_PRESETS])
-    expect(presets.map(preset => preset.name)).toEqual(['单体 / Solo', '蜂群 / Swarm'])
+    expect(presets.map(preset => preset.name)).toEqual(['单体 / Solo', '自动 / Auto', '蜂群 / Swarm'])
     for (const preset of presets) {
       expect(preset.trust, preset.id).toBe('system')
       expect(preset.broken, preset.id).toBeUndefined()
@@ -145,7 +146,7 @@ describe('the shipped preset directories', () => {
   })
 
   it('puts every group row behind an isolate realm', () => {
-    for (const preset of [balancedPreset(), clusterPreset()]) {
+    for (const preset of [balancedPreset(), autoPreset(), clusterPreset()]) {
       for (const row of preset) {
         if (row.group !== true) continue
         expect(row.isolate, `${row.id} is a group without a realm`).toBeTypeOf('object')
@@ -166,12 +167,13 @@ describe('the shipped preset directories', () => {
     // user's own skills are read from the sandbox by a preset-layer
     // `skill-filesystem`, the row the web layer disables at the host.
     expect(presetRowIds(balancedPreset()).has('skill-filesystem')).toBe(true)
+    expect(presetRowIds(autoPreset()).has('skill-filesystem')).toBe(true)
     expect(presetRowIds(clusterPreset()).has('skill-filesystem')).toBe(true)
   })
 
   it('repeats no row the composed host tree still runs', () => {
     const active = activeRows(rows)
-    for (const [preset, ids] of [['sci-balanced', presetRowIds(balancedPreset())], ['sci-cluster', presetRowIds(clusterPreset())]] as const) {
+    for (const [preset, ids] of [['sci-balanced', presetRowIds(balancedPreset())], ['sci-auto', presetRowIds(autoPreset())], ['sci-cluster', presetRowIds(clusterPreset())]] as const) {
       for (const id of ids) {
         expect(active.has(id), `${preset}: row "${id}" is also active in the host composition`).toBe(false)
       }
@@ -213,6 +215,21 @@ describe('05-T1 · the balanced tier cannot see a fan-out tool', () => {
     for (const name of PERSONA_NAMES) expect(listing, name).toContain(subagentToolName(name))
     expect(listing).not.toContain('subagent')
     expect(listing).not.toContain('suggest_tier_upgrade')
+    expect(listing).not.toContain('resolve_tier')
+  })
+
+  // The auto preset is the cluster composition plus the resolution tool: the
+  // swarm is mounted, and `sci-tier` at `auto` keeps it shut until resolved.
+  it('assembles the cluster tools plus resolve_tier at the auto tier, and differs from cluster by that one row', () => {
+    const listing = toolNamesOf([...autoPreset(), ...activeRowsList(rows)])
+    const clusterListing = toolNamesOf([...clusterPreset(), ...activeRowsList(rows)])
+
+    expect(listing).toContain('resolve_tier')
+    expect(listing).not.toContain('suggest_tier_upgrade')
+    expect(listing.filter(name => name !== 'resolve_tier').sort()).toEqual([...clusterListing].sort())
+    expect((autoPreset().find(row => row.id === 'sci-tier')?.config as { tier: string }).tier).toBe('auto')
+    const autoIds = [...presetRowIds(autoPreset())].filter(id => id !== 'sci-tier-resolve').sort()
+    expect(autoIds).toEqual([...presetRowIds(clusterPreset())].sort())
     expect(listing).not.toContain('ralph')
   })
 })

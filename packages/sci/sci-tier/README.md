@@ -1,22 +1,26 @@
-# sci-tier — the balanced/cluster tier, its prompt section, and the two gates that make it true
+# sci-tier — the balanced/cluster/auto tier, its prompt section, and the gates that make it true
 
 English | [中文](README.zh.md)
 
-Replaces the two per-turn tier reminders of the studied platform — the 762-byte balanced injection and the 3.5 KB agent-cluster injection (`ClawsGO-System/04-System-Prompts/verbatim/reminder-B-balanced-mode.txt` and `reminder-C-cluster-mode-2026-08-24.txt`, analysed in `ClawsGO-System/09-Target-Architecture/05-tier-model.md`). There the tier was prose and nothing else: thirteen balanced sessions produced zero fan-outs because the model complied, not because it could not, and the cluster reminder re-materialised 3.5 KB into every request while asserting runtime behaviour — a completion notification that never arrives, a `TaskOutput` polling loop, `resumeFromRunId` recovery — that this harness does not have. Here the tier is a property of the agent preset, its text is a prompt section assembled once, and two gates enforce it: the cluster tier spends one declared plan per fan-out, and the balanced tier denies every fan-out name outright.
+Replaces the two per-turn tier reminders of the studied platform — the 762-byte balanced injection and the 3.5 KB agent-cluster injection (`ClawsGO-System/04-System-Prompts/verbatim/reminder-B-balanced-mode.txt` and `reminder-C-cluster-mode-2026-08-24.txt`, analysed in `ClawsGO-System/09-Target-Architecture/05-tier-model.md`). There the tier was prose and nothing else: thirteen balanced sessions produced zero fan-outs because the model complied, not because it could not, and the cluster reminder re-materialised 3.5 KB into every request while asserting runtime behaviour — a completion notification that never arrives, a `TaskOutput` polling loop, `resumeFromRunId` recovery — that this harness does not have. Here the tier is a property of the agent preset, its text is a prompt section assembled once, and gates enforce it: the cluster tier spends one declared plan per fan-out, and the balanced tier denies every fan-out name outright. A third composition, `auto`, answers the platform's other tier defect — the user chose the tier before the task was known, and a single-threaded session facing a task that needed a real experiment delivered a hollow one (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §1.2, §3): the swarm is mounted but shut until the model resolves the tier from the task with `resolve_tier`, and a balanced resolution can be raised to cluster mid-session.
 
 ## Surfaces
 
 | Surface | Where | Config |
 |---|---|---|
-| Tier section `sci:tier:balanced` / `sci:tier:cluster` | `ctx.systemPrompt.section()`, order `170` | `tier` |
-| G1, declare before fan-out | `tools/pre-execute`, cluster only | `fanoutTools` |
+| Tier section `sci:tier:balanced` / `sci:tier:cluster` / `sci:tier:auto` | `ctx.systemPrompt.section()`, order `170` | `tier` |
+| G1, declare before fan-out | `tools/pre-execute`, cluster and auto | `fanoutTools` |
 | G2, the balanced lock | `ctx.tools.guard()` plus a load-time refusal, balanced only | `fanoutTools` |
+| G0, the resolution lock | `tools/pre-execute` plus `ctx.tools.guard()`, auto only | `fanoutTools` |
 | Tool `suggest_tier_upgrade` | `./suggest`, mounted by the balanced preset only | — |
+| Tool `resolve_tier` | `./resolve`, mounted by the auto preset only | — |
 | RPC `sci.tier.fork` | `./fork`, host plane | — |
-| Session event `sci/tier-resolved` | appended on `session/created`, required-on-read | — |
+| Session event `sci/tier-resolved` | appended on `session/created` (balanced, cluster) or by `resolve_tier` (auto, last record wins), required-on-read | — |
 | Session events `sci/tier-upgrade-suggested`, `sci/tool-denied` | appended by the tool and the two gates, ignorable | — |
 
-The package ships three mountable modules because they belong in three different places. The entry goes in BOTH science-research presets; `./suggest` goes only in `sci-balanced`, where suggesting an upgrade is the model's one legitimate exit; and `./fork` is a Service and therefore host-plane — a service published from the entry would collide the moment the second preset mounted it.
+The package ships four mountable modules because they belong in four different places. The entry goes in every science-research preset; `./suggest` goes only in `sci-balanced`, where suggesting an upgrade is the model's one legitimate exit; `./resolve` goes only in `sci-auto`, the one composition whose tier the model resolves; and `./fork` is a Service and therefore host-plane — a service published from the entry would collide the moment the second preset mounted it.
+
+The balanced text leaves the model exactly two exits from a task one pass cannot cover — a genuinely smaller real result with its scope stated, or `suggest_tier_upgrade` — and names the third one it closes: a large-looking result whose numbers no real run produced. The platform's text offered the honest exit only for research tasks, and on a reproduction task the model built the hollow result instead (§3 of the analysis).
 
 ## G1 · declare before you fan out
 
@@ -29,6 +33,10 @@ A refused fan-out counts as spending the plan on a rebuild. That is the safe dir
 `ctx.tools.restrict()` cannot serve here. It validates every name against the mounted catalog and throws on one the preset never mounted (`packages/core/tools/src/index.ts:1088`), which is exactly the balanced tier's situation: it mounts none of the names it wants blocked. `ctx.tools.guard()` is deny-only and name-blind, runs after the whole `tools/pre-execute` waterfall, and cannot be force-allowed by a listener, so the tier survives the composition it is protecting.
 
 The load-time check is the complementary half: a fan-out tool already in the catalog when this row mounts is a misconfiguration, not an accident, and `apply` throws with the names it found.
+
+## G0 · the resolution lock
+
+In the `auto` composition the fan-out tools are mounted, so neither the load-time refusal nor a static guard applies. Instead both the `tools/pre-execute` listener and a `ctx.tools.guard()` read the session's latest `sci/tier-resolved` — kept per session in this process and rebuilt from the log on first use, the LAST record deciding because a raise appends a second one. Unresolved, every fan-out is refused under rule `unresolved` with `resolve_tier` as the exit; resolved to `balanced`, under rule `tier` with the raise as the exit; resolved to `cluster`, the call meets G1 exactly as in the cluster composition. `resolve_tier` itself refuses to lower a cluster session: the swarm's spend is what the user reserved, and a session that started one finishes in it. The auto session appends no `sci/tier-resolved` on creation — the model's own call is the record.
 
 ## The upgrade fork
 

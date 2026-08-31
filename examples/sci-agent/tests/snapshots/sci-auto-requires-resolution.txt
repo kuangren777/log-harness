@@ -1,0 +1,14 @@
+isError: true
+---
+Error: workflow is refused: this session runs in Auto mode and its tier is not resolved yet. Judge the task first and call resolve_tier — cluster for a real experiment, reproduction, or systematic multi-source research; balanced for what one pass covers — then call workflow again after declaring a plan.
+---
+sci events: [
+  {
+    "type": "sci/tool-denied",
+    "data": {
+      "toolName": "workflow",
+      "rule": "unresolved",
+      "reason": "workflow is refused: this session runs in Auto mode and its tier is not resolved yet. Judge the task first and call resolve_tier — cluster for a real experiment, reproduction, or systematic multi-source research; balanced for what one pass covers — then call workflow again after declaring a plan."
+    }
+  }
+]

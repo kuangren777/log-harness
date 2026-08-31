@@ -76,6 +76,7 @@ import DormiceRuntime from '@deepseek-ai/dsh-dormice'
 import * as UniverTools from '@deepseek-ai/dsh-office-univer/tools'
 import type { ResolvedConfig as UniverResolvedConfig } from '@deepseek-ai/dsh-office-univer/types'
 import * as SciPlan from '@deepseek-ai/dsh-sci-plan'
+import * as SciTierResolve from '@deepseek-ai/dsh-sci-tier/resolve'
 import * as SciTierSuggest from '@deepseek-ai/dsh-sci-tier/suggest'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
@@ -253,6 +254,18 @@ const TOOL_PACKAGES: ToolPackage[] = [
       'suggest_tier_upgrade is the balanced tier\'s only fan-out-adjacent tool: it records that the task outgrew a single pass and leaves the choice to the user, instead of the agent quietly starting a swarm.',
   },
   {
+    pkg: '@deepseek-ai/dsh-sci-tier',
+    dir: 'sci-tier',
+    source: 'packages/sci/sci-tier/src/resolve-tool.ts',
+    requires: ['ctx.tools'],
+    writes: ['tool/call', 'sci/tier-resolved', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(SciTierResolve)
+    },
+    note:
+      'resolve_tier is the auto composition\'s first call: it records the tier the model resolved from the task, and a second call raises a balanced session to cluster. The gates read the latest record, so nothing fans out before it and nothing lowers a swarm.',
+  },
+  {
     pkg: '@deepseek-ai/dsh-sci-plan',
     dir: 'sci-plan',
     source: 'packages/sci/sci-plan/src/index.ts',
@@ -345,7 +358,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     dir: 'camel-runtime',
     source: 'packages/sci/camel-runtime/src/index.ts',
     requires: ['ctx.tools', 'ctx.e2b'],
-    writes: ['tool/call', 'sci/fork-completed', 'tool/result'],
+    writes: ['tool/call', 'sci/variant-created', 'sci/variant-run', 'sci/variant-deleted', 'tool/result'],
     async mount(ctx) {
       // The tool needs `ctx.e2b`; the Dormice provider acquires lazily, so a
       // placeholder token and key mount it without reaching any daemon. The
@@ -355,7 +368,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(CamelRuntime, { apiKey: 'catalog-placeholder', template: 'catalog' })
     },
     note:
-      'fork_workspace is the cluster tier\'s only way to run competing variants in isolation: every variant resumes from one AgentENV snapshot of the Dormice workspace, and only stdout, stderr, the exit code, and the collected directory flow back.',
+      'The variant tools are the cluster tier\'s only way to mutate a project in isolation: a variant is a persistent AgentENV microVM holding a copy of one project directory, capped per workspace, and only what collect_variant copies back reaches the workspace.',
   },
   {
     pkg: '@deepseek-ai/dsh-office-univer',

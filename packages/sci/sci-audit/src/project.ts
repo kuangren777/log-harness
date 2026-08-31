@@ -26,10 +26,11 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-sci-deliver'
 import type {} from '@deepseek-ai/dsh-sci-memory'
 import type {} from '@deepseek-ai/dsh-sci-plan'
+import { SUBAGENT_TOOL_PREFIX } from '@deepseek-ai/dsh-sci-tier'
 import type {} from '@deepseek-ai/dsh-sci-skills'
 import type {} from '@deepseek-ai/dsh-sci-workspace'
 import { AUDIT_TABLE, DELIVERY_TABLE, PLAN_TABLE } from './spec.ts'
-import type { AuditActor, AuditKind, AuditRecord, ProjectedRow } from './types.ts'
+import type { AuditActor, AuditKind, AuditRecord, PlanReconciliation, PlanRecord, ProjectedRow } from './types.ts'
 
 /** Actor of work the projecting session performed itself. */
 export const MAIN_ACTOR: AuditActor = 'main'
@@ -286,6 +287,10 @@ export function project(event: SessionEvent, sessionId: SessionId): ProjectedRow
             sessionId,
             agentsJson: JSON.stringify(event.data.agents),
             edgesJson: JSON.stringify(event.data.edges),
+            declaredAgents: event.data.agents.length,
+            spawnedAgents: 0,
+            spawnedPersonasJson: '[]',
+            reconciled: reconcile(event.data.agents.length, 0),
             ts: event.time,
           },
         },
@@ -305,18 +310,56 @@ export function project(event: SessionEvent, sessionId: SessionId): ProjectedRow
 }
 
 /**
+ * Declared count against started count.
+ * @param declared - agents the declaration named.
+ * @param spawned - agents the fan-outs after it started.
+ * @returns the reconciliation state.
+ */
+function reconcile(declared: number, spawned: number): PlanReconciliation {
+  if (spawned < declared) return 'fewer'
+  return spawned === declared ? 'match' : 'more'
+}
+
+/**
+ * The persona one event starts an agent as, or `undefined` when the event
+ * starts none. A `subagent_<persona>` tool call names its persona in the tool
+ * name (`@deepseek-ai/dsh-sci-tier` derives that name once); a workflow agent
+ * start carries only its label, so it is recorded as `workflow:<label>`.
+ * @param event - one session-log event.
+ * @returns the started persona, or `undefined`.
+ */
+function startedPersona(event: SessionEvent): string | undefined {
+  if (event.type === 'tool/call' && event.data.name.startsWith(SUBAGENT_TOOL_PREFIX)) {
+    return event.data.name.slice(SUBAGENT_TOOL_PREFIX.length)
+  }
+  if (event.type === 'tool-workflow/agent-start') return `workflow:${event.data.label}`
+  return undefined
+}
+
+/**
  * The stateful part of the projection: everything {@link project} cannot decide
  * from one event alone.
  *
- * Today that is exactly one relation — a workflow run belongs to the plan
- * declared before it, and `tool-workflow/run-start` names only the run. The
- * fold remembers the open declaration and attaches the run id to that plan's
- * row. One instance per session; a fresh instance replaying a whole log
- * produces the same rows the live instance wrote.
+ * Two relations. A workflow run belongs to the plan declared before it, and
+ * `tool-workflow/run-start` names only the run, so the fold attaches the run
+ * id to the open declaration's row — once: a second run after the same
+ * declaration is left unattributed. And the agents a fan-out actually starts
+ * belong to that same declaration: every `subagent_<persona>` call and every
+ * workflow agent start after it, until the next declaration, re-emits the
+ * plan's row with its started count, its started personas, and the
+ * reconciliation of the two counts. The studied platform never compared its
+ * plan card with the swarm the script ran
+ * (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §2.2, §5 row 8); the row is where
+ * that comparison lives. One instance per session; a fresh instance replaying a
+ * whole log produces the same rows the live instance wrote.
  */
 export class AuditFold {
-  /** The most recent plan declaration that no run has claimed yet. */
+  /** The most recent plan declaration, which later starts are counted against. */
   private openPlan: (ProjectedRow & { table: 'sci_plan' }) | undefined
+  /** Whether a workflow run already claimed the open declaration. */
+  private runClaimed = false
+  /** The personas the open declaration's fan-outs started, in start order. */
+  private spawned: string[] = []
 
   /**
    * @param sessionId - the session whose log this fold projects.
@@ -331,14 +374,52 @@ export class AuditFold {
   step(event: SessionEvent): ProjectedRow[] {
     const rows = project(event, this.sessionId)
     for (const row of rows) {
-      if (row.table === PLAN_TABLE) this.openPlan = row
+      if (row.table !== PLAN_TABLE) continue
+      this.openPlan = row
+      this.runClaimed = false
+      this.spawned = []
     }
-    if (event.type !== 'tool-workflow/run-start') return rows
     const open = this.openPlan
     if (open === undefined) return rows
-    this.openPlan = undefined
-    return [...rows, { ...open, value: { ...open.value, workflowRunId: event.data.runId } }]
+    if (event.type === 'tool-workflow/run-start') {
+      if (this.runClaimed) return rows
+      this.runClaimed = true
+      this.openPlan = { ...open, value: { ...open.value, workflowRunId: event.data.runId } }
+      return [...rows, this.openPlan]
+    }
+    const persona = startedPersona(event)
+    if (persona === undefined) return rows
+    this.spawned.push(persona)
+    const declared = open.value.declaredAgents ?? 0
+    this.openPlan = {
+      ...open,
+      value: {
+        ...open.value,
+        spawnedAgents: this.spawned.length,
+        spawnedPersonasJson: JSON.stringify(this.spawned),
+        reconciled: reconcile(declared, this.spawned.length),
+      },
+    }
+    return [...rows, this.openPlan]
   }
+}
+
+/**
+ * The settled `sci_plan` record of every declaration in one log: the last row
+ * the fold emitted for each plan id.
+ * @param sessionId - the session the events belong to.
+ * @param events - the session's raw log, in ascending seq order.
+ * @returns each declaration's settled record, in declaration order.
+ */
+export function planRecords(sessionId: SessionId, events: readonly SessionEvent[]): PlanRecord[] {
+  const fold = new AuditFold(sessionId)
+  const latest = new Map<string, PlanRecord>()
+  for (const event of events) {
+    for (const row of fold.step(event)) {
+      if (row.table === PLAN_TABLE) latest.set(row.key, row.value)
+    }
+  }
+  return [...latest.values()]
 }
 
 /**

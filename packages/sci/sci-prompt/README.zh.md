@@ -44,7 +44,7 @@ system prompt 里一段固定约 1100 token 的块，每次请求都有。
 
 #### What the model sees
 
-三到四条单行 reminder（文件规则、引用规则、记忆维护规则，以及设置了 `includeProseReminder` 时的散文规则），各自点名承载完整规范的章节；条件性规则还带一句显式的「若本轮不适用，忽略此 reminder」。
+三到四条单行 reminder（文件规则、引用自检、记忆自检，以及设置了 `includeProseReminder` 时的散文规则），各自点名承载完整规范的章节。只有文件规则带「若本轮不适用，忽略此 reminder」这句逃逸口，因为 `@deepseek-ai/dsh-sci-workspace` 的门禁无论如何都会强制它；引用与记忆两条改写成模型发送前要走一遍的自检，并写明空情况的结论 —— 被研究平台上同样这两条规则带着逃逸口，一个月内分别漂到 100% 违反与 0% 执行（`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §4.2）。记忆自检还拒绝把本会话没有真实事件支撑的内容写进记忆。
 
 #### Token effect
 

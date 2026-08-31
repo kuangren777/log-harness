@@ -358,6 +358,8 @@ describe('sci-audit real Loader composition through cordis.yml', () => {
       delivered: 1,
       authorized: 0,
       citationMissing: false,
+      planMismatches: 1,
+      deliveriesWithoutExecution: 1,
     })
   }, 30_000)
 

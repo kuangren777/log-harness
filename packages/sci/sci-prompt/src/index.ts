@@ -171,14 +171,19 @@ const CHAPTER_OFFICE_DOCUMENTS =
   + 'file itself is the working copy, not the deliverable. Do not generate '
   + 'Office files with python libraries or LibreOffice.'
 
-// --- Standing-reminder prose (one-line summary + chapter pointer + escape) -
-// The three-part shape is deliberate: an enforceable one-line summary, a
-// pointer naming the chapter that holds the full spec (so the rule stays
-// salient without re-stating it), and — where the rule is conditional — an
-// explicit escape clause handing the "does this turn apply?" judgment to the
-// model. The Prose reminder carries no escape clause: prose applies to every
-// reply, so its conditionality is deployment-level (Config.includeProseReminder),
-// not per-turn.
+// --- Standing-reminder prose (one-line summary + chapter pointer) ----------
+// Two shapes, chosen by what enforces the rule. The File reminder is backed by
+// a gate (`@deepseek-ai/dsh-sci-workspace` refuses a binary read regardless of
+// the text), so it may hand the "does this turn apply?" judgment to the model
+// with an explicit escape clause. The Citation and Memory reminders are backed
+// by nothing but the model, and on the studied platform their escape clauses
+// ("if this reply uses no web content, ignore this reminder") drifted to 100%
+// and 0% compliance respectively over a month of transcripts
+// (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §4.2). They are written as checks
+// the model performs before sending — a walk over the reply with a stated
+// outcome for the empty case — rather than rules it may set aside. The Prose
+// reminder carries no clause of either kind: prose applies to every reply, so
+// its conditionality is deployment-level (Config.includeProseReminder).
 
 const REMINDER_FILE_TEXT =
   'File rule (full spec in the "Reading files" section of the system prompt): '
@@ -190,13 +195,14 @@ const REMINDER_FILE_TEXT =
   + 'context. If this turn touches no such file, ignore this reminder.'
 
 const REMINDER_CITATION_TEXT =
-  'Citation rule (full spec in the "Citing web sources" section of the system '
-  + 'prompt): if this reply draws on web search results or pages you read, '
-  + 'attach an inline `[Source Name](url)` link to every concrete fact taken '
-  + 'from the web — number, date, quote, named event, ranking, price, or '
-  + 'technical spec — at the claim itself, never in a trailing Sources list, and '
-  + 'cite only URLs that actually appeared in your results. If this reply uses '
-  + 'no web content, ignore this reminder.'
+  'Citation check (full spec in the "Citing web sources" section of the system '
+  + 'prompt): before you send this reply, walk every concrete fact it takes from '
+  + 'web search results or pages you read — number, date, quote, named event, '
+  + 'ranking, price, or technical spec — and confirm each one carries an inline '
+  + '`[Source Name](url)` link at the claim itself, never in a trailing Sources '
+  + 'list, with a URL that actually appeared in your results. A fact that fails '
+  + 'the check gets its link or leaves the reply. A reply that took nothing from '
+  + 'the web passes the check with nothing to link.'
 
 const REMINDER_PROSE_TEXT =
   'Prose rule (full spec in the "Prose first" section of the system prompt): '
@@ -206,13 +212,15 @@ const REMINDER_PROSE_TEXT =
   + 'structure.'
 
 const REMINDER_MEMORY_TEXT =
-  'Memory upkeep (full spec in the "Maintaining memory and team notes" section '
-  + 'of the system prompt): if this turn taught you something worth keeping '
-  + 'across sessions — a user preference or correction, project state or a '
-  + 'decision, a durable external resource — write it into memory now rather '
-  + 'than batching it, and record a confirmed lasting convention in the team '
-  + 'notes file (AGENTS.md / CLAUDE.md). If nothing this turn is worth keeping, '
-  + 'ignore this reminder.'
+  'Memory check (full spec in the "Maintaining memory and team notes" section '
+  + 'of the system prompt): before you end this turn, name what it established '
+  + 'that outlives the session — a user preference or correction, project state '
+  + 'or a decision, a durable external resource — and write each such item into '
+  + 'memory now rather than batching it; record a confirmed lasting convention in '
+  + 'the team notes file (AGENTS.md / CLAUDE.md). Write only what a real event of '
+  + 'this session supports: a number no run produced or a result no tool call '
+  + 'returned is not a fact and never enters memory. A turn that established '
+  + 'nothing durable passes the check with nothing to write.'
 
 /** The chapters that always render, as ordered `systemPrompt.section` inputs. */
 const CHAPTERS: readonly { name: string; order: number; text: string }[] = [

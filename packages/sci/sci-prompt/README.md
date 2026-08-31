@@ -44,7 +44,7 @@ Prefix-stable: the text is constant for a deployment, so the block is reused acr
 
 #### What the model sees
 
-Three or four one-line reminders (file rule, citation rule, memory upkeep, and — when `includeProseReminder` is set — the prose rule), each naming the chapter that holds its full spec and, where the rule is conditional, an explicit "if this turn does not apply, ignore this reminder" clause.
+Three or four one-line reminders (file rule, citation check, memory check, and — when `includeProseReminder` is set — the prose rule), each naming the chapter that holds its full spec. Only the file rule carries an "if this turn does not apply, ignore this reminder" clause, because a gate in `@deepseek-ai/dsh-sci-workspace` enforces it regardless; the citation and memory reminders are written as checks the model walks before sending, with a stated outcome for the empty case, since on the studied platform the same two rules with escape clauses drifted to 100% and 0% compliance (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §4.2). The memory check also refuses memory a real event of the session does not support.
 
 #### Token effect
 

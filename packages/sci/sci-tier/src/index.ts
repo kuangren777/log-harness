@@ -1,18 +1,24 @@
 /**
- * The tier layer of the science-research agent profile: which of the two tiers
- * a session runs at, the prompt section that says so, and the two gates that
- * make it true rather than advisory.
+ * The tier layer of the science-research agent profile: which tier a session
+ * runs at, the prompt section that says so, and the gates that make it true
+ * rather than advisory.
  *
- * `apply` owns three contributions, all effects of the mounting fiber:
+ * `apply` owns these contributions, all effects of the mounting fiber:
  *
- * - The tier prompt section — the balanced text or the cluster text, selected by
+ * - The tier prompt section — the balanced, cluster, or auto text, selected by
  *   {@link Config.tier}.
- * - **G1**, the cluster tier's declare-before-fan-out gate: one
- *   `tools/pre-execute` listener over {@link Config.fanoutTools} that spends a
- *   per-session latch. The latch is written by `sci/plan-declared` from
- *   `@deepseek-ai/dsh-sci-plan` and rebuilt from the log after a restart.
+ * - **G1**, the declare-before-fan-out gate of the cluster and auto
+ *   compositions: one `tools/pre-execute` listener over
+ *   {@link Config.fanoutTools} that spends a per-session latch. The latch is
+ *   written by `sci/plan-declared` from `@deepseek-ai/dsh-sci-plan` and rebuilt
+ *   from the log after a restart.
  * - **G2**, the balanced tier's second lock: `ctx.tools.guard()` denying every
  *   fan-out name, plus a load-time refusal when one is already in the catalog.
+ * - **G0**, the auto composition's resolution lock: the same `tools/pre-execute`
+ *   listener and a `ctx.tools.guard()` both deny every fan-out until the
+ *   session's latest `sci/tier-resolved` — written by `./resolve` — says
+ *   `cluster`. A session the model resolved to `balanced` is refused with the
+ *   raise as its exit; an unresolved one with the resolution as its exit.
  *
  * `ctx.tools.restrict()` cannot serve as G2: it validates every name against the
  * mounted catalog and throws on one the preset never mounted
@@ -43,13 +49,23 @@ import type {} from '@deepseek-ai/dsh-tools'
 import { TIER_SECTION_ORDER, TIER_SECTIONS } from './chapter.ts'
 import { Config } from './config.ts'
 import type { FanoutLatch } from './latch.ts'
-import { denyBalanced, denyConsumed, denyUndeclared, rebuildLatch } from './latch.ts'
+import {
+  denyBalanced,
+  denyConsumed,
+  denyResolvedBalanced,
+  denyUndeclared,
+  denyUnresolved,
+  rebuildLatch,
+  rebuildResolvedTier,
+} from './latch.ts'
 import { PRESET_NAMES } from './presets.ts'
-import type { SciDenialRule } from './types.ts'
+import type { SciDenialRule, SciTier } from './types.ts'
 
 export {
+  CHAPTER_TIER_AUTO,
   CHAPTER_TIER_BALANCED,
   CHAPTER_TIER_CLUSTER,
+  SECTION_TIER_AUTO,
   SECTION_TIER_BALANCED,
   SECTION_TIER_CLUSTER,
   TIER_SECTIONS,
@@ -73,14 +89,25 @@ export type {
   SciTierForkResult,
   SciTierForkValue,
 } from './fork.ts'
-export { denyBalanced, denyConsumed, denyUndeclared, rebuildLatch } from './latch.ts'
+export {
+  denyBalanced,
+  denyConsumed,
+  denyResolvedBalanced,
+  denyUndeclared,
+  denyUnresolved,
+  rebuildLatch,
+  rebuildResolvedTier,
+} from './latch.ts'
 export type { FanoutLatch } from './latch.ts'
 export { PRESET_NAMES } from './presets.ts'
+export { RESOLVABLE_TIERS, RESOLVE_TOOL, describeResolveTool, formatResolveResult } from './resolve-tool.ts'
 export { SUGGEST_TOOL, describeSuggestTool } from './suggest-tool.ts'
 export type {
   SciDenialRule,
   SciTier,
+  SciTierMode,
   SciTierResolvedData,
+  SciTierResolver,
   SciTierUpgradeSuggestedData,
   SciToolDeniedData,
 } from './types.ts'
@@ -115,16 +142,21 @@ export function apply(ctx: Context, config: Config): void {
   const section = TIER_SECTIONS[config.tier]
   ctx.systemPrompt.section({ name: section.name, order: TIER_SECTION_ORDER, text: section.text })
 
-  // The tier is a fact about the whole session, so it is recorded at the one
-  // moment the session exists and has no events yet. A session restored from
-  // storage already carries the record its first lifecycle wrote.
-  ctx.on('session/created', (session: Session) => {
-    if (session.events.some(event => event.type === 'sci/tier-resolved')) return
-    session.append('sci/tier-resolved', {
-      tier: config.tier,
-      presetName: session.header.agentPreset ?? PRESET_NAMES[config.tier],
+  // In the fixed compositions the tier is a fact about the whole session, so it
+  // is recorded at the one moment the session exists and has no events yet. A
+  // session restored from storage already carries the record its first
+  // lifecycle wrote. The auto composition records nothing here: its record is
+  // the model's own `resolve_tier` call.
+  if (config.tier !== 'auto') {
+    const tier: SciTier = config.tier
+    ctx.on('session/created', (session: Session) => {
+      if (session.events.some(event => event.type === 'sci/tier-resolved')) return
+      session.append('sci/tier-resolved', {
+        tier,
+        presetName: session.header.agentPreset ?? PRESET_NAMES[tier],
+      })
     })
-  })
+  }
 
   /**
    * Record one gate's refusal on the session that was refused.
@@ -151,6 +183,50 @@ export function apply(ctx: Context, config: Config): void {
     return
   }
 
+  const auto = config.tier === 'auto'
+  // The resolved tier of each auto session, recovered from the log on first use
+  // and kept current by the `sci/tier-resolved` records `./resolve` appends.
+  const resolvedTiers = new Map<SessionId, SciTier>()
+  const resolvedInitialised = new Set<SessionId>()
+
+  /**
+   * The tier one auto session is currently resolved to.
+   * @param session - the session whose fan-out is being decided.
+   * @returns the latest resolved tier, or `undefined` before the first resolution.
+   */
+  const resolvedTierOf = (session: Session): SciTier | undefined => {
+    if (!resolvedInitialised.has(session.id)) {
+      resolvedInitialised.add(session.id)
+      const rebuilt = rebuildResolvedTier(session.events)
+      if (rebuilt !== undefined) resolvedTiers.set(session.id, rebuilt)
+    }
+    return resolvedTiers.get(session.id)
+  }
+
+  /**
+   * G0: why one auto session's fan-out is shut before the latch is consulted.
+   * @param session - the session the call belongs to, if any.
+   * @param toolName - the fan-out tool that was called.
+   * @returns the rule and refusal text, or `undefined` when the session is resolved to cluster.
+   */
+  const closedFor = (session: Session | undefined, toolName: string): { rule: SciDenialRule; reason: string } | undefined => {
+    if (!auto) return undefined
+    const tier = session === undefined ? undefined : resolvedTierOf(session)
+    if (tier === 'cluster') return undefined
+    if (tier === 'balanced') return { rule: 'tier', reason: denyResolvedBalanced(toolName) }
+    return { rule: 'unresolved', reason: denyUnresolved(toolName) }
+  }
+
+  if (auto) {
+    // G0 is also a guard, for the same reason G2 is: a later `tools/pre-execute`
+    // listener answering `allow` must still meet the resolution lock.
+    ctx.tools.guard((exec): string | undefined => {
+      if (!fanoutTools.has(exec.name) || exec.name === PLAN_TOOL) return undefined
+      const closed = closedFor(exec.agent?.session, exec.name)
+      return closed === undefined ? undefined : refuse(exec.agent?.session, exec.name, closed.rule, closed.reason)
+    })
+  }
+
   // The authoritative latches of this process, one per session. `initialised`
   // records that a session's latch has been recovered from its log, so a
   // consumed latch is not silently replaced by a rebuild of the same log.
@@ -173,6 +249,11 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   ctx.on('session/event', (session: Session, event: SessionEvent) => {
+    if (event.type === 'sci/tier-resolved') {
+      resolvedInitialised.add(session.id)
+      resolvedTiers.set(session.id, event.data.tier)
+      return
+    }
     if (event.type !== 'sci/plan-declared') return
     initialised.add(session.id)
     latches.set(session.id, { planId: event.data.planId, consumed: false })
@@ -183,6 +264,10 @@ export function apply(ctx: Context, config: Config): void {
     // refuses, even in a deployment that lists it among the fan-out names.
     if (!fanoutTools.has(exec.name) || exec.name === PLAN_TOOL) return next()
     const session = exec.agent?.session
+    const closed = closedFor(session, exec.name)
+    if (closed !== undefined) {
+      return Promise.resolve({ kind: 'deny', reason: refuse(session, exec.name, closed.rule, closed.reason) })
+    }
     const latch = session === undefined ? undefined : latchOf(session, exec.callId)
     if (latch === undefined) {
       return Promise.resolve({ kind: 'deny', reason: refuse(session, exec.name, 'plan', denyUndeclared(exec.name)) })

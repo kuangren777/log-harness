@@ -1,5 +1,5 @@
 /**
- * The agent presets that carry the two tiers.
+ * The agent presets that carry the two tiers and the auto composition.
  *
  * The names are the preset directory names of
  * `ClawsGO-System/09-Target-Architecture/05-tier-model.md` §preset 真实形状, which
@@ -12,10 +12,11 @@
  * @module @deepseek-ai/dsh-sci-tier/presets
  */
 
-import type { SciTier } from './types.ts'
+import type { SciTierMode } from './types.ts'
 
-/** Preset each tier is composed from, by tier. */
-export const PRESET_NAMES: Readonly<Record<SciTier, string>> = {
+/** Preset each tier mode is composed from, by mode. */
+export const PRESET_NAMES: Readonly<Record<SciTierMode, string>> = {
   balanced: 'sci-balanced',
   cluster: 'sci-cluster',
+  auto: 'sci-auto',
 }

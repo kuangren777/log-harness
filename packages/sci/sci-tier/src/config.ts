@@ -7,17 +7,19 @@
 
 import z from '@deepseek-ai/schemastery'
 import { PERSONA_NAMES, type PersonaName } from '@deepseek-ai/dsh-sci-plan'
-import type { SciTier } from './types.ts'
+import type { SciTierMode } from './types.ts'
 
 /** Deployment-varying choices for the science-research tier layer. */
 export interface Config {
   /**
-   * Which tier this composition runs at. Required and with no default: the
-   * value decides which prompt section the model reads and which of the two
-   * gates is live, and a guessed tier would either state a rule nothing
-   * enforces or enforce a rule the model was never told about.
+   * Which tier this composition runs at, or `auto`. Required and with no
+   * default: the value decides which prompt section the model reads and which
+   * gates are live, and a guessed tier would either state a rule nothing
+   * enforces or enforce a rule the model was never told about. `auto` mounts
+   * the cluster composition and keeps every fan-out shut until the model has
+   * resolved the session's tier with `resolve_tier`.
    */
-  tier: SciTier
+  tier: SciTierMode
   /**
    * Registered tool names that fan work out across subagents. Both gates read
    * this one list: in the cluster tier a call to one of these names spends a
@@ -82,6 +84,6 @@ export const DEFAULT_FANOUT_TOOLS: string[] = [
 
 /** Schemastery schema for the science-research tier layer. */
 export const Config: z<Config> = z.object({
-  tier: z.union(['balanced', 'cluster'] as const).required(),
+  tier: z.union(['balanced', 'cluster', 'auto'] as const).required(),
   fanoutTools: z.array(z.string()).default(DEFAULT_FANOUT_TOOLS),
 })

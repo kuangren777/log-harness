@@ -130,7 +130,7 @@ describe('sci-plan real Loader composition through cordis.yml', () => {
 
     const result = await declare(booted.ctx, booted.agent, {
       agents: Array.from({ length: 16 }, (_unused, index) => ({
-        id: `a${index}`, name: `card ${index}`, icon: 'code', task: `do ${index}`,
+        id: `a${index}`, name: `card ${index}`, icon: 'security', task: `do ${index}`,
       })),
     })
 
@@ -142,7 +142,7 @@ describe('sci-plan real Loader composition through cordis.yml', () => {
     const booted = await boot(['    maxAgents: 1'])
 
     const refused = await declare(booted.ctx, booted.agent, ARCHIVED_INSTALL)
-    const accepted = await declare(booted.ctx, booted.agent, { agents: [ARCHIVED_INSTALL.agents[0]] })
+    const accepted = await declare(booted.ctx, booted.agent, { agents: [ARCHIVED_SURVEY.agents[2]] })
 
     expect(refused.isError).toBe(true)
     expect(refused.content.map(block => block.text).join('')).toContain('this deployment admits at most 1')

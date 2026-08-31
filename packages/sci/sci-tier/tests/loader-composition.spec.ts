@@ -21,8 +21,9 @@ import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import * as SciTier from '../src/index.ts'
 import * as SciTierSuggest from '../src/suggest.ts'
+import * as SciTierResolve from '../src/resolve.ts'
 import SciTierForkService from '../src/fork.ts'
-import { SECTION_TIER_BALANCED, SUGGEST_TOOL } from '../src/index.ts'
+import { RESOLVE_TOOL, SECTION_TIER_AUTO, SECTION_TIER_BALANCED, SUGGEST_TOOL } from '../src/index.ts'
 
 const SIGNAL = new AbortController().signal
 
@@ -76,6 +77,7 @@ async function boot(configLines: readonly string[], extraRows: readonly string[]
     ['@deepseek-ai/dsh-tools', ToolRuntime],
     ['@deepseek-ai/dsh-sci-tier', SciTier],
     ['@deepseek-ai/dsh-sci-tier/suggest', SciTierSuggest],
+    ['@deepseek-ai/dsh-sci-tier/resolve', SciTierResolve],
     ['@deepseek-ai/dsh-sci-tier/fork', SciTierForkService],
   ])
   ctx.loader.internal = {
@@ -173,9 +175,29 @@ describe('sci-tier real Loader composition through cordis.yml', () => {
     expect(booted.ctx.sessions.get(forked.value.sessionId)?.header.parentSession).toBe(booted.session.id)
   }, 30_000)
 
+  it('carries the auto section, the resolution lock, and the resolve tool out of one config', async () => {
+    const booted = await boot(
+      ['    tier: auto', '    fanoutTools: [workflow]'],
+      ["- name: '@deepseek-ai/dsh-sci-tier/resolve'"],
+    )
+
+    const assembly = await booted.ctx.systemPrompt.assemble({})
+    const unresolved = await call(booted, 'workflow')
+    const resolved = await call(booted, RESOLVE_TOOL, { tier: 'cluster', reason: 'six corpora need parallel close reading' })
+    const undeclared = await call(booted, 'workflow')
+
+    expect(assembly.sections.some(section => section.name === SECTION_TIER_AUTO)).toBe(true)
+    expect(booted.ran).toEqual([])
+    expect(text(unresolved)).toContain('resolve_tier')
+    expect(resolved.isError).toBe(false)
+    expect(text(undeclared)).toContain('declare_research_plan')
+    expect(booted.session.events.filter(event => event.type.startsWith('sci/')).map(event => event.type))
+      .toEqual(['sci/tool-denied', 'sci/tier-resolved', 'sci/tool-denied'])
+  }, 30_000)
+
   it.each([
     { label: 'the tier is missing', configLines: ['    fanoutTools: [workflow]'], failure: /tier/ },
-    { label: 'the tier is not one of the two', configLines: ['    tier: ultra'], failure: /tier/ },
+    { label: 'the tier is not one of the three', configLines: ['    tier: ultra'], failure: /tier/ },
     { label: 'a fan-out name is not a string', configLines: ['    tier: cluster', '    fanoutTools: [3]'], failure: /fanoutTools/ },
   ])('fails loading when $label', async ({ configLines, failure }) => {
     await expect(boot(configLines)).rejects.toThrow(failure)

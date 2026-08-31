@@ -110,9 +110,29 @@ export interface PlanRecord {
   readonly edgesJson: string
   /** Workflow run this plan authorized, absent until a run starts under it. */
   readonly workflowRunId?: string
+  /** How many agents the declaration named. */
+  readonly declaredAgents?: number
+  /**
+   * How many agents the fan-outs after this declaration actually started —
+   * one per `subagent_<persona>` call and one per workflow agent start — until
+   * the next declaration superseded it.
+   */
+  readonly spawnedAgents?: number
+  /** JSON array of the personas those starts ran as; a workflow agent is `workflow:<label>`. */
+  readonly spawnedPersonasJson?: string
+  /**
+   * Declared count against started count: `fewer` while fewer agents started
+   * than declared (a swarm still starting, or one that never reached its
+   * roster), `match` at parity, `more` once the fan-outs started agents the
+   * declaration never named.
+   */
+  readonly reconciled?: PlanReconciliation
   /** Unix epoch milliseconds of the declaration. */
   readonly ts: number
 }
+
+/** The three states a declaration's roster can be in against the agents that ran. */
+export type PlanReconciliation = 'fewer' | 'match' | 'more'
 
 /**
  * One row a projection step wants written, tagged by the table that owns it.
@@ -145,6 +165,19 @@ export interface AuditSummary {
    * link: the second behavioral invariant, measured rather than gated.
    */
   readonly citationMissing: boolean
+  /**
+   * Declarations whose started agents never matched their roster: the studied
+   * platform drew a plan card and ran whatever the script did, and nothing
+   * compared the two (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §5 row 8).
+   */
+  readonly planMismatches: number
+  /**
+   * Deliveries made before any execution tool had returned in the session: a
+   * deliverable no run preceded. The studied platform's fabricated
+   * reproduction shipped exactly so (`clawsgo-analysis/CLAWSGO-SCHEDULING.md`
+   * §3); measured here, refused by the adversary the plan tool now requires.
+   */
+  readonly deliveriesWithoutExecution: number
 }
 
 /** Outcome of one `rebuild` call over the sessions it was given. */

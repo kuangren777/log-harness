@@ -16,12 +16,13 @@ This table connects model-visible tool names to the plugin package and service s
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
 | `@deepseek-ai/dsh-sci-tier` | `suggest_tier_upgrade` | `ctx.tools` | `tool/call`, `sci/tier-upgrade-suggested`, `tool/result` | - | suggest_tier_upgrade is the balanced tier's only fan-out-adjacent tool: it records that the task outgrew a single pass and leaves the choice to the user, instead of the agent quietly starting a swarm. |
+| `@deepseek-ai/dsh-sci-tier` | `resolve_tier` | `ctx.tools` | `tool/call`, `sci/tier-resolved`, `tool/result` | - | resolve_tier is the auto composition's first call: it records the tier the model resolved from the task, and a second call raises a balanced session to cluster. The gates read the latest record, so nothing fans out before it and nothing lowers a swarm. |
 | `@deepseek-ai/dsh-sci-plan` | `declare_research_plan` | `ctx.tools` | `tool/call`, `sci/plan-declared`, `tool/result` | - | declare_research_plan names the parallel lines of work before a fan-out; the tier gate consumes its sci/plan-declared event and refuses a fan-out tool until one is declared. |
 | `@deepseek-ai/dsh-sci-literature` | `literature_search` | `ctx.tools`, `ctx.systemPrompt`, `ctx.storageDomain` | `tool/call`, `sci/literature-searched`, `tool/result` | - | literature_search fans out to OpenAlex, Semantic Scholar, arXiv, and Crossref in one call and merges them, so the model-visible schema does not change when a source is dropped from `sources`. |
 | `@deepseek-ai/dsh-sci-library` | `library_add`, `library_search` | `ctx.tools`, `ctx.systemPrompt`, `ctx.storageDomain`, `ctx.fs`, `ctx.webServer`, `ctx.connection` | `tool/call`, `sci/library-changed`, `tool/result` | - | library_search reads the user's own collection before the public indexes; library_add resolves a DOI or arXiv id through sci-literature when it is mounted and stores a manual entry otherwise. The prompt section pins the sandbox path stored files are opened from. |
 | `@deepseek-ai/dsh-sci-citations` | `citations_add`, `citations_list` | `ctx.tools`, `ctx.systemPrompt`, `ctx.storageDomain`, `ctx.fs` | `tool/call`, `sci/citations-changed`, `tool/result` | - | Neither tool requires a project: the slug is inferred from the session's working directory under `projectRoot`, and a session that is not inside a project gets a refusal rather than a guess. citations_add resolves a DOI or arXiv id through sci-literature and a library id through sci-library when either is mounted. |
 | `@deepseek-ai/dsh-sci-deliver` | `deliver_files` | `ctx.tools`, `ctx.fs`, `ctx.systemPrompt` | `tool/call`, `sci/delivered`, `sci/delivery-failed`, `tool/result` | - | deliver_files is the only way a file reaches the user; the in-sandbox `sci deliver` CLI writes the same request into the spool the plugin drains at turn start, through the same validation. |
-| `@deepseek-ai/dsh-camel-runtime` | `fork_workspace` | `ctx.tools`, `ctx.e2b` | `tool/call`, `sci/fork-completed`, `tool/result` | - | fork_workspace is the cluster tier's only way to run competing variants in isolation: every variant resumes from one AgentENV snapshot of the Dormice workspace, and only stdout, stderr, the exit code, and the collected directory flow back. |
+| `@deepseek-ai/dsh-camel-runtime` | `collect_variant`, `create_variant`, `delete_variant`, `list_variants`, `run_in_variant` | `ctx.tools`, `ctx.e2b` | `tool/call`, `sci/variant-created`, `sci/variant-run`, `sci/variant-deleted`, `tool/result` | - | The variant tools are the cluster tier's only way to mutate a project in isolation: a variant is a persistent AgentENV microVM holding a copy of one project directory, capped per workspace, and only what collect_variant copies back reaches the workspace. |
 | `@deepseek-ai/dsh-office-univer` | `univer_api`, `univer_compile_svg`, `univer_execute`, `univer_export`, `univer_import`, `univer_inspect`, `univer_lint`, `univer_new`, `univer_resources`, `univer_screenshot`, `univer_status`, `univer_unit`, `univer_worktree` | `ctx.tools`, `ctx.univer`, `ctx.attachments` | `tool/call`, `tool/result`, `a tools/pre-execute approval ask on univer_worktree merge and discard` | - | The catalogued set is what `@deepseek-ai/dsh-office-univer/tools` registers with nothing withheld. Every name is withholdable through that row's `disabledTools`, and a deployment whose host ships no Chromium or no outbound network is expected to withhold `univer_screenshot`, `univer_lint`, and `univer_resources`; `univer_screenshot` additionally requires an attachment store. Mounting the package entry with its default `tools: true` registers the same set. |
 | `@deepseek-ai/dsh-tool-ask-user` | `ask_user_question` | `ctx.tools`, `ctx.userQuestions` | `tool/call`, `tool/result after a UI/provider answers the question` | - | ask_user_question pauses the tool call until the active UI provider returns a human answer. |
 | `@deepseek-ai/dsh-tools` | `run_code` | `ctx.tools`, `ctx.codeRuntime (execution time)`, `ctx.systemPrompt` | `tool/call`, `one tool/code-dispatch-start + tool/code-dispatch pair per bridged sub-call`, `tool/result` | - | Owned by the tool registry as a reserved transport outside filterable capability layers under `mode: code` / `mode: both` (see the Code Mode Agent Note). Under `code` it is the registry's only wire contribution; the other visible capabilities are declared in a generated SDK section in the loaded runtime's language, and a program calls them through bindings scheduled under the native concurrency contract (submission-ordered starts and policy; concurrency-safe bodies overlap up to `maxParallelSubCalls`) that re-enter the complete guarded tool pipeline and link each nested execution to this outer result. |
@@ -56,7 +57,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 ### `suggest_tier_upgrade`
 
-Tell the user this task would be better served by Swarm mode, which fans the work out across parallel subagents. This does not change the current session: it records the suggestion so the user can decide, and they continue in a new session if they accept. Call it only after you have delivered what a single honest pass covers, and say in one sentence what the swarm would add that this pass could not — which angles stay uncovered, which sources stay unread.
+Tell the user this task would be better served by Swarm mode, which fans the work out across parallel subagents. This does not change the current session: it records the suggestion so the user can decide, and they continue in a new session if they accept. Call it only after you have delivered what a single honest pass covers — a real smaller pilot with its reduced scope stated, never a large-looking result whose numbers no real run produced — and say in one sentence what the swarm would add that this pass could not: which angles stay uncovered, which sources stay unread, which experiment stays unrun at full scale.
 
 ```json
 {
@@ -77,13 +78,49 @@ Source: [`packages/sci/sci-tier/src/suggest-tool.ts`](../packages/sci/sci-tier/s
 
 suggest_tier_upgrade is the balanced tier's only fan-out-adjacent tool: it records that the task outgrew a single pass and leaves the choice to the user, instead of the agent quietly starting a swarm.
 
+<a id="deepseek-aidsh-sci-tier"></a>
+
+## `@deepseek-ai/dsh-sci-tier`
+
+### `resolve_tier`
+
+Resolve this session's tier from the task, before any other tool call. `cluster` when the work needs a real experiment or reproduction, systematic multi-source research, or due-diligence-grade coverage that one thread cannot honestly finish; `balanced` for everything one careful pass covers. Until you resolve, no fan-out tool runs. Call it again with `cluster` and the reason the moment a balanced task turns out larger than one pass — a tier is only ever raised, never lowered. Give one sentence on why the task needs the tier you chose.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "tier": {
+      "type": "string",
+      "description": "The tier the task needs: cluster for a swarm, balanced for one pass.",
+      "enum": [
+        "balanced",
+        "cluster"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "description": "One sentence on why the task needs this tier."
+    }
+  },
+  "required": [
+    "tier",
+    "reason"
+  ]
+}
+```
+
+Source: [`packages/sci/sci-tier/src/resolve-tool.ts`](../packages/sci/sci-tier/src/resolve-tool.ts)
+
+resolve_tier is the auto composition's first call: it records the tier the model resolved from the task, and a second call raises a balanced session to cluster. The gates read the latest record, so nothing fans out before it and nothing lowers a swarm.
+
 <a id="deepseek-aidsh-sci-plan"></a>
 
 ## `@deepseek-ai/dsh-sci-plan`
 
 ### `declare_research_plan`
 
-Announce how you intend to split the work before you fan out to a swarm. Declare one agent per parallel line of work, each with a short id that `edges` refers to, a card title, an icon, and one sentence saying what it does. Icons select the subagent persona that runs the step: web runs as researcher, search runs as scout, security runs as adversary, code runs as writer, check runs as deliverer. Use `edges` only for real ordering constraints — `[["installer", "verifier"]]` means the verifier waits for the installer; agents with no edge between them run in parallel. The plan must be acyclic and every edge must name a declared agent. One declaration authorizes one fan-out: declare again before the next one.
+Announce how you intend to split the work before you fan out to a swarm. Declare one agent per parallel line of work, each with a short id that `edges` refers to, a card title, an icon, and one sentence saying what it does. Icons select the subagent persona that runs the step: web runs as researcher, search runs as scout, security runs as adversary, code runs as writer, check runs as deliverer. Use `edges` only for real ordering constraints — `[["installer", "verifier"]]` means the verifier waits for the installer; agents with no edge between them run in parallel. The plan must be acyclic and every edge must name a declared agent. Every plan must include at least one `security` agent (the adversary) whose task is to break what the others produce; when a plan has a `code` or `check` agent, an edge must lead from it into that adversary so the check runs on the artifact, not on the producer's summary. One declaration authorizes one fan-out: declare again before the next one.
 
 ```json
 {
@@ -400,54 +437,126 @@ deliver_files is the only way a file reaches the user; the in-sandbox `sci deliv
 
 ## `@deepseek-ai/dsh-camel-runtime`
 
-### `fork_workspace`
+### `collect_variant`
 
-Fork the current workspace into isolated copies and run one shell command in each, in parallel. Every variant starts from an identical snapshot of the workspace as it is now, so use it to try competing hypotheses, parameter sweeps, or risky transformations without touching the real files. Each variant's stdout, stderr, exit code, and (with `collect`) a chosen output directory land in .sci/forks/&lt;forkId&gt;/&lt;variant&gt;/ of the real workspace. Up to 8 variants per call. Variants cannot see each other or the real workspace; anything not collected is discarded when the variant ends.
+Copy a directory of a variant's project back into the workspace, under .sci/variants/&lt;name&gt;/collect/. The real project files are never overwritten; read the collected copy and merge what you want by hand.
 
 ```json
 {
   "type": "object",
   "properties": {
-    "variants": {
-      "type": "array",
-      "description": "The variants to run, each in its own forked copy of the workspace.",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Short lowercase identifier; names the result directory."
-          },
-          "command": {
-            "type": "string",
-            "description": "Shell command to run in the variant, from the workspace root."
-          }
-        },
-        "required": [
-          "name",
-          "command"
-        ]
-      }
-    },
-    "collect": {
+    "name": {
       "type": "string",
-      "description": "Workspace-relative directory whose contents are copied back from each variant. Omit to keep only stdout and stderr."
+      "description": "The variant to collect from."
     },
-    "timeoutSeconds": {
-      "type": "integer",
-      "description": "Per-variant wall-clock budget in seconds. Default 600, max 3600."
+    "path": {
+      "type": "string",
+      "description": "Project-relative directory to collect. Omit for the whole project."
     }
   },
   "required": [
-    "variants"
+    "name"
   ]
 }
 ```
 
 Source: [`packages/sci/camel-runtime/src/index.ts`](../packages/sci/camel-runtime/src/index.ts)
 
-fork_workspace is the cluster tier's only way to run competing variants in isolation: every variant resumes from one AgentENV snapshot of the Dormice workspace, and only stdout, stderr, the exit code, and the collected directory flow back.
+### `create_variant`
+
+Create a persistent variant: an isolated microVM holding a copy of one project directory, for trying a hypothesis, a parameter set, or a risky change without touching the real files. Up to 8 variants per workspace; when full, delete one with delete_variant first. Pass `from` to fork an existing variant instead — the copy then starts from that variant's current files, processes, and memory. Variants pause when idle and resume on use. Nothing a variant writes reaches the workspace until collect_variant copies it back.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Short lowercase identifier; names the slot and its results directory."
+    },
+    "project": {
+      "type": "string",
+      "description": "Workspace-relative project directory to copy, e.g. projects/my-study."
+    },
+    "from": {
+      "type": "string",
+      "description": "Existing variant to fork from. The project is inherited."
+    }
+  },
+  "required": [
+    "name",
+    "project"
+  ]
+}
+```
+
+Source: [`packages/sci/camel-runtime/src/index.ts`](../packages/sci/camel-runtime/src/index.ts)
+
+### `delete_variant`
+
+Delete a variant: its microVM is destroyed and its slot freed. Files already collected stay in the workspace.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The variant to delete."
+    }
+  },
+  "required": [
+    "name"
+  ]
+}
+```
+
+Source: [`packages/sci/camel-runtime/src/index.ts`](../packages/sci/camel-runtime/src/index.ts)
+
+### `list_variants`
+
+List the variants of this workspace with their project, state (running, paused, or missing), and last use.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/sci/camel-runtime/src/index.ts`](../packages/sci/camel-runtime/src/index.ts)
+
+### `run_in_variant`
+
+Run one shell command inside a variant, from its project directory. The variant is resumed if it was paused. A non-zero exit is reported, not thrown. Output beyond the last 4000 characters is dropped from the result.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The variant to run in."
+    },
+    "command": {
+      "type": "string",
+      "description": "Shell command, run from the variant's project directory."
+    },
+    "timeoutSeconds": {
+      "type": "integer",
+      "description": "Wall-clock budget in seconds. Default 600, max 3600."
+    }
+  },
+  "required": [
+    "name",
+    "command"
+  ]
+}
+```
+
+Source: [`packages/sci/camel-runtime/src/index.ts`](../packages/sci/camel-runtime/src/index.ts)
+
+The variant tools are the cluster tier's only way to mutate a project in isolation: a variant is a persistent AgentENV microVM holding a copy of one project directory, capped per workspace, and only what collect_variant copies back reaches the workspace.
 
 <a id="deepseek-aidsh-office-univer"></a>
 

@@ -23,7 +23,7 @@ import { applyPlanTool } from './tool.ts'
 
 export { topologicalSort } from './graph.ts'
 export type { EdgeIndices, TopologicalSort } from './graph.ts'
-export { ICON_PERSONA, PERSONA_NAMES, PLAN_ICONS } from './personas.ts'
+export { ICON_PERSONA, PERSONA_NAMES, PLAN_ICONS, PRODUCER_ICONS, VERIFIER_ICON } from './personas.ts'
 export { SciPlanId, randomPlanId } from './plan-id.ts'
 export { formatDag, formatPlanResult } from './render.ts'
 export type { RenderedAgent } from './render.ts'

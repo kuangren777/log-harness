@@ -24,7 +24,7 @@ import {
   randomPlanId,
 } from '@deepseek-ai/dsh-sci-plan'
 import type { PlanInput, SciPlanDeclaredData } from '@deepseek-ai/dsh-sci-plan'
-import { ARCHIVED_INSTALL, ARCHIVED_SURVEY } from './archived-calls.ts'
+import { ARCHIVED_SURVEY, AUDITED_INSTALL } from './archived-calls.ts'
 
 const SIGNAL = new AbortController().signal
 
@@ -84,9 +84,9 @@ function declarations(agent: Agent): SessionEvent[] {
   return agent.session.events.filter(event => event.type === 'sci/plan-declared')
 }
 
-/** One well-formed declared agent, so a case only states what it is testing. */
+/** One well-formed declared agent — an adversary, so the composition rule holds by default and a case only states what it is testing. */
 function agent(id: string, overrides: Partial<PlanInput['agents'][number]> = {}): PlanInput['agents'][number] {
-  return { id, name: `card ${id}`, icon: 'code', task: `do ${id}`, ...overrides }
+  return { id, name: `card ${id}`, icon: 'security', task: `do ${id}`, ...overrides }
 }
 
 describe('describePlanTool', () => {
@@ -173,15 +173,16 @@ describe('declare_research_plan accepted calls', () => {
   it('renders the accepted plan in run order with the persona each icon selects', async () => {
     const { ctx, agent: caller } = await harness()
 
-    const result = await call(ctx, caller, ARCHIVED_INSTALL)
+    const result = await call(ctx, caller, AUDITED_INSTALL)
 
     expect(result.isError).toBe(false)
     expect(text(result)).toMatchInlineSnapshot(`
-      "research plan declared: 2 agents, 1 dependency.
+      "research plan declared: 3 agents, 2 dependencies.
       1. installer — 连接器安装 [code, runs as writer]: 在项目临时目录执行预检、获取并启动已获授权的客户端。
       2. verifier — 安装结果验证 [check, runs as deliverer]: 核对安装命令退出状态及项目内留下的可见安装记录。
+      3. auditor — 安装结果证伪 [security, runs as adversary]: 重跑安装命令并核对进程与文件痕迹，报出与安装报告不符之处。
       dependencies:
-        installer → verifier"
+        installer → verifier, auditor"
     `)
     await ctx.fiber.dispose()
   })
@@ -203,15 +204,15 @@ describe('declare_research_plan accepted calls', () => {
   it('appends one required-on-read event carrying the plan id, the agents, and the edges', async () => {
     const { ctx, agent: caller } = await harness()
 
-    await call(ctx, caller, ARCHIVED_INSTALL)
+    await call(ctx, caller, AUDITED_INSTALL)
 
     const [event] = declarations(caller)
     expect(event?.ignorable).toBeUndefined()
     const declared = event?.data as SciPlanDeclaredData
     expect(Object.keys(declared).sort()).toEqual(['agents', 'edges', 'planId'])
     expect(declared.planId).toMatch(/^[0-9a-f-]{36}$/)
-    expect(declared.agents).toEqual(ARCHIVED_INSTALL.agents)
-    expect(declared.edges).toEqual([['installer', 'verifier']])
+    expect(declared.agents).toEqual(AUDITED_INSTALL.agents)
+    expect(declared.edges).toEqual([['installer', 'verifier'], ['installer', 'auditor']])
     await ctx.fiber.dispose()
   })
 
@@ -231,7 +232,7 @@ describe('declare_research_plan accepted calls', () => {
     const { ctx, agent: caller } = await harness()
 
     await call(ctx, caller, ARCHIVED_SURVEY)
-    await call(ctx, caller, ARCHIVED_INSTALL)
+    await call(ctx, caller, AUDITED_INSTALL)
 
     const ids = declarations(caller).map(event => (event.data as SciPlanDeclaredData).planId)
     expect(ids).toHaveLength(2)

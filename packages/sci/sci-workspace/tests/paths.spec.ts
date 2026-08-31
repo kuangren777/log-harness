@@ -7,6 +7,7 @@ import {
   PATH_CLASSES,
   classifyPath,
   isAbsolutePath,
+  isOutsideDelegationScope,
   normalizePath,
   pathSegments,
   resolveAgainst,
@@ -114,5 +115,36 @@ describe('path helpers', () => {
     expect(segmentsUnder(['sci', 'projects'], ['sci', 'projects'])).toEqual([])
     expect(segmentsUnder(['sci', 'projects'], ['sci', 'projectsX', 'p1'])).toBeUndefined()
     expect(segmentsUnder(['sci', 'projects'], ['sci'])).toBeUndefined()
+  })
+})
+
+// A delegated agent is confined by location, not by prose: the studied
+// platform's environment-check subagent cited sibling projects' scratch
+// directories although its brief said to stay in its own
+// (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §2.2, §6.3).
+describe('isOutsideDelegationScope', () => {
+  const CWD = '/sci/projects/p1'
+
+  it.each([
+    ['/sci/projects/p2/workspace/report.md', true],
+    ['/sci/projects/p2/tmp/notes.txt', true],
+    ['/sci/projects', true],
+    ['/sci/.claude/settings.json', true],
+    ['/sci/memory/gaussian-process.md', true],
+    ['/sci', true],
+    ['/sci/projects/p1/workspace/report.md', false],
+    ['/sci/projects/p1', false],
+    ['/sci/skills/sci-plot/SKILL.md', false],
+    ['/sci/.sci/spool/pending/request.json', false],
+    ['/sci/.sci/state.json', false],
+    ['/usr/lib/python3/os.py', false],
+    ['/tmp/scratch', false],
+    ['relative/path', false],
+  ])('%s → outside scope: %s', (path, outside) => {
+    expect(isOutsideDelegationScope(path, CWD, LAYOUT)).toBe(outside)
+  })
+
+  it('does not confuse a sibling project whose name extends the agent\'s own', () => {
+    expect(isOutsideDelegationScope('/sci/projects/p10/workspace/x.md', CWD, LAYOUT)).toBe(true)
   })
 })

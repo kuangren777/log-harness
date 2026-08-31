@@ -14,10 +14,11 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { CallId } from '@deepseek-ai/dsh-llm'
 import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 
-/** The two example compositions, by tier. */
+/** The three example compositions, by tier. */
 export const CONFIGS = {
   balanced: fileURLToPath(new URL('../cordis.yml', import.meta.url)),
   cluster: fileURLToPath(new URL('../cluster.cordis.yml', import.meta.url)),
+  auto: fileURLToPath(new URL('../auto.cordis.yml', import.meta.url)),
 } as const
 
 /** One booted example: the tree, its pre-created agent, and the project root it works in. */

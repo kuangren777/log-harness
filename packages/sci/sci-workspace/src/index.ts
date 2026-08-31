@@ -45,10 +45,10 @@ import { indexFsTools, readStringArg, reconstructAfter, resolveFsOp } from './bi
 import { BINARY_MAGIC_BYTES, denyBinaryRead, detectBinarySignature } from './binary.ts'
 import { parseBootstrapArgv, runSkeletonBootstrap } from './bootstrap.ts'
 import { Config } from './config.ts'
-import { decideFsOp, denyExistingCreateOnly } from './decide.ts'
+import { decideFsOp, denyDelegationScope, denyExistingCreateOnly } from './decide.ts'
 import { checkManifestChange } from './manifest-gate.ts'
-import { classifyPath, isAbsolutePath } from './paths.ts'
-import { screenShellCommand } from './shell.ts'
+import { classifyPath, isAbsolutePath, isOutsideDelegationScope } from './paths.ts'
+import { delegationScopeOperand, screenShellCommand } from './shell.ts'
 import type { FsToolBinding, FsOp, SciFsDeniedData } from './types.ts'
 
 export { indexFsTools, readBooleanArg, readStringArg, reconstructAfter, resolveFsOp } from './bindings.ts'
@@ -62,6 +62,7 @@ export {
   FS_DENIAL_RULES,
   RULE_BINARY_READ,
   RULE_BUNDLE_RECURSIVE_DELETE,
+  RULE_DELEGATION_SCOPE,
   RULE_MANIFEST_INVALID,
   RULE_MANIFEST_OWNED_FIELD,
   RULE_MANIFEST_UNVERIFIABLE,
@@ -72,6 +73,7 @@ export {
   RULE_SPOOL_CREATE_ONLY,
   RULE_VERSIONS_APPEND_ONLY,
   decideFsOp,
+  denyDelegationScope,
   denyExistingCreateOnly,
 } from './decide.ts'
 export { applyReplacement, checkManifestChange, parseManifestJson } from './manifest-gate.ts'
@@ -79,14 +81,16 @@ export type { ManifestChange, ManifestDenial } from './manifest-gate.ts'
 export {
   PATH_CLASSES,
   classifyPath,
+  isOutsideDelegationScope,
   isAbsolutePath,
+  sandboxHomeSegments,
   normalizePath,
   pathSegments,
   resolveAgainst,
   segmentsUnder,
 } from './paths.ts'
 export type { PathLayout } from './paths.ts'
-export { recursiveDeleteOperands, screenShellCommand, tokenizeCommand } from './shell.ts'
+export { delegationScopeOperand, recursiveDeleteOperands, screenShellCommand, tokenizeCommand } from './shell.ts'
 export type { ShellScreenConfig } from './shell.ts'
 export type {
   DeniedOp,
@@ -144,6 +148,18 @@ export function apply(ctx: Context, config: Config): void {
    * @returns the calling session's workspace, or the project root for a call with no session.
    */
   const workingDirectory = (exec: ToolExecution): string => exec.agent?.session.header.cwd ?? config.projectRoot
+
+  /**
+   * The project a delegated call is confined to, or `undefined` for a
+   * top-level session and for a delegation with no recorded working directory.
+   * @param exec - the pending call.
+   * @returns the delegated session's working directory when the scope rule applies.
+   */
+  const delegationScope = (exec: ToolExecution): string | undefined => {
+    const header = exec.agent?.session.header
+    if (header === undefined || (header.delegationDepth ?? 0) === 0) return undefined
+    return header.cwd
+  }
 
   /**
    * Resolve the path argument of a filesystem call.
@@ -215,6 +231,8 @@ export function apply(ctx: Context, config: Config): void {
     const target = await resolveTarget(requested, exec)
     if (target === undefined) return undefined
     const path = ctx.fs.processPath(target)
+    const scope = delegationScope(exec)
+    if (scope !== undefined && isOutsideDelegationScope(path, scope, config)) return { op, path, ...denyDelegationScope(path) }
     const cls = classifyPath(path, config)
     const decision = decideFsOp(op, cls)
     if (decision.kind === 'deny') return { op, path, rule: decision.rule, reason: decision.reason }
@@ -235,6 +253,9 @@ export function apply(ctx: Context, config: Config): void {
   const screenShellCall = (commandArg: string, exec: ToolExecution): SciFsDeniedData | undefined => {
     const command = readStringArg(exec.arguments, commandArg)
     if (command === undefined) return undefined
+    const scope = delegationScope(exec)
+    const outside = scope === undefined ? undefined : delegationScopeOperand(command, scope, config)
+    if (outside !== undefined) return { op: 'shell', path: outside, ...denyDelegationScope(outside) }
     const denial = screenShellCommand(command, {
       cwd: workingDirectory(exec),
       projectRoot: config.projectRoot,

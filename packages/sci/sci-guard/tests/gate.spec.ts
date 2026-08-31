@@ -47,6 +47,7 @@ let ctx: Context
 let guard: Awaited<ReturnType<Context['plugin']>>
 let ran: string[]
 let answer: ApprovalOutcome
+let consulted = 0
 let callCounter = 0
 
 /** Absolute path inside the one test project. */
@@ -91,7 +92,10 @@ async function boot(options: {
   // A Partial spread widens every optional field to `| undefined`; the plugin's
   // schema fills each one, so the merged literal is a valid partial config.
   guard = await ctx.plugin(SciGuard, { projectRoot: join(root, 'projects'), ...options.config } as SciGuard.Config)
-  ctx.on('approval/request', () => Promise.resolve(answer))
+  ctx.on('approval/request', () => {
+    consulted += 1
+    return Promise.resolve(answer)
+  })
 }
 
 /** A session whose shell starts in `cwd`, inside an open turn so an approval may be asked. */
@@ -145,6 +149,7 @@ beforeEach(async () => {
   await writeFile(inProject('workspace/secrets.tgz'), 'archive bytes')
   ran = []
   answer = 'rejected'
+  consulted = 0
   callCounter = 0
 })
 
@@ -359,5 +364,39 @@ describe('the Irreversible actions chapter', () => {
 
     expect(assembly.sections.some(section => section.name === SECTION_IRREVERSIBLE_ACTIONS)).toBe(false)
     expect(ran).toEqual(['rm -rf papers/nn'])
+  })
+})
+
+// The studied platform's executing subagent never saw the user: it received the
+// orchestrator's relayed "the user has authorised this" and ran the installer
+// (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §2.2). Here a delegated child's
+// session carries `approval/policy: never` from the delegation itself, so its
+// irreversible action is refused before any answerer — relayed consent included
+// — is asked.
+describe('the gate in a delegated child session', () => {
+  it('refuses the irreversible action deterministically and consults no answerer', async () => {
+    await boot()
+    answer = 'allowed-once'
+    const child = ctx.sessions.create(SessionId('sci-guard-child'), { meta: { cwd: inProject('tmp'), origin: 'subagent', delegationDepth: 1 } })
+    child.append('approval/policy', { policy: 'never', source: 'delegation' })
+    child.append('turn/start', { turn: 1 })
+
+    const result = await bash(child, './installer --yes')
+
+    expect(ran).toEqual([])
+    expect(result.isError).toBe(true)
+    expect(consulted).toBe(0)
+    expect(authorizations(child).map(record => record.decision)).toEqual(['denied'])
+  })
+
+  it('still asks the answerer for the top-level session that holds the user', async () => {
+    await boot()
+    answer = 'allowed-once'
+    const session = sessionAt(inProject('tmp'), 'sci-guard-top')
+
+    await bash(session, './installer --yes')
+
+    expect(consulted).toBe(1)
+    expect(ran).toEqual(['./installer --yes'])
   })
 })

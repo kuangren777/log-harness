@@ -19,7 +19,8 @@
 1. 每个文本字段都被 trim，边也按 trim 后的 id 匹配，前后空白因此永远不会变成悬空引用。
 2. `id`、`name`、`task` 非空，id 唯一，且至少声明一个 agent。
 3. 每条边恰好两个端点，不指向自己，两端都命名已声明的 agent。
-4. 只有在不存在任何字段或引用错误之后才做成环检查 —— 端点无法解析的图没有有意义的环可报 —— 成环时点名被困住的每一个 agent。
+4. 至少一个 agent 带 `security` 图标，于是每个蜂群里都有一个被要求去推翻其他人产出的 `adversary`；当计划声明了 `code` 或 `check` agent —— 会留下代码、结果或交付文件的那种 —— 必须有一条边从其中之一指向某个 adversary，让核查跑在产物上，而不是跑在生产者自己的陈述上。只读蜂群（只有 `web` 和 `search` agent）配一个并行的 adversary 即满足规则。被研究平台的伪造复现之所以能出厂，正因为它的 DAG 里全是生产者（`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §3）。
+5. 只有在不存在任何字段、引用或组成错误之后才做成环检查 —— 端点无法解析的图没有有意义的环可报 —— 成环时点名被困住的每一个 agent。
 
 `topologicalSort` 是基于下标的 Kahn 排序：id 已由 `validatePlan` 解析完毕，所以它唯一的失败模式就是环。同时就绪的节点保持声明顺序，因此运行顺序可从日志复现；重复声明的依赖只计一次，而不会把目标节点永久堵死。
 
@@ -66,6 +67,6 @@
 ## Known Limitations and Deferred Work
 
 - **声明不等于强制。** 本包只记录授权；消费它的 G1 门禁在 `@deepseek-ai/dsh-sci-tier`，这里没有任何东西会拒绝扇出。只挂 `sci-plan` 而不挂 `sci-tier` 的档案，得到的是「计划被校验、被记录」加「扇出不受约束」。
-- **没有任何东西把声明的计划与真正跑起来的 agent 对账。** 计划是模型宣布的意图，不是集群的记录；声明了却没被拉起的 agent、或在任何已声明 id 之外被拉起的子 agent，只有把 `sci/plan-declared` 与 `tool-workflow/*` 记录对照的读者才看得见 —— 那是 `@deepseek-ai/dsh-sci-audit` 的活，不是本包的。
+- **本包只声明，不对账。** 计划是模型宣布的意图，不是集群的记录。与真正启动的 agent 的比对住在 `@deepseek-ai/dsh-sci-audit` 的 `sci_plan` 行（`spawnedAgents`、`spawnedPersonasJson`、`reconciled`）和它的 `planMismatches` 摘要数字里；这里没有任何东西会拒绝一次名册偏离声明的扇出。
 - **`plotter` 从任何图标都到不了。** 绘图工作在卡片这一层不可区分 —— 对盯着计划看的用户来说，绘图步骤读起来就是 `code` —— 所以第六个人格只能由编排线程从 agent 的 `task` 文本里选出。加第六个图标会改动前端取美术资源的 schema。
 - **摘要行数的是声明的依赖数，不是去重后的数量。** 重复声明的一对只画一次，但在头行里计两次，因为这个数描述的是模型写了什么。

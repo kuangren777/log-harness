@@ -1,4 +1,4 @@
-# sci-profile —— `dsh-sci` bundle、两个档位 preset、六份人格章程
+# sci-profile —— `dsh-sci` bundle、三个档位 preset、六份人格章程
 
 [English](README.md) | 中文
 
@@ -10,6 +10,7 @@
 |---|---|---|
 | Bundle patch 层 | `cordis.patch.yml` | `dsh --profile sci`，作为 `dsh-base` + `dsh-web-app` 之上的第三层 |
 | 均衡档 preset，界面显示 `单体 / Solo` | `config/agent-presets/sci-balanced/` | `dsh-agent-presets`，每进程挂一次，每会话按 scope 加入 |
+| 自动档 preset，界面显示 `自动 / Auto` | `config/agent-presets/sci-auto/` | 同一份名册 |
 | 集群档 preset，界面显示 `蜂群 / Swarm` | `config/agent-presets/sci-cluster/` | 同一名册 |
 | 人格章程 | `config/agents/*.md` | 下面那个插件，汇成一段 system-prompt section |
 | 人格名册插件 | `src/index.ts` | 只有 `sci-cluster` preset 挂它 |
@@ -20,7 +21,7 @@
 
 判据沿用 web 层写下的那一条，patch 与两个 preset 里的每一行都照它走：被别的行解析的 Service、按 session 或 agent 键控的注册表、以及任何**注入**服务的行，属于 host plane；面向模型的工具、档位段、交付工具，是一个 agent 贡献的东西。
 
-于是 `sci-prompt`、`sci-skills`、`sci-workspace`、`sci-guard`、`sci-credit`、`sci-memory`、`sci-audit`、`sci-remote-hosts`、`sci-tier/fork`、`office-univer` 在 `cordis.patch.yml` 里，而 `sci-tier`、`sci-tier/suggest`、`sci-plan`、`sci-deliver`、`office-univer/tools` 和委派工具在 preset 里，`camel-runtime`（架在 `ctx.e2b` 与 AgentENV 上的 `fork_workspace` 引擎）只在集群 preset 里，且该行以 `AENV_API_KEY` 门控：没有 AgentENV 服务的部署不挂 fork 工具，而不是让每个集群会话在加载时失败。`office-univer` 在一个包内部沿用同一划分：host 行运行 Univer Gateway、发布 `univer` 服务、提供 Viewer，且 `tools: false`、`skills: false`——`univer_*` skills 属于受保护的内置层，由 skill vault 经 `sci-skills` 提供，包内自带的副本因此不发布——每个 preset 再在该服务之上挂 `@deepseek-ai/dsh-office-univer/tools`，并禁掉 `univer_screenshot` 与 `univer_lint`，因为 dsh 镜像不带 headless Chromium。`sci-tier/fork` 归 host plane 的理由与 subagent 注册表相同：包入口是一个**两个 preset 都挂**的函数插件，从那里发布服务会在第二个 preset 挂载的一刻撞名。`sci-credit` 归 host plane 是因为它为进程里每个 agent 计量同一条 `llm/stream` waterfall；它的 `vmToken` 没有默认值：没有 gate 的部署应当删掉那一行，而不是把 token 留空。
+于是 `sci-prompt`、`sci-skills`、`sci-workspace`、`sci-guard`、`sci-credit`、`sci-memory`、`sci-audit`、`sci-remote-hosts`、`sci-tier/fork`、`office-univer` 在 `cordis.patch.yml` 里，而 `sci-tier`、`sci-tier/suggest`、`sci-plan`、`sci-deliver`、`office-univer/tools` 和委派工具在 preset 里，`camel-runtime`（架在 `ctx.e2b` 与 AgentENV 上的常驻项目变体）只在集群 preset 里，该行以 `AENV_API_KEY` 门控：没有 AgentENV 服务的部署不挂变体工具，而不是让每个集群会话在加载时失败；每工作区上限从 `AENV_MAX_VARIANTS` 读取，由 gate 按套餐设置。`office-univer` 在一个包内部沿用同一划分：host 行运行 Univer Gateway、发布 `univer` 服务、提供 Viewer，且 `tools: false`、`skills: false`——`univer_*` skills 属于受保护的内置层，由 skill vault 经 `sci-skills` 提供，包内自带的副本因此不发布——每个 preset 再在该服务之上挂 `@deepseek-ai/dsh-office-univer/tools`，并禁掉 `univer_screenshot` 与 `univer_lint`，因为 dsh 镜像不带 headless Chromium。`sci-tier/fork` 归 host plane 的理由与 subagent 注册表相同：包入口是一个**两个 preset 都挂**的函数插件，从那里发布服务会在第二个 preset 挂载的一刻撞名。`sci-credit` 归 host plane 是因为它为进程里每个 agent 计量同一条 `llm/stream` waterfall；它的 `vmToken` 没有默认值：没有 gate 的部署应当删掉那一行，而不是把 token 留空。
 
 这一层还换掉了工作区目录选择器，理由与它把 `fs` 与 `subprocess` 搬走的理由相同：两个缝都在 Dormice 里之后，`-auto` 解析出的后端提供的宿主路径会变成一个「每条命令都失败」的会话 cwd。`directory-picker` 被禁用，插入 `@deepseek-ai/dsh-host-directory-picker-e2b` 与它的浏览器一侧 `@deepseek-ai/dsh-client-ui-directory-picker-browse` —— **两侧都要**，因为 patch 改不了一行的 `name`，而 `-auto` 自己会挂客户端界面。这与 `apps/web/tests/pin-browse-picker.overlay.yml` 是同一对「禁用 + 插入」。
 

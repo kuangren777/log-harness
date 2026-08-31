@@ -32,7 +32,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
 import { BUNDLED_AGENTS_ROOT, loadPersonas } from '../src/index.ts'
-import { balancedPreset, clusterPreset, flattenRows } from './harness.ts'
+import { autoPreset, balancedPreset, clusterPreset, flattenRows } from './harness.ts'
 
 const SIGNAL = new AbortController().signal
 
@@ -102,10 +102,17 @@ describe('the sci-cluster delegation rows', () => {
     }
   })
 
+  it('restates the six delegation rows in sci-auto exactly as sci-cluster carries them', () => {
+    const clusterRows = delegationRows().map(row => JSON.stringify(row))
+    const autoRows = flattenRows(autoPreset()).filter(row => row.name === '@deepseek-ai/dsh-tool-subagent').map(row => JSON.stringify(row))
+
+    expect(autoRows).toEqual(clusterRows)
+  })
+
   it('gates every persona tool at both tiers', () => {
     const names = PERSONA_NAMES.map(subagentToolName)
 
-    for (const [label, entries] of [['sci-cluster', clusterPreset()], ['sci-balanced', balancedPreset()]] as const) {
+    for (const [label, entries] of [['sci-cluster', clusterPreset()], ['sci-auto', autoPreset()], ['sci-balanced', balancedPreset()]] as const) {
       for (const name of names) expect(fanoutTools(entries), `${label}: ${name}`).toContain(name)
     }
   })
