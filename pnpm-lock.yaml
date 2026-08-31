@@ -2525,6 +2525,9 @@ importers:
       katex:
         specifier: ^0.16.47
         version: 0.16.47
+      lucide:
+        specifier: ^1.37.0
+        version: 1.37.0
       mdast-util-from-markdown:
         specifier: ^2.0.3
         version: 2.0.3
@@ -2561,6 +2564,9 @@ importers:
       micromark-util-types:
         specifier: ^2.0.2
         version: 2.0.2
+      morphicons:
+        specifier: ^1.7.1
+        version: 1.7.1(react@18.3.1)(vue@3.5.39(typescript@6.0.3))
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -2671,6 +2677,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-layout':
         specifier: workspace:^
         version: link:../ui-layout
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: workspace:^
+        version: link:../ui-primitives
       '@deepseek-ai/dsh-client-ui-sci-shell':
         specifier: workspace:^
         version: link:../ui-sci-shell
@@ -2716,6 +2725,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-layout':
         specifier: workspace:^
         version: link:../ui-layout
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: workspace:^
+        version: link:../ui-primitives
       '@deepseek-ai/dsh-client-ui-sci-shell':
         specifier: workspace:^
         version: link:../ui-sci-shell
@@ -2912,6 +2924,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-layout':
         specifier: workspace:^
         version: link:../ui-layout
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: workspace:^
+        version: link:../ui-primitives
       '@deepseek-ai/dsh-client-ui-sci-shell':
         specifier: workspace:^
         version: link:../ui-sci-shell
@@ -2960,6 +2975,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-layout':
         specifier: workspace:^
         version: link:../ui-layout
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: workspace:^
+        version: link:../ui-primitives
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:^
         version: link:../ui-slots
@@ -6795,6 +6813,9 @@ importers:
       '@deepseek-ai/dsh-sci-skills':
         specifier: workspace:^
         version: link:../sci-skills
+      '@deepseek-ai/dsh-sci-tier':
+        specifier: workspace:^
+        version: link:../sci-tier
       '@deepseek-ai/dsh-sci-workspace':
         specifier: workspace:^
         version: link:../sci-workspace
@@ -15253,6 +15274,9 @@ packages:
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
+  lucide@1.37.0:
+    resolution: {integrity: sha512-e6/YmVKk0dwJf1CVDlYfSZTLax/+a7tVPPo867aUC+VmWsGNMimWrFI/pGoDc9qkjiJqkVHar14rMwgOHMrTcw==}
+
   lz-string@1.5.0:
     resolution: {integrity: sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ==}
     hasBin: true
@@ -15455,6 +15479,26 @@ packages:
   modern-tar@0.8.4:
     resolution: {integrity: sha512-gN54ddmyzEg10orwZ2u4OOv+bjpMWdIl5jIkodK97bMq8QBSL5c0D7YX0lT1Ooz+99S7+PvFbnxzdjgHo1r41g==}
     engines: {node: '>=18.0.0'}
+
+  morphicons@1.7.1:
+    resolution: {integrity: sha512-q5ylxy5/d7vBg0OAzanlooXf05PekovMYDuuQVpr6vAQZxl99lrJbaIi+jJ32PXQf9WEEaDO2pbNBsx1ZhEnFQ==}
+    peerDependencies:
+      react: '>=18'
+      react-native: '>=0.71'
+      react-native-svg: '>=14'
+      svelte: '>=5'
+      vue: '>=3.3'
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-native:
+        optional: true
+      react-native-svg:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
 
   mri@1.2.0:
     resolution: {integrity: sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA==}
@@ -20985,6 +21029,8 @@ snapshots:
     dependencies:
       yallist: 3.1.1
 
+  lucide@1.37.0: {}
+
   lz-string@1.5.0: {}
 
   magic-string@0.30.21:
@@ -21391,6 +21437,11 @@ snapshots:
   mitt@3.0.1: {}
 
   modern-tar@0.8.4: {}
+
+  morphicons@1.7.1(react@18.3.1)(vue@3.5.39(typescript@6.0.3)):
+    optionalDependencies:
+      react: 18.3.1
+      vue: 3.5.39(typescript@6.0.3)
 
   mri@1.2.0: {}
 

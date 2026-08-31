@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import {
-  IconChevronDownOutline14, IconChevronRightOutline14, IconPlusOutline16, IconTrashOutline16,
+  ChevronDown, ChevronRight, IconPlusOutline16, IconTrashOutline16, MorphStrokeIcon,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
@@ -325,7 +325,7 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
                     title={props.t('modelAdvanced')}
                     onClick={() => { toggle(index) }}
                   >
-                    {expanded.has(index) ? <IconChevronDownOutline14 /> : <IconChevronRightOutline14 />}
+                    <MorphStrokeIcon icon={expanded.has(index) ? ChevronDown : ChevronRight} size={14} />
                   </button>
                   <button
                     type="button"

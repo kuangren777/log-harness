@@ -30,6 +30,9 @@
       "path": "../ui-layout"
     },
     {
+      "path": "../ui-primitives"
+    },
+    {
       "path": "../ui-sci-shell"
     },
     {

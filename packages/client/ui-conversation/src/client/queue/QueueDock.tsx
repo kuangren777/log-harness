@@ -8,8 +8,8 @@ import { useEffect, useId, useMemo, useState } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import {
-  IconCheckOutline16, IconChevronDownOutline14, IconChevronUpOutline14, IconCloseOutline16,
-  IconEditOutline16, IconQueueOutline14, IconSendOutline14, IconTrashOutline16, Tooltip,
+  ChevronDown, ChevronUp, IconCheckOutline16, IconCloseOutline16,
+  IconEditOutline16, IconQueueOutline14, IconSendOutline14, IconTrashOutline16, MorphStrokeIcon, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { QueueAction, QueueItemId } from '../contract/queue.ts'
 import { NS } from '../locales.ts'
@@ -90,7 +90,7 @@ export function QueueDock({ useSession, updateQueue, notify, t }: QueueDockProps
             <span className={css.lead} aria-hidden><IconQueueOutline14 /></span>
             <span className={css.count}>{t('queue.count', { n: queue.length })}</span>
             <span className={css.chevron} aria-hidden>
-              {expanded ? <IconChevronDownOutline14 /> : <IconChevronUpOutline14 />}
+              <MorphStrokeIcon icon={expanded ? ChevronDown : ChevronUp} size={14} />
             </span>
           </button>
         )}

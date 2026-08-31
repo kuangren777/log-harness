@@ -3325,7 +3325,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AuditSummary',
-    declaration: 'export interface AuditSummary {\n    readonly sessionId: SessionId;\n    readonly denied: number;\n    readonly delivered: number;\n    readonly authorized: number;\n    readonly memoryTimingScore?: number;\n    readonly citationMissing: boolean;\n}',
+    declaration: 'export interface AuditSummary {\n    readonly sessionId: SessionId;\n    readonly denied: number;\n    readonly delivered: number;\n    readonly authorized: number;\n    readonly memoryTimingScore?: number;\n    readonly citationMissing: boolean;\n    readonly planMismatches: number;\n    readonly deliveriesWithoutExecution: number;\n}',
   },
   {
     name: 'AuthorizationEntry',
@@ -4360,8 +4360,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface PermissionSelect {\n    options: PresetOption[];\n    currentValue: string;\n}',
   },
   {
+    name: 'PlanReconciliation',
+    declaration: 'export type PlanReconciliation = \'fewer\' | \'match\' | \'more\';',
+  },
+  {
     name: 'PlanRecord',
-    declaration: 'export interface PlanRecord {\n    readonly planId: string;\n    readonly sessionId: SessionId;\n    readonly agentsJson: string;\n    readonly edgesJson: string;\n    readonly workflowRunId?: string;\n    readonly ts: number;\n}',
+    declaration: 'export interface PlanRecord {\n    readonly planId: string;\n    readonly sessionId: SessionId;\n    readonly agentsJson: string;\n    readonly edgesJson: string;\n    readonly workflowRunId?: string;\n    readonly declaredAgents?: number;\n    readonly spawnedAgents?: number;\n    readonly spawnedPersonasJson?: string;\n    readonly reconciled?: PlanReconciliation;\n    readonly ts: number;\n}',
   },
   {
     name: 'PostToolDecision',

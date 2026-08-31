@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GoalSnapshot } from '@deepseek-ai/dsh-goal/client'
 import {
   IconCheckOutline16, IconCloseOutline16, IconEditOutline16, IconGoalOutline16,
-  IconPauseOutline16, IconPlayOutline16, IconTrashOutline16, Tooltip,
+  IconTrashOutline16, MorphStrokeIcon, Pause, Play, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { GoalActionResult, GoalBarActions } from './slots.ts'
@@ -132,17 +132,16 @@ export function GoalBar({ goal, onEdit, onPause, onResume, onClear, t }: GoalBar
         <span className={css.objective}>{goal.objective}</span>
         {actionError !== null && <span className={css.error} role="alert">{actionError}</span>}
         <div className={css.actions}>
-          {goal.phase === 'active' && (
-            <Tooltip label={t('action.pause')} side="bottom" delayMs={500}>
-              <button type="button" className={css.iconBtn} disabled={pending} onClick={() => { void runAction(onPause) }} aria-label={t('action.pause')}>
-                <IconPauseOutline16 size={14} />
-              </button>
-            </Tooltip>
-          )}
-          {goal.phase === 'paused' && (
-            <Tooltip label={t('action.resume')} side="bottom" delayMs={500}>
-              <button type="button" className={css.iconBtn} disabled={pending} onClick={() => { void runAction(onResume) }} aria-label={t('action.resume')}>
-                <IconPlayOutline16 size={14} />
+          {(goal.phase === 'active' || goal.phase === 'paused') && (
+            <Tooltip label={goal.phase === 'active' ? t('action.pause') : t('action.resume')} side="bottom" delayMs={500}>
+              <button
+                type="button"
+                className={css.iconBtn}
+                disabled={pending}
+                onClick={() => { void runAction(goal.phase === 'active' ? onPause : onResume) }}
+                aria-label={goal.phase === 'active' ? t('action.pause') : t('action.resume')}
+              >
+                <MorphStrokeIcon icon={goal.phase === 'active' ? Pause : Play} size={14} />
               </button>
             </Tooltip>
           )}

@@ -9,7 +9,7 @@
 import { useSyncExternalStore } from 'react'
 import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import { avatarGlyph, type ShellStore } from './stores.ts'
-import { MoonGlyph, SunGlyph } from './icons.tsx'
+import { Moon, MorphStrokeIcon, Sun } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './RailFooter.module.css'
 
 /** Sun glyph edge length, in CSS pixels. */
@@ -48,7 +48,7 @@ export function ThemeToggle({ getScheme, setTheme, subscribe, t }: ThemeTogglePr
       title={label}
       onClick={() => { setTheme(next) }}
     >
-      {scheme === 'dark' ? <SunGlyph size={SUN_SIZE} /> : <MoonGlyph size={MOON_SIZE} />}
+      <MorphStrokeIcon icon={scheme === 'dark' ? Sun : Moon} size={scheme === 'dark' ? SUN_SIZE : MOON_SIZE} />
     </button>
   )
 }

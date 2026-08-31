@@ -58,6 +58,7 @@ export interface LogPageProps {
 export function LogPage({ agent, glyphAt, calls, error, onBack, onOpen, t }: LogPageProps) {
   const rows = calls ?? []
   const withTokens = rows.some(call => call.outputTokens !== undefined)
+  const withRetrieval = rows.some(call => call.retrievalCalls !== undefined)
   return (
     <div className={css.root}>
       <PageHeader
@@ -83,6 +84,7 @@ export function LogPage({ agent, glyphAt, calls, error, onBack, onOpen, t }: Log
               <th scope="col">{t('log.duration')}</th>
               <th scope="col">{t('log.status')}</th>
               {withTokens && <th scope="col">{t('log.tokens')}</th>}
+              {withRetrieval && <th scope="col">{t('log.retrieval')}</th>}
             </tr>
           </thead>
           <tbody>
@@ -116,6 +118,15 @@ export function LogPage({ agent, glyphAt, calls, error, onBack, onOpen, t }: Log
                   {withTokens && (
                     <td className={css.mono}>
                       {call.outputTokens === undefined ? ABSENT : formatTokens(call.outputTokens)}
+                    </td>
+                  )}
+                  {withRetrieval && (
+                    <td className={css.mono}>
+                      {call.retrievalCalls === undefined
+                        ? ABSENT
+                        : call.retrievalRepeats !== undefined && call.retrievalRepeats > 0
+                          ? t('log.retrievalRepeats', { calls: String(call.retrievalCalls), repeats: String(call.retrievalRepeats) })
+                          : String(call.retrievalCalls)}
                     </td>
                   )}
                 </tr>

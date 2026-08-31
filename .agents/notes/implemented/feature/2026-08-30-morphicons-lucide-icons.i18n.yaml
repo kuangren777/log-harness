@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-30-morphicons-lucide-icons.md
+2026-08-30-morphicons-lucide-icons.md: fcffb4c926acdbffd3190a65e5edb36e64fc2476
+2026-08-30-morphicons-lucide-icons.zh.md: 1ddf554403b879c08d3bcb4295879d1a04147f1e

@@ -102,7 +102,7 @@ describe('ProfilePopover', () => {
     expect(screen.queryByText(/·/)).toBeNull()
     // The management pages are one click away; the admin link needs the role.
     expect(screen.getByRole('link', { name: '额度与充值' }).getAttribute('href')).toBe('/gate/credit')
-    expect(screen.getByRole('link', { name: '账户与虚拟机' }).getAttribute('href')).toBe('/gate/')
+    expect(screen.getByRole('link', { name: '账户与虚拟机' }).getAttribute('href')).toBe('/gate/login')
     expect(screen.getByRole('link', { name: '管理后台' }).getAttribute('href')).toBe('/admin/')
   })
 

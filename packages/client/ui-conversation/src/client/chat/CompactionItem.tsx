@@ -9,10 +9,11 @@
 import { memo, useState } from 'react'
 import type { CompactionSummaryNode } from '@deepseek-ai/dsh-client-runtime/client'
 import {
+  ChevronDown,
+  ChevronRight,
   IconApiOutline14,
-  IconChevronDownOutline14,
-  IconChevronRightOutline14,
   MarkdownText,
+  MorphStrokeIcon,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import css from './MessageItem.module.css'
@@ -65,7 +66,7 @@ export const CompactionItem = memo(function CompactionItem({
             className={css.compactionDisclosureIcon}
             data-compaction-disclosure={open ? 'expanded' : 'collapsed'}
           >
-            {open ? <IconChevronDownOutline14 /> : <IconChevronRightOutline14 />}
+            <MorphStrokeIcon icon={open ? ChevronDown : ChevronRight} size={14} />
           </span>
         </span>
         <span className={css.compactionTitle}>{title ?? t('message.compaction')}</span>

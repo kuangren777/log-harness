@@ -1,8 +1,8 @@
 /**
- * Citation-pool glyphs: stroked 24×24 paths in `currentColor`, geometry
- * copied from the design reference's `IC` table so this view draws in the
- * same system as the rest of the CaMeL Science surface.
+ * Citation-pool glyphs: lucide stroke icons drawn through StrokeIcon from
+ * dsh-client-ui-primitives, the same icon system as the rest of the UI.
  */
+import { Bookmark, Plus, StrokeIcon, X } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /** One glyph's presentation input. */
 export interface GlyphProps {
@@ -11,37 +11,12 @@ export interface GlyphProps {
 }
 
 /**
- * Render one stroked glyph.
- * @param size - rendered edge length in CSS pixels.
- * @param paths - the glyph's `d` attributes, drawn in order.
- * @returns the glyph as an inline SVG.
- */
-function glyph(size: number, paths: readonly string[]) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ display: 'block' }}
-      aria-hidden="true"
-    >
-      {paths.map(d => <path key={d} d={d} />)}
-    </svg>
-  )
-}
-
-/**
- * The citation-pool glyph: a bookmark with a spine.
+ * The citation-pool glyph: a bookmark.
  * @param props - glyph presentation input.
  * @returns the glyph.
  */
 export function PoolGlyph({ size }: GlyphProps) {
-  return glyph(size, ['M7 3.5h10a1 1 0 0 1 1 1V21l-6-4.2L6 21V4.5a1 1 0 0 1 1-1', 'M9.5 8.5h5'])
+  return <StrokeIcon icon={Bookmark} size={size} />
 }
 
 /**
@@ -50,7 +25,7 @@ export function PoolGlyph({ size }: GlyphProps) {
  * @returns the glyph.
  */
 export function PlusGlyph({ size }: GlyphProps) {
-  return glyph(size, ['M12 5v14', 'M5 12h14'])
+  return <StrokeIcon icon={Plus} size={size} />
 }
 
 /**
@@ -59,5 +34,5 @@ export function PlusGlyph({ size }: GlyphProps) {
  * @returns the glyph.
  */
 export function CloseGlyph({ size }: GlyphProps) {
-  return glyph(size, ['M6 6l12 12', 'M18 6 6 18'])
+  return <StrokeIcon icon={X} size={size} />
 }

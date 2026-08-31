@@ -58,6 +58,8 @@ export const CALLS: readonly AgentCall[] = [
     durationMs: 11_600,
     status: 'ok',
     outputTokens: 9200,
+    retrievalCalls: 29,
+    retrievalRepeats: 21,
   },
   {
     ts: FIRST_AT - 60_000,

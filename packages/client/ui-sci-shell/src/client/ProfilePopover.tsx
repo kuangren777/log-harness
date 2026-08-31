@@ -22,8 +22,10 @@ const LOGIN_PATH = '/gate/login'
 /** The gate's credit page: balance detail and top-up. */
 const CREDIT_PATH = '/gate/credit'
 
-/** The gate landing: account facts and VM selection. */
-const GATE_PATH = '/gate/'
+/** The gate's account page: identity, workspaces, and VM selection. `/gate/`
+ * itself is the marketing landing (the gate now bounces signed-in visitors
+ * here anyway, but the link should not need the bounce). */
+const GATE_PATH = '/gate/login'
 
 /** The gate's admin console; the gate itself refuses non-admins. */
 const ADMIN_PATH = '/admin/'

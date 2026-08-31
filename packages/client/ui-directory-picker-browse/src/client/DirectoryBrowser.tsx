@@ -37,8 +37,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconCheckOutline16, IconChevronRightOutline14, IconEditOutline16, IconFolderClose16, IconFolderOpen16,
-  IconPlusOutline16, Modal,
+  Button, Folder, FolderOpen, IconCheckOutline16, IconChevronRightOutline14, IconEditOutline16,
+  IconPlusOutline16, Modal, MorphStrokeIcon,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-client-runtime/client'
 import { DirectoryBrowseError } from '@deepseek-ai/dsh-client-runtime/client'
@@ -241,9 +241,7 @@ function LevelColumn({ entries, selectedPath, busy, onPick, showHidden, filterPr
               // still fall to body.
               onClick={() => { onPick(entry) }}
             >
-              {selected
-                ? <IconFolderOpen16 size={16} className={css.rowIconSelected} />
-                : <IconFolderClose16 size={16} className={css.rowIcon} />}
+              <MorphStrokeIcon icon={selected ? FolderOpen : Folder} size={16} className={selected ? css.rowIconSelected : css.rowIcon} />
               <span className={css.rowName}>{entry.name}</span>
               <IconChevronRightOutline14 size={12} className={css.rowChevron} />
             </button>

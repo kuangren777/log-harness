@@ -10,7 +10,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import {
-  IconChevronRightOutline14, IconFolderClose16, IconFolderOpen16,
+  Folder, FolderOpen, IconChevronRightOutline14, MorphStrokeIcon,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Translate } from '@deepseek-ai/dsh-client-locale/client'
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
@@ -131,7 +131,7 @@ export function FileTree({ sessionId, root, expanded, selectedPath, listDirector
           onClick={() => { onToggle(entry.path) }}
         >
           <IconChevronRightOutline14 size={12} className={open ? `${css.chevron} ${css.chevronOpen}` : css.chevron} />
-          {open ? <IconFolderOpen16 size={16} className={css.icon} /> : <IconFolderClose16 size={16} className={css.icon} />}
+          <MorphStrokeIcon icon={open ? FolderOpen : Folder} size={16} className={css.icon} />
           <span className={css.name}>{entry.name}</span>
           {isVersionsDirectory(entry.name) && <span className={css.tag}>{t('tree.versions')}</span>}
         </button>
