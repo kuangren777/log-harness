@@ -129,9 +129,12 @@ function readPeakSchedule(value: unknown): PeakSchedule {
 
 /**
  * Read the published rate card.
+ *
+ * A row may state its own `version`, which a charge is then stamped with; the
+ * card-wide one is the fallback for a gate that versions its whole list at once.
  * @param body - the parsed JSON body.
  * @returns the rate card.
- * @throws GateUnavailableError when the version or every row is unreadable.
+ * @throws GateUnavailableError when the card version or every row is unreadable.
  */
 function readPriceTable(body: unknown): PriceTable {
   const source = objectValue(body)
@@ -148,6 +151,7 @@ function readPriceTable(body: unknown): PriceTable {
     const missMicros = integerField(row, 'missMicros')
     const outMicros = integerField(row, 'outMicros')
     if (hitMicros === undefined || missMicros === undefined || outMicros === undefined) continue
+    const rowVersion = integerField(row, 'version')
     models.push({
       model: row['model'],
       hitMicros,
@@ -157,6 +161,9 @@ function readPriceTable(body: unknown): PriceTable {
       // A gate older than the resale multiplier serves rows without the field;
       // reselling at the official price is the only safe reading of its silence.
       ratioX1000: integerField(row, 'ratioX1000') ?? 1000,
+      // Absent leaves the charge stamped with the card version, which is what a
+      // gate that versions its whole price list at once already means.
+      ...rowVersion === undefined ? {} : { version: rowVersion },
     })
   }
   if (models.length === 0) {

@@ -669,7 +669,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'sci/credit-charged': SciCreditChargedData
 ```
 
-来源：[`packages/sci/sci-credit/src/types.ts:154`](../packages/sci/sci-credit/src/types.ts)
+来源：[`packages/sci/sci-credit/src/types.ts:171`](../packages/sci/sci-credit/src/types.ts)
 
 <a id="scidelivered--log-only"></a>
 

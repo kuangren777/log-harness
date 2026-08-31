@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-27-sci-credit-metering.md
-2026-08-27-sci-credit-metering.md: 94621598a72f6844f815122fb42b48699ba40cd2
-2026-08-27-sci-credit-metering.zh.md: 7c6d822e3d1422e227b30697460c225719e6482d
+2026-08-27-sci-credit-metering.md: c94f34d2477b7d1dc53a6132b82d8ca4c0fd50c2
+2026-08-27-sci-credit-metering.zh.md: ed7e51cbcc804fc3ce684823e35af5b4a6ef4a71

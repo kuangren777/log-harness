@@ -79,6 +79,7 @@ const PAYLOAD: ChargePayload = {
   usage: { inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheWriteTokens: 4, reasoningTokens: 5 },
   usdMicros: 42,
   priceVersion: 1,
+  ratioX1000: 1000,
   unknownModel: false,
 }
 
@@ -191,7 +192,7 @@ describe('GateClient.charge', () => {
 })
 
 describe('GateClient.pricing', () => {
-  it('reads the published rows and peak schedule, defaulting both multipliers a row omits', async () => {
+  it('reads the published rows and peak schedule, defaulting the version and multipliers a row omits', async () => {
     const { gate } = client([jsonResponse({
       unit: 'micro-USD per 1M tokens (peak price)',
       version: 3,
@@ -201,7 +202,7 @@ describe('GateClient.pricing', () => {
           hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000,
           peakMultiplierX1000: 1000, ratioX1000: 1500,
         },
-        { model: 'deepseek-v4-pro', version: 2, hitMicros: 44_000, missMicros: 1_320_000, outMicros: 3_960_000 },
+        { model: 'deepseek-v4-pro', hitMicros: 44_000, missMicros: 1_320_000, outMicros: 3_960_000 },
       ],
       peak: { timezone: 'UTC', weekdays: [1], windows: [['02:00', '03:00']], offPeakMultiplierX1000: 400 },
     })])
@@ -210,7 +211,7 @@ describe('GateClient.pricing', () => {
       version: 3,
       models: [
         {
-          model: 'deepseek-v4-flash',
+          model: 'deepseek-v4-flash', version: 1,
           hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000,
           peakMultiplierX1000: 1000, ratioX1000: 1500,
         },

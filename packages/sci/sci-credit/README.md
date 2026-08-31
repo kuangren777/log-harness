@@ -14,6 +14,8 @@ Everything runs on one `llm/stream` waterfall listener, because that waterfall i
 
 **Charge.** The usage is priced (below) and `POST /gate/api/credit/charge` records it under a per-call UUID. The gate keys idempotency on that `requestId`, so `duplicate: true` is a delivered charge and not a failure. The post is never awaited by the stream: a refused or unreachable gate sends the payload to the spool instead, and the retry loop drains it in the background.
 
+The body carries `priceVersion` and `ratioX1000` so the ledger row describes its own arithmetic. `priceVersion` is the version of the exact price ROW the charge was computed from when the card states one per row, and the card-wide version only when it does not: the gate's price list is append-only per model, so one card can carry rows of different ages and `(model, priceVersion)` is what joins a ledger row to the price it was charged at. `ratioX1000` travels with it because the multiplier is what turns that joined list price into the amount, and it may have changed by the time anyone audits.
+
 ## Pricing
 
 Integer arithmetic over `BigInt` throughout — the ledger is integer micro-USD, and a float intermediate would make two identical calls priced on different hosts disagree in the last digit.

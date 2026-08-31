@@ -14,6 +14,8 @@
 
 **扣费。** 用量按下文计价，`POST /gate/api/credit/charge` 以一个每次调用现铸的 UUID 记账。gate 的幂等键就是这个 `requestId`，所以 `duplicate: true` 是扣费成功而不是失败。这个 POST 从不被流等待：gate 拒绝或不可达时，payload 转入 spool，由后台重试循环排空。
 
+扣费体带 `priceVersion` 与 `ratioX1000`，让账本行自己说清它的算术。价目表按行状态版本时，`priceVersion` 是**该行**的版本，只有行没有版本时才用整表的：gate 的价目表按模型 append-only，一张卡上可以并存不同年龄的行，而 `(model, priceVersion)` 才是把一条账本行接回它当时那个价格的连接键。`ratioX1000` 一同上报，因为把接回来的标价变成金额的正是这个倍率，而等到有人来审计时它可能已经改了。
+
 ## 计价
 
 全程 `BigInt` 整数运算 —— 账本是整数微美元，浮点中间值会让同样的两次调用在不同机器上算出末位不同的结果。

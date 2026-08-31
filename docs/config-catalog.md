@@ -1988,6 +1988,15 @@ export interface PriceRow {
    * `1000` resells at cost, and the gate seeds every row with it.
    */
   readonly ratioX1000: number
+  /**
+   * Version this row was published at, when the gate states one per row. The
+   * gate's price list is append-only per model, so a card can carry rows of
+   * different ages and the card-wide version cannot identify which row priced
+   * a charge. A charge stamps this when present, so `(model, priceVersion)`
+   * joins the exact `prices` row it was computed from. A card that states no
+   * per-row version leaves every charge stamped with the card's own.
+   */
+  readonly version?: number
 }
 ```
 

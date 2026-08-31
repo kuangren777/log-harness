@@ -667,7 +667,7 @@ Source: [`packages/sci/sci-citations/src/events.ts:26`](../packages/sci/sci-cita
 'sci/credit-charged': SciCreditChargedData
 ```
 
-Source: [`packages/sci/sci-credit/src/types.ts:154`](../packages/sci/sci-credit/src/types.ts)
+Source: [`packages/sci/sci-credit/src/types.ts:171`](../packages/sci/sci-credit/src/types.ts)
 
 <a id="scidelivered--log-only"></a>
 

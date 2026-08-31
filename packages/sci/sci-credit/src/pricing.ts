@@ -210,11 +210,17 @@ export function resolvePriceRow(table: PriceTable, model: string): ResolvedPrice
  * completion count. Adding it would bill every reasoning token twice.
  * `cacheWriteTokens` is priced at the uncached-input rate, because DeepSeek
  * charges a cache write as ordinary uncached input.
+ *
+ * The charge is stamped with the ROW's version when the card states one, and
+ * with the card's own only when it does not. The gate's price list is
+ * append-only per model, so one card can carry rows of different ages and the
+ * card-wide version alone would not say which row a charge came from.
  * @param usage - the disjoint token counts the adapter reported.
  * @param table - the rate card in force.
  * @param model - the provider model id the request named.
  * @param startedAt - when the request started, which decides peak or off-peak.
- * @returns the price, its rate-card version, and the pricing inputs that produced it.
+ * @returns the price, the version of the row it was computed from, and the
+ *   pricing inputs that produced it.
  * @throws Error when the card cannot price anything, or names a timezone other than `UTC`.
  */
 export function quoteCharge(usage: TokenUsage, table: PriceTable, model: string, startedAt: Date): ChargeQuote {
@@ -227,7 +233,7 @@ export function quoteCharge(usage: TokenUsage, table: PriceTable, model: string,
   const multiplier = BigInt(peak ? row.peakMultiplierX1000 : table.peak.offPeakMultiplierX1000)
   const atRate = divideRoundHalfUp(atPeak * multiplier, MULTIPLIER_UNIT)
   const usdMicros = divideRoundHalfUp(atRate * BigInt(row.ratioX1000), MULTIPLIER_UNIT)
-  return { usdMicros: Number(usdMicros), priceVersion: table.version, peak, unknownModel, row }
+  return { usdMicros: Number(usdMicros), priceVersion: row.version ?? table.version, peak, unknownModel, row }
 }
 
 /**

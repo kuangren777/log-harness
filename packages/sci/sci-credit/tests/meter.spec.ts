@@ -371,6 +371,7 @@ describe('metering an admitted call', () => {
       usage: { inputTokens: 1_000_000, outputTokens: 1_000_000, cacheReadTokens: 1_000_000, cacheWriteTokens: 0, reasoningTokens: 0 },
       usdMicros: 1_320_000 + 44_000 + 3_960_000,
       priceVersion: 0,
+      ratioX1000: 1000,
       unknownModel: false,
     }])
   })

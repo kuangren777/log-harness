@@ -43,6 +43,7 @@ interface RecordedCharge {
   model: string
   usdMicros: number
   priceVersion: number
+  ratioX1000: number
 }
 
 /** A real loopback gate serving the three credit endpoints. */
@@ -76,7 +77,7 @@ async function startGate(): Promise<FakeGate> {
       json({
         version: 5,
         models: [{
-          model: 'deepseek-v4-pro',
+          model: 'deepseek-v4-pro', version: 42,
           hitMicros: 0, missMicros: 2_000_000, outMicros: 0,
           peakMultiplierX1000: 1000, ratioX1000: 1500,
         }],
@@ -235,7 +236,15 @@ describe('sci-credit real Loader composition through cordis.yml', () => {
     // The composed card declares every hour of every day peak, so the price is
     // the full 2.00 per 1M uncached input tokens whenever this suite runs,
     // resold at the card's 1.5 multiplier.
-    expect(charge).toMatchObject({ model: 'deepseek-v4-pro', priceVersion: 5, usdMicros: 3_000_000 })
+    // The charge is stamped with the ROW's version, not the card's 5, so the
+    // ledger row joins the exact price it was computed from, and carries the
+    // multiplier that produced it.
+    expect(charge).toMatchObject({
+      model: 'deepseek-v4-pro',
+      priceVersion: 42,
+      ratioX1000: 1500,
+      usdMicros: 3_000_000,
+    })
     // The minted id is a real UUID and the record names the same one.
     expect(charge?.requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
     expect(charged(booted.session)[0]?.data).toMatchObject({

@@ -260,6 +260,7 @@ export class CreditMeter {
       usage: completeUsage(usage),
       usdMicros: quote.usdMicros,
       priceVersion: quote.priceVersion,
+      ratioX1000: quote.row.ratioX1000,
       unknownModel: quote.unknownModel,
     }
     let spooled = false

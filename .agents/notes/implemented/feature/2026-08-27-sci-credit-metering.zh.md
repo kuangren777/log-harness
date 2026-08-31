@@ -16,6 +16,8 @@ Status: implemented
 
 调 `next()` 之前，用 VM bearer token 读 `GET /gate/api/credit/balance`，比 `balanceTtlMs`（默认 2 秒）新的答案直接复用，并把并发读合并成一个请求：工具循环每隔一秒就发一次模型调用，否则每一步都要多花一个往返去重问同一个问题。`exhausted` 的租户会被拒绝 —— 产出一个终止的 `{kind:'error'}` finish，code 为 `CREDIT_EXHAUSTED`，消息是一句含 `creditUrl` 的双语文案 —— 并且**完全不调用 `next()`**，所以这次拒绝不消耗任何上游 token。gate 答不上来时，默认的 `failMode: 'closed'` 用同样的形状拒绝，code 为 `CREDIT_GATE_UNAVAILABLE`；文案故意不同，因为告诉一个有钱的租户"额度已用完"会把它导向一个解决不了问题的页面。
 
+扣费体带 `priceVersion` 与 `ratioX1000`，让账本行自己说清它的算术。价目表按行状态版本时 `priceVersion` 取**该行**的版本，只有行没有版本时才取整表的：gate 的价目表按模型 append-only，一张卡上并存不同年龄的行，`(model, priceVersion)` 才是把账本行接回它当时那个价格的连接键。倍率与它同行，因为把接回来的标价变成金额的正是它，而等到有人来审计时它可能已经改了。
+
 调用期间每个 chunk 原样透传，并记住最后一个 `usage` chunk。可迭代对象结束之后 —— 正常 finish、抛错、以及消费者中途丢弃迭代器，三种情况都经过同一个 `finally` —— 用量被计价，`POST /gate/api/credit/charge` 以一个每次调用现铸的 UUID 记账。这个 POST 从不被流等待；gate 拒绝时 payload 转入 `$DSH_HOME/.sci/credit-spool.jsonl`，由倍增退避稍后排空。`duplicate: true` 视为扣费成功，这正是让重复排空安全的原因。
 
 计价全程是 `BigInt` 整数运算，因为账本是整数微美元，浮点中间值会让同样的调用在不同机器上末位不一致。`inputTokens` 与 `cacheWriteTokens` 按未命中输入价、`cacheReadTokens` 按命中价、`outputTokens` 按输出价，各自四舍五入（半数进位）后求和，乘峰谷乘子做一次同样的舍入，再乘该行的 `ratioX1000` 使用倍率做一次。**`reasoningTokens` 不计价。** `packages/llm/llm-deepseek/src/translate.ts::mapUsage` 把 `completion_tokens` 直接映射成 `outputTokens`，并把 `completion_tokens_details.reasoning_tokens` 并列报出而**不做减法** —— 这是 OpenAI 兼容口径，reasoning 输出已经包含在补全计数里 —— 所以再算一次等于把每个 reasoning token 收两遍。峰谷按请求的**开始**时间取 UTC，依 gate 发布的表，起点含、终点不含；价目表若把窗口声明在别的时钟上会被拒收而不是当作 UTC 读，从而保留上一张表，而不是无声地算错每一笔。价目表里没有的模型按最贵的一行计价并标记 `unknownModel`；这里的最贵是在乘过该行的使用倍率之后比的，因为那个乘积才是这一行上的调用真正会被收的钱，只比标价会在标价低但倍率高时选错成便宜的一行。`ratioX1000` 表示平台在供应商标价之上加收多少 —— `1000` 即按成本转售 —— gate 供的行若没有这个字段就按 `1000` 读，因为按官方价转售是对它沉默的唯一安全解读。

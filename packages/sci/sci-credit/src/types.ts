@@ -30,6 +30,15 @@ export interface PriceRow {
    * `1000` resells at cost, and the gate seeds every row with it.
    */
   readonly ratioX1000: number
+  /**
+   * Version this row was published at, when the gate states one per row. The
+   * gate's price list is append-only per model, so a card can carry rows of
+   * different ages and the card-wide version cannot identify which row priced
+   * a charge. A charge stamps this when present, so `(model, priceVersion)`
+   * joins the exact `prices` row it was computed from. A card that states no
+   * per-row version leaves every charge stamped with the card's own.
+   */
+  readonly version?: number
 }
 
 /** One peak window as `[startInclusive, endExclusive]` in `HH:MM`, on the schedule's own clock. */
@@ -53,9 +62,10 @@ export interface PeakSchedule {
 /** A complete rate card: the priced models plus the schedule that discounts them. */
 export interface PriceTable {
   /**
-   * Version the charge is recorded under, so a later price change leaves old
-   * charges auditable at the rate they were priced with. `0` marks a table
-   * declared in this plugin's own configuration rather than served by the gate.
+   * Version the whole card was served at, used for a row that states none of
+   * its own, so a later price change leaves old charges auditable at the rate
+   * they were priced with. `0` marks a table declared in this plugin's own
+   * configuration rather than served by the gate.
    */
   readonly version: number
   /** The priced models. A request naming none of them is priced by the most expensive row. */
@@ -68,7 +78,7 @@ export interface PriceTable {
 export interface ChargeQuote {
   /** The amount to charge, in micro-USD. */
   readonly usdMicros: number
-  /** The rate-card version the price came from. */
+  /** The version of the exact price row the charge was computed from. */
   readonly priceVersion: number
   /** Whether the request started inside a peak window. */
   readonly peak: boolean
@@ -102,8 +112,15 @@ export interface ChargePayload {
   readonly usage: Required<TokenUsage>
   /** The price this plugin computed, in micro-USD. */
   readonly usdMicros: number
-  /** The rate-card version the price came from. */
+  /** The version of the exact price row the charge was computed from. */
   readonly priceVersion: number
+  /**
+   * The resale multiplier that row carried. Sent so the ledger row describes
+   * its own arithmetic: with the token counts, the joined price row, and this,
+   * an audit re-derives `usdMicros` without knowing which multiplier was in
+   * force when the call ran.
+   */
+  readonly ratioX1000: number
   /** Whether the model was priced by the most expensive row because the card did not list it. */
   readonly unknownModel: boolean
 }
@@ -124,7 +141,7 @@ export interface SciCreditChargedData {
   readonly usage: Required<TokenUsage>
   /** What the call cost, in micro-USD. */
   readonly usdMicros: number
-  /** The rate-card version the price came from; `0` for a configured table. */
+  /** The version of the exact price row the charge was computed from; `0` for a configured table. */
   readonly priceVersion: number
   /** Whether the request started inside a peak window. */
   readonly peak: boolean

@@ -13,7 +13,7 @@ import {
   quoteCharge,
   resolvePriceRow,
 } from '../src/pricing.ts'
-import type { PeakSchedule, PriceTable } from '../src/types.ts'
+import type { PeakSchedule, PriceRow, PriceTable } from '../src/types.ts'
 
 /** A two-row card whose prices make every component visible in the total. */
 const TABLE: PriceTable = {
@@ -326,6 +326,20 @@ describe('quoteCharge', () => {
 
     expect(atCost.row.ratioX1000).toBe(1000)
     expect(atCost.usdMicros).toBe(2000 + 6000)
+  })
+
+  it('stamps the charge with the row version when the card states one per row', () => {
+    const table: PriceTable = {
+      ...TABLE,
+      models: [{ ...TABLE.models[0] as PriceRow, version: 42 }],
+    }
+
+    // The card is version 7; the row is the one a ledger row must join on.
+    expect(quoteCharge({ inputTokens: 0, outputTokens: 0 }, table, 'cheap', MONDAY_PEAK).priceVersion).toBe(42)
+  })
+
+  it('falls back to the card version for a gate that versions its whole price list at once', () => {
+    expect(quoteCharge({ inputTokens: 0, outputTokens: 0 }, TABLE, 'cheap', MONDAY_PEAK).priceVersion).toBe(7)
   })
 
   it('prices the built-in official card at the published list rate', () => {
