@@ -108,7 +108,9 @@ function money(micros: number): string {
 /**
  * A list price with the institution's multiplier applied. The multiplier lands
  * on the integer micro amount, so the displayed cents are rounded once, at the
- * end, from the same arithmetic the charger bills with.
+ * end, from the same multiplier the charger applies. The charged total is not
+ * this number: the charger prices each token component separately, rounds each
+ * one, and applies the peak multiplier as well.
  * @param micros - micro-USD per million tokens.
  * @param ratioX1000 - the multiplier in thousandths.
  * @returns the effective price as this deployment renders money.
