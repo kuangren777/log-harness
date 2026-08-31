@@ -20,12 +20,13 @@
 | 工具包 | 模型可见名称 | 依赖 | 写入／影响 | 随产品发布的别名 | 部署说明 |
 | --- | --- | --- | --- | --- | --- |
 | `@deepseek-ai/dsh-sci-tier` | `suggest_tier_upgrade` | `ctx.tools` | `tool/call`、`sci/tier-upgrade-suggested`、`tool/result` | - | suggest_tier_upgrade 是均衡档位唯一与扇出相关的工具：它记录任务已超出单次处理的范围，把选择权留给用户，而不是让 agent 悄悄启动蜂群。 |
+| `@deepseek-ai/dsh-sci-tier` | `resolve_tier` | `ctx.tools` | `tool/call`、`sci/tier-resolved`、`tool/result` | - | resolve_tier 是 auto 组合的第一次调用：它记录模型从任务中解出的档位，第二次调用则把均衡会话升级到集群。门禁读取的是最新一条记录，所以在它之前不会有任何扇出，也不会把蜂群降级。 |
 | `@deepseek-ai/dsh-sci-plan` | `declare_research_plan` | `ctx.tools` | `tool/call`、`sci/plan-declared`、`tool/result` | - | declare_research_plan 在扇出前点名各条并行工作线；档位门禁消费其 sci/plan-declared 事件，在声明之前拒绝扇出工具。 |
-| `@deepseek-ai/dsh-sci-library` | `library_add`、`library_search` | `ctx.tools`、`ctx.systemPrompt`、`ctx.storageDomain`、`ctx.fs`、`ctx.webServer`、`ctx.connection` | `tool/call`、`sci/library-changed`、`tool/result` | - | library_search 先读用户自己的收藏，再考虑公开索引；library_add 在挂载了 sci-literature 时经它解析 DOI / arXiv id，否则按手工条目保存。prompt 章节点名已存文件在沙箱里的打开路径。 |
 | `@deepseek-ai/dsh-sci-literature` | `literature_search` | `ctx.tools`、`ctx.systemPrompt`、`ctx.storageDomain` | `tool/call`、`sci/literature-searched`、`tool/result` | - | literature_search 一次调用扇出到 OpenAlex、Semantic Scholar、arXiv 与 Crossref 并合并结果，因此从 `sources` 里去掉某个来源不会改变模型可见的 schema。 |
+| `@deepseek-ai/dsh-sci-library` | `library_add`、`library_search` | `ctx.tools`、`ctx.systemPrompt`、`ctx.storageDomain`、`ctx.fs`、`ctx.webServer`、`ctx.connection` | `tool/call`、`sci/library-changed`、`tool/result` | - | library_search 先读用户自己的收藏，再考虑公开索引；library_add 在挂载了 sci-literature 时经它解析 DOI / arXiv id，否则按手工条目保存。prompt 章节点名已存文件在沙箱里的打开路径。 |
 | `@deepseek-ai/dsh-sci-citations` | `citations_add`、`citations_list` | `ctx.tools`、`ctx.systemPrompt`、`ctx.storageDomain`、`ctx.fs` | `tool/call`、`sci/citations-changed`、`tool/result` | - | 两个工具都不要求给出项目：slug 由会话工作目录在 `projectRoot` 之下推断，不在任何项目里的会话得到的是拒绝而不是猜测。citations_add 在挂载了 sci-literature 时经它解析 DOI / arXiv id，在挂载了 sci-library 时经它解析知识库条目 id。 |
 | `@deepseek-ai/dsh-sci-deliver` | `deliver_files` | `ctx.tools`、`ctx.fs`、`ctx.systemPrompt` | `tool/call`、`sci/delivered`、`sci/delivery-failed`、`tool/result` | - | deliver_files 是文件送达用户的唯一途径；沙箱内的 `sci deliver` CLI 把同一份请求写进 spool，插件在轮次开始时拾取，走同一条校验链。 |
-| `@deepseek-ai/dsh-camel-runtime` | `fork_workspace` | `ctx.tools`、`ctx.e2b` | `tool/call`、`sci/fork-completed`、`tool/result` | - | fork_workspace 是集群档在隔离环境里跑竞争变体的唯一途径：每个变体都从 Dormice 工作区的同一份 AgentENV 快照恢复，只有 stdout、stderr、退出码与收集目录回流。 |
+| `@deepseek-ai/dsh-camel-runtime` | `collect_variant`, `create_variant`, `delete_variant`, `list_variants`, `run_in_variant` | `ctx.tools`、`ctx.e2b` | `tool/call`、`sci/variant-created`、`sci/variant-run`、`sci/variant-deleted`、`tool/result` | - | 变体工具是集群档在隔离环境里改动项目的唯一途径：一个变体就是一台常驻的 AgentENV microVM，装着某个项目目录的副本，按工作区设上限；只有 collect_variant 拷回的内容才到达工作区。 |
 | `@deepseek-ai/dsh-office-univer` | `univer_api`、`univer_compile_svg`、`univer_execute`、`univer_export`、`univer_import`、`univer_inspect`、`univer_lint`、`univer_new`、`univer_resources`、`univer_screenshot`、`univer_status`、`univer_unit`、`univer_worktree` | `ctx.tools`、`ctx.univer`、`ctx.attachments` | `tool/call`、`tool/result`、`univer_worktree` 的 merge 与 discard 会触发一次 tools/pre-execute 审批 ask | - | 本目录收录的是 `@deepseek-ai/dsh-office-univer/tools` 在不撤下任何工具时注册的集合。每一个名字都可以通过该行的 `disabledTools` 撤下；宿主没有 Chromium 或没有出网的部署，应当撤下 `univer_screenshot`、`univer_lint` 与 `univer_resources`；`univer_screenshot` 还额外要求挂载附件存储。以默认的 `tools: true` 挂载包入口会注册同一个集合。 |
 | `@deepseek-ai/dsh-tool-ask-user` | `ask_user_question` | `ctx.tools`、`ctx.userQuestions` | `tool/call`、`tool/result after a UI/provider answers the question` | - | ask_user_question 会暂停工具调用，直到当前 UI 提供方返回人类答案。 |
 | `@deepseek-ai/dsh-tools` | `run_code` | `ctx.tools`、`ctx.codeRuntime (execution time)`、`ctx.systemPrompt` | `tool/call`、`one tool/code-dispatch-start + tool/code-dispatch pair per bridged sub-call`、`tool/result` | - | 在 `mode: code`／`mode: both` 下，它由工具注册表所有，作为可过滤能力层之外的保留传输机制（参见 Code Mode Agent Note）。在 `code` 下，它是注册表对协议格式（wire format）的唯一贡献；其他可见能力在使用已加载运行时语言生成的 SDK 章节中声明。程序通过 binding 调用这些能力，调用按照原生并发约定调度：启动顺序和策略遵循提交顺序，并发安全的函数体最多重叠执行 `maxParallelSubCalls` 个。调用会重新进入完整且受守卫保护的工具流水线，并将每个嵌套执行关联到此外层结果。 |
@@ -60,7 +61,7 @@
 
 ### `suggest_tier_upgrade`
 
-告诉用户这项任务用 Swarm 模式（把工作扇出给多个并行 subagent）会更合适。此调用不会改变当前会话：它只是记录这条建议供用户决定，用户接受后会在新会话中继续。只有在你已经交付了单次诚实处理所能覆盖的内容之后才调用它，并用一句话说明 swarm 能补上什么这一遍做不到的东西——哪些角度还没覆盖，哪些来源还没读。
+告诉用户这项任务用 Swarm 模式（把工作扇出给多个并行 subagent）会更合适。此调用不会改变当前会话：它只是记录这条建议供用户决定，用户接受后会在新会话中继续。只有在你已经交付了单次诚实处理所能覆盖的内容——一次范围如实缩小的真实小型试点，而不是靠没有真实运行产生数字撑出来的、看起来很大的结果——之后才调用它，并用一句话说明 swarm 能补上什么这一遍做不到的东西：哪些角度还没覆盖，哪些来源还没读，哪个实验还没在完整规模上跑过。
 
 ```json
 {
@@ -81,13 +82,49 @@
 
 suggest_tier_upgrade 是均衡档位唯一与扇出相关的工具：它记录任务已超出单次处理的范围，把选择权留给用户，而不是让 agent 悄悄启动蜂群。
 
+<a id="deepseek-aidsh-sci-tier"></a>
+
+## `@deepseek-ai/dsh-sci-tier`
+
+### `resolve_tier`
+
+在做任何其他工具调用之前，先从任务中解出这个会话的档位。当工作需要一次真实的实验或复现、系统性的多源研究，或达到尽职调查级别覆盖度、单条线程无法诚实完成时，选 `cluster`；单次认真处理就能覆盖的一切情况，选 `balanced`。在你解出档位之前，任何扇出工具都不会运行。一旦一个均衡任务变得比单次处理更大，立刻带上原因再次调用它并传入 `cluster`——档位只能升，绝不降。用一句话说明为什么这项任务需要你所选的档位。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "tier": {
+      "type": "string",
+      "description": "The tier the task needs: cluster for a swarm, balanced for one pass.",
+      "enum": [
+        "balanced",
+        "cluster"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "description": "One sentence on why the task needs this tier."
+    }
+  },
+  "required": [
+    "tier",
+    "reason"
+  ]
+}
+```
+
+来源：[`packages/sci/sci-tier/src/resolve-tool.ts`](../packages/sci/sci-tier/src/resolve-tool.ts)
+
+resolve_tier 是 auto 组合的第一次调用：它记录模型从任务中解出的档位，第二次调用则把均衡会话升级到集群。门禁读取的是最新一条记录，所以在它之前不会有任何扇出，也不会把蜂群降级。
+
 <a id="deepseek-aidsh-sci-plan"></a>
 
 ## `@deepseek-ai/dsh-sci-plan`
 
 ### `declare_research_plan`
 
-在扇出到 swarm 之前，宣布你打算如何拆分工作。为每条并行工作线声明一个 agent，各带一个供 `edges` 引用的短 id、一个卡片标题、一个图标，以及一句话说明它做什么。图标决定运行该步骤的 subagent 人格：`web` → `researcher`，`search` → `scout`，`security` → `adversary`，`code` → `writer`，`check` → `deliverer`。`edges` 只用于真正的顺序约束——`[["installer", "verifier"]]` 表示 verifier 要等 installer；两个 agent 之间没有边就并行运行。计划必须无环，且每条边都必须指向一个已声明的 agent。一次声明只授权一次扇出：下一次扇出前要重新声明。
+在扇出到 swarm 之前，宣布你打算如何拆分工作。为每条并行工作线声明一个 agent，各带一个供 `edges` 引用的短 id、一个卡片标题、一个图标，以及一句话说明它做什么。图标决定运行该步骤的 subagent 人格：`web` → `researcher`，`search` → `scout`，`security` → `adversary`，`code` → `writer`，`check` → `deliverer`。`edges` 只用于真正的顺序约束——`[["installer", "verifier"]]` 表示 verifier 要等 installer；两个 agent 之间没有边就并行运行。计划必须无环，且每条边都必须指向一个已声明的 agent。每份计划都必须至少包含一个 `security` agent（adversary 人格），其任务是破坏其他 agent 产出的成果；当计划中有 `code` 或 `check` agent 时，必须有一条边从它指向该 adversary，让检查作用于产出物本身，而不是产出者自己的总结。一次声明只授权一次扇出：下一次扇出前要重新声明。
 
 ```json
 {
@@ -404,54 +441,126 @@ deliver_files 是文件送达用户的唯一途径；沙箱内的 `sci deliver` 
 
 ## `@deepseek-ai/dsh-camel-runtime`
 
-### `fork_workspace`
+### `collect_variant`
 
-把当前工作区分叉成若干隔离副本，在每个副本里并行跑一条 shell 命令。每个变体都从工作区此刻的同一份快照出发，所以可以用它尝试相互竞争的假设、参数扫描或有风险的变换，而不碰真实文件。每个变体的 stdout、stderr、退出码，以及（给了 `collect` 时）指定的输出目录，会落到真实工作区的 .sci/forks/&lt;forkId&gt;/&lt;variant&gt;/。每次调用最多 8 个变体。变体之间、变体与真实工作区互不可见；没收集的内容在变体结束时丢弃。
+把变体项目里的某个目录拷回工作区，放在 .sci/variants/&lt;name&gt;/collect/ 下。真实项目文件永不被覆盖；读这份收集来的副本，自己决定合并什么。
 
 ```json
 {
   "type": "object",
   "properties": {
-    "variants": {
-      "type": "array",
-      "description": "The variants to run, each in its own forked copy of the workspace.",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Short lowercase identifier; names the result directory."
-          },
-          "command": {
-            "type": "string",
-            "description": "Shell command to run in the variant, from the workspace root."
-          }
-        },
-        "required": [
-          "name",
-          "command"
-        ]
-      }
-    },
-    "collect": {
+    "name": {
       "type": "string",
-      "description": "Workspace-relative directory whose contents are copied back from each variant. Omit to keep only stdout and stderr."
+      "description": "The variant to collect from."
     },
-    "timeoutSeconds": {
-      "type": "integer",
-      "description": "Per-variant wall-clock budget in seconds. Default 600, max 3600."
+    "path": {
+      "type": "string",
+      "description": "Project-relative directory to collect. Omit for the whole project."
     }
   },
   "required": [
-    "variants"
+    "name"
   ]
 }
 ```
 
 来源：[`packages/sci/camel-runtime/src/index.ts`](../packages/sci/camel-runtime/src/index.ts)
 
-fork_workspace 是集群档在隔离环境里跑竞争变体的唯一途径：每个变体都从 Dormice 工作区的同一份 AgentENV 快照恢复，只有 stdout、stderr、退出码与收集目录回流。
+### `create_variant`
+
+创建一个常驻变体：一台隔离的 microVM，装着某个项目目录的副本，用来在不碰真实文件的前提下尝试一个假设、一组参数或一次有风险的改动。每个工作区最多 8 个变体；满了先用 delete_variant 删一个。传 `from` 则改为分叉一个已有变体 —— 副本从那个变体此刻的文件、进程与内存出发。变体闲置时暂停、使用时恢复。变体写的任何东西在 collect_variant 拷回之前都到不了工作区。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Short lowercase identifier; names the slot and its results directory."
+    },
+    "project": {
+      "type": "string",
+      "description": "Workspace-relative project directory to copy, e.g. projects/my-study."
+    },
+    "from": {
+      "type": "string",
+      "description": "Existing variant to fork from. The project is inherited."
+    }
+  },
+  "required": [
+    "name",
+    "project"
+  ]
+}
+```
+
+来源：[`packages/sci/camel-runtime/src/index.ts`](../packages/sci/camel-runtime/src/index.ts)
+
+### `delete_variant`
+
+删除一个变体：销毁它的 microVM，释放槽位。已收集的文件留在工作区。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The variant to delete."
+    }
+  },
+  "required": [
+    "name"
+  ]
+}
+```
+
+来源：[`packages/sci/camel-runtime/src/index.ts`](../packages/sci/camel-runtime/src/index.ts)
+
+### `list_variants`
+
+列出本工作区的变体，含项目、状态（running、paused 或 missing）与最近使用时间。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+来源：[`packages/sci/camel-runtime/src/index.ts`](../packages/sci/camel-runtime/src/index.ts)
+
+### `run_in_variant`
+
+在某个变体里、从它的项目目录跑一条 shell 命令。变体若已暂停会被恢复。非零退出会被报告而不是抛出。结果里只保留输出的最后 4000 个字符。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The variant to run in."
+    },
+    "command": {
+      "type": "string",
+      "description": "Shell command, run from the variant's project directory."
+    },
+    "timeoutSeconds": {
+      "type": "integer",
+      "description": "Wall-clock budget in seconds. Default 600, max 3600."
+    }
+  },
+  "required": [
+    "name",
+    "command"
+  ]
+}
+```
+
+来源：[`packages/sci/camel-runtime/src/index.ts`](../packages/sci/camel-runtime/src/index.ts)
+
+变体工具是集群档在隔离环境里改动项目的唯一途径：一个变体就是一台常驻的 AgentENV microVM，装着某个项目目录的副本，按工作区设上限；只有 collect_variant 拷回的内容才到达工作区。
 
 <a id="deepseek-aidsh-office-univer"></a>
 

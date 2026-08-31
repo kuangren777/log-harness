@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-08-28-camel-runtime-fork-engine.md
-2026-08-28-camel-runtime-fork-engine.md: 40bc57f295702277d4a27a5878791bbc7400a5ed
-2026-08-28-camel-runtime-fork-engine.zh.md: caaa0854b374efe82c5c06f70c4eba6a8fc5199b
+2026-08-28-camel-runtime-fork-engine.md: 057418da8e6b13981fc4fbbcde8826721db0f071
+2026-08-28-camel-runtime-fork-engine.zh.md: 43bfcdbda9c27121ae0800a2f849b48ac8c77bd5

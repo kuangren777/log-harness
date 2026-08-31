@@ -1,17 +1,18 @@
 /**
  * Package-owned invariant companion for `@deepseek-ai/dsh-camel-runtime`.
  *
- * The relationship this asserts over the session log: within one session, no
- * two `sci/fork-completed` events share a `forkId`. A fork id names the result
- * directory the model reads back, so a repeated id would mean two forks wrote
- * into one directory and the model can no longer tell whose files it is reading.
+ * The relationship this asserts over the session log: a variant name is live
+ * from its `sci/variant-created` until its `sci/variant-deleted`, and no
+ * second `sci/variant-created` for that name appears while it is live. The
+ * registry refuses such a creation; this companion checks the committed
+ * result at the log, so a bypassing caller or a registry write that lost the
+ * race is caught where it would leave two sandboxes behind one slot.
  * @module @deepseek-ai/dsh-camel-runtime/invariant
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantFailure, InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
-import type { SciForkCompletedData } from './types.ts'
 
 const PACKAGE_NAME = '@deepseek-ai/dsh-camel-runtime'
 
@@ -21,26 +22,29 @@ export const name = 'camel-runtime-invariant'
 export const inject = ['invariants']
 
 /**
- * Assert the unique-fork-id rule for one appended event.
+ * Assert the one-live-creation-per-name rule for one appended event.
  * @param session - the session whose log received the event.
  * @param event - the event just appended.
  * @param fail - the package-attributed invariant reporter.
  */
-export function validateForkCompleted(session: Session, event: SessionEvent, fail: InvariantFailure): void {
-  if (event.type !== 'sci/fork-completed') return
-  const completed: SciForkCompletedData = event.data
-  const earlier = session.events.some(prior => prior.seq !== event.seq
-    && prior.type === 'sci/fork-completed'
-    && prior.data.forkId === completed.forkId)
-  if (earlier) {
-    fail(`fork ${JSON.stringify(completed.forkId)} completed twice in one session; a fork id names one result directory`)
+export function validateVariantCreated(session: Session, event: SessionEvent, fail: InvariantFailure): void {
+  if (event.type !== 'sci/variant-created') return
+  const created = event.data
+  let live = false
+  for (const prior of session.events) {
+    if (prior.seq >= event.seq) break
+    if (prior.type === 'sci/variant-created' && prior.data.name === created.name) live = true
+    else if (prior.type === 'sci/variant-deleted' && prior.data.name === created.name) live = false
+  }
+  if (live) {
+    fail(`variant ${JSON.stringify(created.name)} was created twice in one session without a deletion in between; one slot name owns one sandbox`)
   }
 }
 
 /** Install validation on the authoritative session-event stream. */
 const install: InvariantInstaller = (ctx, fail) => {
   ctx.on('session/event', (session: Session, event: SessionEvent) => {
-    validateForkCompleted(session, event, fail)
+    validateVariantCreated(session, event, fail)
   }, { global: true })
 }
 

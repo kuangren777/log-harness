@@ -410,28 +410,26 @@ export interface Config {
   endpoint?: string
   /** AgentENV API key; omission reads `AENV_API_KEY`. It is never forwarded into any sandbox. */
   apiKey?: string
-  /** AgentENV template the seed microVM starts from; it must carry the same toolchain as the workspace image. */
+  /** AgentENV template a fresh variant starts from; it must carry the same toolchain as the workspace image. */
   template: string
-  /** Workspace-relative directory receiving `<forkId>/<variant>/`. */
-  forksDir?: string
-  /** Variants one call may request. */
+  /** Variant slots one workspace may hold; a plan-dependent cap the deployment sets per VM. */
   maxVariants?: number
-  /** Byte cap on the exported workspace archive. */
-  maxWorkspaceBytes?: number
-  /** Per-variant command budget when the call names none. */
+  /** Workspace-relative directory holding the registry and `<name>/collect/`. */
+  variantsDir?: string
+  /** Byte cap on one exported project archive. */
+  maxProjectBytes?: number
+  /** Command budget when a call names none. */
   commandTimeoutSeconds?: number
-  /** Largest per-variant command budget a call may ask for. */
+  /** Largest command budget a call may ask for. */
   maxCommandTimeoutSeconds?: number
-  /** TTL of every microVM the engine starts; a safety net, since the engine deletes them itself. */
+  /** Idle seconds before a variant pauses itself; every use extends it. */
   sandboxTimeoutSeconds?: number
-  /** Variants running at once. */
-  concurrency?: number
-  /** tar exclude patterns applied to the workspace export. */
+  /** tar exclude patterns applied when copying a project either way. */
   exclude?: string[]
 }
 ```
 
-来源：[`packages/sci/camel-runtime/src/index.ts:68`](../packages/sci/camel-runtime/src/index.ts)
+来源：[`packages/sci/camel-runtime/src/index.ts:84`](../packages/sci/camel-runtime/src/index.ts)
 
 <a id="deepseek-aidsh-client-connection"></a>
 
@@ -1892,6 +1890,12 @@ export interface Config {
    * so the names cannot be fixed in this package.
    */
   webToolNames: string[]
+  /**
+   * Registered names of the tools that execute code or commands, used by the
+   * deliveries-without-execution figure of a summary. Configurable for the same
+   * reason as `webToolNames`: which tool runs a command is a composition choice.
+   */
+  execToolNames: string[]
 }
 ```
 
@@ -2208,7 +2212,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/sci/sci-prompt/src/index.ts:241`](../packages/sci/sci-prompt/src/index.ts)
+来源：[`packages/sci/sci-prompt/src/index.ts:249`](../packages/sci/sci-prompt/src/index.ts)
 
 <a id="deepseek-aidsh-sci-remote-hosts"></a>
 
@@ -2300,12 +2304,14 @@ export interface SciSkillSourceConfig {
 /** Deployment-varying choices for the science-research tier layer. */
 export interface Config {
   /**
-   * Which tier this composition runs at. Required and with no default: the
-   * value decides which prompt section the model reads and which of the two
-   * gates is live, and a guessed tier would either state a rule nothing
-   * enforces or enforce a rule the model was never told about.
+   * Which tier this composition runs at, or `auto`. Required and with no
+   * default: the value decides which prompt section the model reads and which
+   * gates are live, and a guessed tier would either state a rule nothing
+   * enforces or enforce a rule the model was never told about. `auto` mounts
+   * the cluster composition and keeps every fan-out shut until the model has
+   * resolved the session's tier with `resolve_tier`.
    */
-  tier: SciTier
+  tier: SciTierMode
   /**
    * Registered tool names that fan work out across subagents. Both gates read
    * this one list: in the cluster tier a call to one of these names spends a
@@ -2318,6 +2324,18 @@ export interface Config {
 }
 
 /**
+ * What a composition is configured at: one of the two tiers, fixed, or `auto`,
+ * where the composition mounts the cluster tools and the model resolves the
+ * tier from the task by calling `resolve_tier` before its first fan-out.
+ *
+ * `auto` exists because the studied platform bound the tier before the task was
+ * known: a user picking the single-threaded tier for a task that turned out to
+ * need a real experiment left the model no honest path, and it delivered a
+ * hollow result (`clawsgo-analysis/CLAWSGO-SCHEDULING.md` §1.2, §6.1).
+ */
+export type SciTierMode = SciTier | 'auto'
+
+/**
  * How much machinery one session is allowed to spend.
  *
  * - `balanced` — the ordinary single-threaded pass. No fan-out tool is mounted,
@@ -2325,9 +2343,12 @@ export interface Config {
  * - `cluster` — research-grade depth. Fan-out is available, but each fan-out
  *   costs one `declare_research_plan` declaration.
  *
- * The value is fixed for a session because it is a property of the agent preset
- * the session was composed from; changing tiers means the {@link SciTierForkRequest}
- * fork into a session composed from the other preset.
+ * In the `balanced` and `cluster` compositions the value is fixed for a session,
+ * because it is a property of the agent preset the session was composed from;
+ * changing tiers means the {@link SciTierForkRequest} fork into a session
+ * composed from the other preset. In the `auto` composition
+ * ({@link SciTierMode}) the value is resolved by the model per task and may be
+ * raised from `balanced` to `cluster` mid-session.
  */
 export type SciTier = 'balanced' | 'cluster'
 ```

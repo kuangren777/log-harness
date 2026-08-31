@@ -11,12 +11,12 @@
 | [`sci-skills/`](sci-skills/README.zh.md) | 内置 skill 树、按内容 hash 同步进沙箱、生命周期策展、listing provider。 | `ctx.skills` provider |
 | [`sci-workspace/`](sci-workspace/README.zh.md) | `tools/pre-execute` 上的路径策略与 shell 预检：交付区、只追加的 `versions/`、manifest 所有权。 | `tools/pre-execute` |
 | [`sci-deliver/`](sci-deliver/README.zh.md) | `deliver_files` 工具与沙箱内 `sci deliver` spool，同一条校验链。 | `ctx.tools` |
-| [`camel-runtime/`](camel-runtime/README.zh.md) | `fork_workspace` 工具：把 Dormice 工作区快照进 AgentENV microVM，每个 fork 跑一个变体，结果回流到 `.sci/forks/`。 | `ctx.tools`、`ctx.e2b` consumer |
+| [`camel-runtime/`](camel-runtime/README.zh.md) | 常驻项目变体：`create_variant` / `run_in_variant` / `collect_variant` / `delete_variant` / `list_variants`，跑在 AgentENV microVM 上，按工作区设上限，注册表在 `.sci/variants/`。 | `ctx.tools`、`ctx.e2b` consumer |
 | [`sci-memory/`](sci-memory/README.zh.md) | 带 `originSessionId` 的记忆节点、写入时序投影、recall RPC。 | `tools/post-execute`、RPC |
 | [`sci-plan/`](sci-plan/README.zh.md) | `declare_research_plan` 工具与 `sci/plan-declared` 事件。 | `ctx.tools` |
 | [`sci-guard/`](sci-guard/README.zh.md) | 不可逆操作分类器：未签名二进制、外发、凭据、破坏性删除 → approval。 | `tools/pre-execute` |
 | [`sci-audit/`](sci-audit/README.zh.md) | session log 投影到六张审计表；可重建。 | `ctx.storageDomain` |
-| [`sci-tier/`](sci-tier/README.zh.md) | 两个档位，界面显示 `单体 / Solo` 与 `蜂群 / Swarm`：档位段、fan-out guard、先声明后扇出 latch、升档建议、fork RPC。 | `ctx.tools.guard`、`tools/pre-execute`、RPC |
+| [`sci-tier/`](sci-tier/README.zh.md) | 两个档位，界面显示 `单体 / Solo` 与 `蜂群 / Swarm`，加上由任务判定的 `自动 / Auto` 组合：档位段、fan-out guard、判定锁、先声明后扇出 latch、升档建议、fork RPC。 | `ctx.tools.guard`、`tools/pre-execute`、RPC |
 | [`sci-remote-hosts/`](sci-remote-hosts/README.zh.md) | 用户 SSH 主机作为沙箱 `~/.ssh/config` 里的托管块。 | RPC |
 | [`sci-profile/`](sci-profile/README.zh.md) | `dsh-sci` bundle：profile patch 层、两个档位 preset、六个人格、可运行示例、snapshot。 | profile |
 

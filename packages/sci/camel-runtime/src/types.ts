@@ -1,16 +1,24 @@
 /**
- * Wire records and event payloads of the CaMeL runtime.
+ * Wire records, registry records, and event payloads of the CaMeL runtime.
  * @module @deepseek-ai/dsh-camel-runtime/types
  */
 
-/** One AgentENV sandbox as `POST /sandboxes` answers it. */
+/** One AgentENV sandbox as `POST /sandboxes` and `POST /sandboxes/{id}/connect` answer it. */
 export interface AgentEnvSandbox {
-  /** Identifier of the microVM this call started. */
+  /** Identifier of the microVM. */
   readonly sandboxID: string
   /** Template or snapshot the microVM resumed from. */
   readonly templateID: string
-  /** Present when the sandbox was created `secure`; envd control traffic then carries it. */
-  readonly envdAccessToken?: string
+}
+
+/** Lifecycle state AgentENV reports for a sandbox that still exists. */
+export type AgentEnvSandboxState = 'running' | 'paused'
+
+/** One AgentENV sandbox as `GET /sandboxes/{id}` answers it. */
+export interface AgentEnvSandboxDetail extends AgentEnvSandbox {
+  readonly state: AgentEnvSandboxState
+  /** ISO time at which the sandbox pauses or expires. */
+  readonly endAt: string
 }
 
 /** One AgentENV snapshot as `POST /sandboxes/{id}/snapshots` answers it. */
@@ -21,66 +29,103 @@ export interface AgentEnvSnapshot {
   readonly names: readonly string[]
 }
 
-/** One requested variant of a fork. */
-export interface ForkVariant {
-  /** Short identifier naming the variant's result directory: `^[a-z0-9][a-z0-9-]*$`. */
+/** One persistent variant: a named AgentENV sandbox holding a copy of one project directory. */
+export interface VariantRecord {
+  /** Slot name, unique within the workspace: `^[a-z0-9][a-z0-9-]*$`. */
   readonly name: string
-  /** Shell command run inside the forked microVM, in the imported workspace directory. */
-  readonly command: string
+  /** Workspace-relative project directory the variant copied. */
+  readonly project: string
+  /** The AgentENV sandbox holding the copy. */
+  readonly sandboxID: string
+  /** Template or snapshot the sandbox started from. */
+  readonly templateID: string
+  /** When the variant was forked from another variant, the snapshot that fork resumed from; deleted with the variant. */
+  readonly snapshotID?: string
+  /** The variant this one was forked from, when any. */
+  readonly from?: string
+  readonly createdAt: string
+  readonly lastUsedAt: string
 }
 
-/** What one `fork_workspace` call asks for, after schema and value validation. */
-export interface ForkRequest {
-  /** Variants to run; names are unique within one request. */
-  readonly variants: readonly ForkVariant[]
-  /** Directory relative to the workspace whose contents flow back per variant; absent means stdout only. */
-  readonly collect?: string
-  /** Per-command wall-clock budget in seconds. */
-  readonly timeoutSeconds: number
+/** The durable registry file, kept in the workspace beside the collected results. */
+export interface VariantRegistryFile {
+  readonly version: 1
+  readonly variants: readonly VariantRecord[]
 }
 
-/** Outcome of one variant. */
-export interface ForkVariantResult {
+/** State a listing reports per variant: the sandbox's state, or `missing` when AgentENV no longer has it. */
+export type VariantState = AgentEnvSandboxState | 'missing'
+
+/** One row of `list_variants`. */
+export interface VariantListing extends VariantRecord {
+  readonly state: VariantState
+}
+
+/** Outcome of one `run_in_variant`. */
+export interface VariantRunResult {
   readonly name: string
-  /** Exit code of the variant's command; a failing command is a result, not a fork failure. */
   readonly exitCode: number
-  /** Last bytes of stdout, for the model's result text. */
   readonly stdoutTail: string
-  /** Last bytes of stderr. */
   readonly stderrTail: string
-  /** Absolute workspace path holding `stdout.txt`, `stderr.txt`, `exit-code`, and the collected files. */
-  readonly resultDir: string
-}
-
-/** Outcome of one whole fork. */
-export interface ForkOutcome {
-  /** Identity of this fork, naming its result directory. */
-  readonly forkId: string
-  /** Snapshot every variant resumed from. */
-  readonly snapshotID: string
-  readonly variants: readonly ForkVariantResult[]
   readonly durationMs: number
 }
 
-/** Payload of {@link SessionEventMap['sci/fork-completed']}. */
-export interface SciForkCompletedData {
-  readonly forkId: string
-  readonly snapshotID: string
-  readonly variants: readonly { readonly name: string; readonly exitCode: number }[]
+/** Outcome of one `collect_variant`. */
+export interface VariantCollectResult {
+  readonly name: string
+  /** Project-relative directory that was collected. */
+  readonly path: string
+  /** Absolute workspace directory the files were written into. */
+  readonly destination: string
+  readonly files: number
+}
+
+/** Payload of {@link SessionEventMap['sci/variant-created']}. */
+export interface SciVariantCreatedData {
+  readonly name: string
+  readonly project: string
+  readonly sandboxID: string
+  readonly from?: string
+}
+
+/** Payload of {@link SessionEventMap['sci/variant-deleted']}. */
+export interface SciVariantDeletedData {
+  readonly name: string
+  readonly sandboxID: string
+}
+
+/** Payload of {@link SessionEventMap['sci/variant-run']}. */
+export interface SciVariantRunData {
+  readonly name: string
+  readonly exitCode: number
   readonly durationMs: number
 }
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /**
-     * One fork finished: every variant ran and its results are in the
-     * workspace. Log-only and non-surface; the tool result already told the
-     * model, and nothing later in the log depends on this record.
-     * @param forkId - identity of the fork, naming `<forksDir>/<forkId>/`.
-     * @param snapshotID - the AgentENV snapshot the variants resumed from.
-     * @param variants - name and exit code per variant, in request order.
-     * @param durationMs - wall-clock time of the whole fork.
+     * One variant slot was created. Log-only and non-surface; the registry
+     * file in the workspace is the authoritative slot table, and this record
+     * exists so the session log explains where a sandbox came from.
+     * @param name - slot name.
+     * @param project - workspace-relative project directory copied into it.
+     * @param sandboxID - the AgentENV sandbox holding the copy.
+     * @param from - the variant it was forked from, when any.
      */
-    'sci/fork-completed': SciForkCompletedData
+    'sci/variant-created': SciVariantCreatedData
+    /**
+     * One variant slot was deleted and its sandbox killed. Log-only and non-surface.
+     * @param name - slot name.
+     * @param sandboxID - the sandbox that was killed.
+     */
+    'sci/variant-deleted': SciVariantDeletedData
+    /**
+     * One command ran inside a variant. Log-only and non-surface; the tool
+     * result already told the model.
+     * @param name - slot name.
+     * @param exitCode - the command's exit code.
+     * @param durationMs - wall-clock time of the command.
+     */
+    'sci/variant-run': SciVariantRunData
   }
 }

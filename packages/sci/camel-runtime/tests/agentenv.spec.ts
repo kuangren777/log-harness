@@ -1,6 +1,7 @@
 // The AgentENV client is the package's only wire boundary: every path, method,
-// header, and body it sends is pinned against a local HTTP server, and a
-// non-2xx answer surfaces as one error naming the call and what the server said.
+// header, and body it sends is pinned against a local HTTP server; a 404 on a
+// lookup reads as "gone", and any other non-2xx surfaces as one error naming
+// the call and what the server said.
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -76,24 +77,46 @@ afterEach(async () => {
 })
 
 describe('AgentEnvClient', () => {
-  it('starts a sandbox with POST /sandboxes, the key header, and an explicit TTL (T1)', async () => {
-    server.respond = () => ({ status: 201, body: JSON.stringify({ sandboxID: 'sb-1', templateID: 'tpl', envdVersion: '0.1' }) })
-    await expect(client.createSandbox('tpl', 90)).resolves.toEqual({ sandboxID: 'sb-1', templateID: 'tpl', envdVersion: '0.1' })
+  it('starts a sandbox with POST /sandboxes, the key header, the idle TTL, and auto-pause on', async () => {
+    server.respond = () => ({ status: 201, body: JSON.stringify({ sandboxID: 'sb-1', templateID: 'tpl' }) })
+    await expect(client.createSandbox('tpl', 90)).resolves.toEqual({ sandboxID: 'sb-1', templateID: 'tpl' })
     expect(server.seen).toEqual([{
       method: 'POST',
       path: '/sandboxes',
       apiKey: 'k-1',
       contentType: 'application/json',
-      body: JSON.stringify({ templateID: 'tpl', timeout: 90, autoPause: false }),
+      body: JSON.stringify({ templateID: 'tpl', timeout: 90, autoPause: true }),
     }])
+  })
+
+  it('connects with POST /sandboxes/{id}/connect carrying the new TTL, and reads a 404 as gone', async () => {
+    server.respond = () => ({ status: 200, body: JSON.stringify({ sandboxID: 'sb-1', templateID: 'tpl' }) })
+    await expect(client.connect('sb/1', 300)).resolves.toEqual({ sandboxID: 'sb-1', templateID: 'tpl' })
+    server.respond = () => ({ status: 404, body: '{"message":"not found"}' })
+    await expect(client.connect('sb-2', 300)).resolves.toBeUndefined()
+    expect(server.seen.map(seen => [seen.method, seen.path, seen.body])).toEqual([
+      ['POST', '/sandboxes/sb%2F1/connect', JSON.stringify({ timeout: 300 })],
+      ['POST', '/sandboxes/sb-2/connect', JSON.stringify({ timeout: 300 })],
+    ])
+  })
+
+  it('reads a sandbox with GET /sandboxes/{id}, and a 404 as gone', async () => {
+    server.respond = () => ({ status: 200, body: JSON.stringify({ sandboxID: 'sb-1', templateID: 'tpl', state: 'paused', endAt: 'later' }) })
+    await expect(client.getSandbox('sb-1')).resolves.toEqual({ sandboxID: 'sb-1', templateID: 'tpl', state: 'paused', endAt: 'later' })
+    server.respond = () => ({ status: 404 })
+    await expect(client.getSandbox('sb-1')).resolves.toBeUndefined()
+    expect(server.seen.map(seen => [seen.method, seen.path, seen.contentType])).toEqual([
+      ['GET', '/sandboxes/sb-1', undefined],
+      ['GET', '/sandboxes/sb-1', undefined],
+    ])
   })
 
   it('snapshots with and without a name', async () => {
     server.respond = () => ({ status: 201, body: JSON.stringify({ snapshotID: 'snap-1', names: [] }) })
-    await expect(client.snapshot('sb/1')).resolves.toEqual({ snapshotID: 'snap-1', names: [] })
+    await expect(client.snapshot('sb-1')).resolves.toEqual({ snapshotID: 'snap-1', names: [] })
     await client.snapshot('sb-1', 'base')
     expect(server.seen.map(seen => [seen.path, seen.body])).toEqual([
-      ['/sandboxes/sb%2F1/snapshots', '{}'],
+      ['/sandboxes/sb-1/snapshots', '{}'],
       ['/sandboxes/sb-1/snapshots', JSON.stringify({ name: 'base' })],
     ])
   })
@@ -118,6 +141,8 @@ describe('AgentEnvClient', () => {
     )
     server.respond = () => ({ status: 500 })
     await expect(client.kill('sb-1')).rejects.toThrow('camel-runtime: agentenv DELETE /sandboxes/sb-1 failed with 500')
+    server.respond = () => ({ status: 503 })
+    await expect(client.connect('sb-1', 1)).rejects.toThrow('camel-runtime: agentenv POST /sandboxes/sb-1/connect failed with 503')
   })
 
   it('reports a failed call whose body cannot be read with the status alone', async () => {
@@ -133,9 +158,9 @@ describe('AgentEnvClient', () => {
     await expect(failing.kill('sb-1')).rejects.toThrow('camel-runtime: agentenv DELETE /sandboxes/sb-1 failed with 502')
   })
 
-  it('connects through the E2B SDK against the same endpoint with the same key', async () => {
+  it('opens the E2B SDK surface against the same endpoint with the same key', async () => {
     sdk.connect.mockResolvedValue('handle')
-    await expect(client.connect({ sandboxID: 'sb-1', templateID: 'tpl' })).resolves.toBe('handle')
+    await expect(client.open({ sandboxID: 'sb-1', templateID: 'tpl' })).resolves.toBe('handle')
     expect(sdk.connect.mock.calls).toEqual([
       ['sb-1', { apiKey: 'k-1', apiUrl: server.endpoint, sandboxUrl: server.endpoint }],
     ])

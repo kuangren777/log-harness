@@ -48,7 +48,7 @@
 
 ## 其余部分在哪
 
-承担了大部分产品行为的门禁与工具都不发布服务：档位与扇出门禁在 [`sci-tier`](../../packages/sci/sci-tier)，路径与 manifest 所有权策略在 [`sci-workspace`](../../packages/sci/sci-workspace)，交付在 [`sci-deliver`](../../packages/sci/sci-deliver)，经 AgentENV microVM 分叉工作区在 [`camel-runtime`](../../packages/sci/camel-runtime)，不可逆操作授权在 [`sci-guard`](../../packages/sci/sci-guard)，计划声明在 [`sci-plan`](../../packages/sci/sci-plan)，skill 目录及其沙箱同步在 [`sci-skills`](../../packages/sci/sci-skills)，prompt 章节在 [`sci-prompt`](../../packages/sci/sci-prompt)，manifest 校验在 [`sci-manifest`](../../packages/sci/sci-manifest)，组合本身在 [`sci-profile`](../../packages/sci/sci-profile)。每个包的 README 都写明它替代了被研究平台的哪个机制、改了什么。
+承担了大部分产品行为的门禁与工具都不发布服务：档位与扇出门禁在 [`sci-tier`](../../packages/sci/sci-tier)，路径与 manifest 所有权策略在 [`sci-workspace`](../../packages/sci/sci-workspace)，交付在 [`sci-deliver`](../../packages/sci/sci-deliver)，AgentENV microVM 上的常驻项目变体在 [`camel-runtime`](../../packages/sci/camel-runtime)，不可逆操作授权在 [`sci-guard`](../../packages/sci/sci-guard)，计划声明在 [`sci-plan`](../../packages/sci/sci-plan)，skill 目录及其沙箱同步在 [`sci-skills`](../../packages/sci/sci-skills)，prompt 章节在 [`sci-prompt`](../../packages/sci/sci-prompt)，manifest 校验在 [`sci-manifest`](../../packages/sci/sci-manifest)，组合本身在 [`sci-profile`](../../packages/sci/sci-profile)。每个包的 README 都写明它替代了被研究平台的哪个机制、改了什么。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

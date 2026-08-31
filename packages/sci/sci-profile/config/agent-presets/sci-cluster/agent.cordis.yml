@@ -299,16 +299,20 @@
     snapshotDir: /home/user/sci/.sci/snapshots
 
 # Cluster-only: the workspace stays in the Dormice sandbox behind `ctx.e2b`;
-# `fork_workspace` snapshots it into AgentENV microVMs and runs one variant per
-# fork, writing results back under `.sci/forks/`. The AgentENV key comes from
-# `AENV_API_KEY` in this process's environment and is never forwarded into any
-# sandbox. The row is gated on that key: a deployment without an AgentENV
-# server mounts no fork tool instead of failing every cluster session at load,
-# while a deployment that sets the key still fails loud on any other
-# misconfiguration. The balanced preset has no fan-out and therefore no fork row.
+# the variant tools copy one project directory into persistent AgentENV
+# microVMs (`create_variant` / `run_in_variant` / `collect_variant` /
+# `delete_variant` / `list_variants`), bounded per workspace by
+# `AENV_MAX_VARIANTS` — the plan-dependent cap the gate injects per VM. The
+# AgentENV key comes from `AENV_API_KEY` in this process's environment and is
+# never forwarded into any sandbox. The row is gated on that key: a deployment
+# without an AgentENV server mounts no variant tools instead of failing every
+# cluster session at load, while a deployment that sets the key still fails
+# loud on any other misconfiguration. The balanced preset has no fan-out and
+# therefore no variant row.
 - id: camel-runtime
   name: '@deepseek-ai/dsh-camel-runtime'
   disabled: !!js process.env.AENV_API_KEY === undefined
   config:
     endpoint: !!js process.env.AENV_ENDPOINT ?? 'http://127.0.0.1:8000'
     template: !!js process.env.AENV_TEMPLATE ?? 'sci'
+    maxVariants: !!js Number(process.env.AENV_MAX_VARIANTS ?? 8)
