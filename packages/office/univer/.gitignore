@@ -2,4 +2,4 @@
 # the pinned dsh-univer-office npm release. Never committed: the integrity pin
 # in scripts/fetch-artifacts.mjs is the source of truth for which bytes belong
 # here, and docs/office-univer-upstream.md records the version.
-artifacts/
+/artifacts/
