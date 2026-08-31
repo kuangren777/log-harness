@@ -75,7 +75,11 @@ async function startGate(): Promise<FakeGate> {
     if (path === '/gate/api/credit/pricing') {
       json({
         version: 5,
-        models: [{ model: 'deepseek-v4-pro', hitMicros: 0, missMicros: 2_000_000, outMicros: 0, peakMultiplierX1000: 1000 }],
+        models: [{
+          model: 'deepseek-v4-pro',
+          hitMicros: 0, missMicros: 2_000_000, outMicros: 0,
+          peakMultiplierX1000: 1000, ratioX1000: 1500,
+        }],
         peak: { timezone: 'UTC', weekdays: [0, 1, 2, 3, 4, 5, 6], windows: [['00:00', '24:00']], offPeakMultiplierX1000: 500 },
       })
       return
@@ -217,7 +221,8 @@ describe('sci-credit real Loader composition through cordis.yml', () => {
   it('charges a real gate over the platform transport and records it on the session', async () => {
     const booted = await boot(['    pricing: gate'])
     // The composed card lands asynchronously; the built-in table would price
-    // the same call at 1.32 rather than 2.00 per 1M uncached input tokens.
+    // the same call at 1.32 rather than 2.00 per 1M uncached input tokens, and
+    // would resell it at cost rather than at the card's 1.5 multiplier.
     await until(() => booted.gate.charges.length === 0, 'the boot rate-card fetch')
 
     const chunks = await run(booted)
@@ -228,14 +233,16 @@ describe('sci-credit real Loader composition through cordis.yml', () => {
     expect(chunks.map(chunk => chunk.type)).toEqual(['usage', 'finish'])
     const charge = booted.gate.charges[0]
     // The composed card declares every hour of every day peak, so the price is
-    // the full 2.00 per 1M uncached input tokens whenever this suite runs.
-    expect(charge).toMatchObject({ model: 'deepseek-v4-pro', priceVersion: 5, usdMicros: 2_000_000 })
+    // the full 2.00 per 1M uncached input tokens whenever this suite runs,
+    // resold at the card's 1.5 multiplier.
+    expect(charge).toMatchObject({ model: 'deepseek-v4-pro', priceVersion: 5, usdMicros: 3_000_000 })
     // The minted id is a real UUID and the record names the same one.
     expect(charge?.requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
     expect(charged(booted.session)[0]?.data).toMatchObject({
       requestId: charge?.requestId,
-      usdMicros: 2_000_000,
+      usdMicros: 3_000_000,
       peak: true,
+      ratioX1000: 1500,
       spooled: false,
     })
   }, 30_000)

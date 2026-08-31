@@ -1983,6 +1983,13 @@ export interface PriceRow {
    * lowers this instead of restating every row.
    */
   readonly peakMultiplierX1000: number
+  /**
+   * Resale multiplier in thousandths, applied last to the peak-adjusted total.
+   * The other prices on this row are the provider's official list price, so
+   * this is the only field that states what the platform charges on top of it;
+   * `1000` resells at cost, and the gate seeds every row with it.
+   */
+  readonly ratioX1000: number
 }
 ```
 

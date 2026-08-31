@@ -191,12 +191,16 @@ describe('GateClient.charge', () => {
 })
 
 describe('GateClient.pricing', () => {
-  it('reads the published rows and peak schedule', async () => {
+  it('reads the published rows and peak schedule, defaulting both multipliers a row omits', async () => {
     const { gate } = client([jsonResponse({
       unit: 'micro-USD per 1M tokens (peak price)',
       version: 3,
       models: [
-        { model: 'deepseek-v4-flash', version: 1, hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000, peakMultiplierX1000: 1000 },
+        {
+          model: 'deepseek-v4-flash', version: 1,
+          hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000,
+          peakMultiplierX1000: 1000, ratioX1000: 1500,
+        },
         { model: 'deepseek-v4-pro', version: 2, hitMicros: 44_000, missMicros: 1_320_000, outMicros: 3_960_000 },
       ],
       peak: { timezone: 'UTC', weekdays: [1], windows: [['02:00', '03:00']], offPeakMultiplierX1000: 400 },
@@ -205,8 +209,16 @@ describe('GateClient.pricing', () => {
     await expect(gate.pricing()).resolves.toEqual({
       version: 3,
       models: [
-        { model: 'deepseek-v4-flash', hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000, peakMultiplierX1000: 1000 },
-        { model: 'deepseek-v4-pro', hitMicros: 44_000, missMicros: 1_320_000, outMicros: 3_960_000, peakMultiplierX1000: 1000 },
+        {
+          model: 'deepseek-v4-flash',
+          hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000,
+          peakMultiplierX1000: 1000, ratioX1000: 1500,
+        },
+        {
+          model: 'deepseek-v4-pro',
+          hitMicros: 44_000, missMicros: 1_320_000, outMicros: 3_960_000,
+          peakMultiplierX1000: 1000, ratioX1000: 1000,
+        },
       ],
       peak: { timezone: 'UTC', weekdays: [1], windows: [['02:00', '03:00']], offPeakMultiplierX1000: 400 },
     })

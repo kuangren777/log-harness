@@ -154,6 +154,9 @@ function readPriceTable(body: unknown): PriceTable {
       missMicros,
       outMicros,
       peakMultiplierX1000: integerField(row, 'peakMultiplierX1000') ?? 1000,
+      // A gate older than the resale multiplier serves rows without the field;
+      // reselling at the official price is the only safe reading of its silence.
+      ratioX1000: integerField(row, 'ratioX1000') ?? 1000,
     })
   }
   if (models.length === 0) {

@@ -38,9 +38,21 @@ export const DEFAULT_PEAK_SCHEDULE: PeakSchedule = {
 export const DEFAULT_PRICE_TABLE: PriceTable = {
   version: 1,
   models: [
-    { model: 'deepseek-v4-flash', hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000, peakMultiplierX1000: 1000 },
-    { model: 'deepseek-v4-pro', hitMicros: 44_000, missMicros: 1_320_000, outMicros: 3_960_000, peakMultiplierX1000: 1000 },
-    { model: 'deepseek-v4-flash-vision-exp', hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000, peakMultiplierX1000: 1000 },
+    {
+      model: 'deepseek-v4-flash',
+      hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000,
+      peakMultiplierX1000: 1000, ratioX1000: 1000,
+    },
+    {
+      model: 'deepseek-v4-pro',
+      hitMicros: 44_000, missMicros: 1_320_000, outMicros: 3_960_000,
+      peakMultiplierX1000: 1000, ratioX1000: 1000,
+    },
+    {
+      model: 'deepseek-v4-flash-vision-exp',
+      hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000,
+      peakMultiplierX1000: 1000, ratioX1000: 1000,
+    },
   ],
   peak: DEFAULT_PEAK_SCHEDULE,
 }
@@ -161,10 +173,13 @@ export function resolvePriceRow(table: PriceTable, model: string): ResolvedPrice
  * Price one model call.
  *
  * The four components are priced separately and rounded half up each, then
- * summed, and the peak multiplier is applied to that sum with one final
- * half-up rounding. Rounding once per component and once per call keeps the
- * arithmetic reproducible from the ledger row alone; multiplying the prices
- * first would compound a rounding error per component instead.
+ * summed; the peak multiplier is applied to that sum with a half-up rounding,
+ * and the row's resale multiplier to that result with another. Rounding once
+ * per component and once per multiplier keeps the arithmetic reproducible from
+ * the ledger row alone; multiplying the prices first would compound a rounding
+ * error per component instead. The two multipliers are applied in that order
+ * and not folded into one, so the official list price and the platform's markup
+ * stay separately auditable in the same quote.
  *
  * `reasoningTokens` is deliberately NOT priced on top of `outputTokens`. The
  * DeepSeek adapter maps `completion_tokens` straight to `outputTokens` and
@@ -189,7 +204,8 @@ export function quoteCharge(usage: TokenUsage, table: PriceTable, model: string,
     + priceComponent(usage.cacheReadTokens ?? 0, row.hitMicros)
     + priceComponent(usage.outputTokens, row.outMicros)
   const multiplier = BigInt(peak ? row.peakMultiplierX1000 : table.peak.offPeakMultiplierX1000)
-  const usdMicros = divideRoundHalfUp(atPeak * multiplier, MULTIPLIER_UNIT)
+  const atRate = divideRoundHalfUp(atPeak * multiplier, MULTIPLIER_UNIT)
+  const usdMicros = divideRoundHalfUp(atRate * BigInt(row.ratioX1000), MULTIPLIER_UNIT)
   return { usdMicros: Number(usdMicros), priceVersion: table.version, peak, unknownModel, row }
 }
 

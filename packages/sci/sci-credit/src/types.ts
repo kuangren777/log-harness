@@ -23,6 +23,13 @@ export interface PriceRow {
    * lowers this instead of restating every row.
    */
   readonly peakMultiplierX1000: number
+  /**
+   * Resale multiplier in thousandths, applied last to the peak-adjusted total.
+   * The other prices on this row are the provider's official list price, so
+   * this is the only field that states what the platform charges on top of it;
+   * `1000` resells at cost, and the gate seeds every row with it.
+   */
+  readonly ratioX1000: number
 }
 
 /** One peak window as `[startInclusive, endExclusive]` in `HH:MM`, on the schedule's own clock. */
@@ -121,6 +128,8 @@ export interface SciCreditChargedData {
   readonly priceVersion: number
   /** Whether the request started inside a peak window. */
   readonly peak: boolean
+  /** The resale multiplier in thousandths the priced total was multiplied by last. */
+  readonly ratioX1000: number
   /** Whether the gate refused or could not be reached and the payload is waiting in the spool. */
   readonly spooled: boolean
   /** Whether the rate card did not list the model and its most expensive row was used. */
@@ -138,8 +147,9 @@ declare module '@deepseek-ai/dsh-session/types' {
      * that does not know the type skips it instead of refusing the log.
      * @param data - the idempotency key, the model, the token counts, the
      *   computed micro-USD, the rate-card version, whether the request started
-     *   in a peak window, whether the payload is waiting in the local spool,
-     *   and whether the model was priced by the fallback row.
+     *   in a peak window, the resale multiplier applied, whether the payload is
+     *   waiting in the local spool, and whether the model was priced by the
+     *   fallback row.
      */
     'sci/credit-charged': SciCreditChargedData
   }

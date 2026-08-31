@@ -19,7 +19,7 @@ import { configuredPriceTable, resolveSpoolPath, type Config } from './config.ts
 import { GateClient, GateUnavailableError } from './gate.ts'
 import { completeUsage, DEFAULT_PRICE_TABLE, quoteCharge } from './pricing.ts'
 import { ChargeSpool, retryDelayMs } from './spool.ts'
-import type { ChargePayload, PriceTable } from './types.ts'
+import type { ChargePayload, ChargeQuote, PriceTable } from './types.ts'
 
 /** Provider-neutral code for a model call refused because the tenant has no credit left. */
 export const CREDIT_EXHAUSTED_CODE = 'CREDIT_EXHAUSTED'
@@ -286,7 +286,7 @@ export class CreditMeter {
       // The record is written whatever happened to the delivery: it is what an
       // audit reconciles the tenant's ledger against, and a lost charge is
       // exactly the case that needs to be visible in the log.
-      this.appendChargedEvent(options.sessionId, payload, quote.peak, spooled)
+      this.appendChargedEvent(options.sessionId, payload, quote, spooled)
     }
   }
 
@@ -298,13 +298,13 @@ export class CreditMeter {
    * to and neither is an error.
    * @param sessionId - the session the request named, if any.
    * @param payload - the charge that was priced.
-   * @param peak - whether the request started inside a peak window.
+   * @param quote - the price, carrying the peak decision and the row's resale multiplier.
    * @param spooled - whether the payload is waiting in the local spool.
    */
   private appendChargedEvent(
     sessionId: SessionId | undefined,
     payload: ChargePayload,
-    peak: boolean,
+    quote: ChargeQuote,
     spooled: boolean,
   ): void {
     if (sessionId === undefined) return
@@ -316,7 +316,8 @@ export class CreditMeter {
       usage: payload.usage,
       usdMicros: payload.usdMicros,
       priceVersion: payload.priceVersion,
-      peak,
+      peak: quote.peak,
+      ratioX1000: quote.row.ratioX1000,
       spooled,
       unknownModel: payload.unknownModel,
     }, { ignorable: true })

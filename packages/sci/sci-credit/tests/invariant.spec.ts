@@ -32,6 +32,7 @@ function charge(session: Session, requestId: string): SessionEvent {
     usdMicros: 42,
     priceVersion: 1,
     peak: true,
+    ratioX1000: 1000,
     spooled: false,
     unknownModel: false,
   }

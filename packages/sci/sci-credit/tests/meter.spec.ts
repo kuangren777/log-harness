@@ -33,8 +33,8 @@ const SATURDAY = Date.parse('2026-09-05T02:00:00Z')
 
 /** The rate card the suites price against, so no gate fetch is needed. */
 const PRICING = [
-  { model: 'deepseek-v4-pro', hitMicros: 44_000, missMicros: 1_320_000, outMicros: 3_960_000, peakMultiplierX1000: 1000 },
-  { model: 'deepseek-v4-flash', hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000, peakMultiplierX1000: 1000 },
+  { model: 'deepseek-v4-pro', hitMicros: 44_000, missMicros: 1_320_000, outMicros: 3_960_000, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+  { model: 'deepseek-v4-flash', hitMicros: 14_000, missMicros: 440_000, outMicros: 1_320_000, peakMultiplierX1000: 1000, ratioX1000: 1000 },
 ]
 
 /** A gate balance body with both pools funded. */
@@ -391,6 +391,7 @@ describe('metering an admitted call', () => {
       usdMicros: 5_324_000,
       priceVersion: 0,
       peak: true,
+      ratioX1000: 1000,
       spooled: false,
       unknownModel: false,
     })

@@ -19,8 +19,8 @@ import type { PeakSchedule, PriceTable } from '../src/types.ts'
 const TABLE: PriceTable = {
   version: 7,
   models: [
-    { model: 'cheap', hitMicros: 1000, missMicros: 2000, outMicros: 3000, peakMultiplierX1000: 1000 },
-    { model: 'dear', hitMicros: 2000, missMicros: 4000, outMicros: 6000, peakMultiplierX1000: 1000 },
+    { model: 'cheap', hitMicros: 1000, missMicros: 2000, outMicros: 3000, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+    { model: 'dear', hitMicros: 2000, missMicros: 4000, outMicros: 6000, peakMultiplierX1000: 1000, ratioX1000: 1000 },
   ],
   peak: DEFAULT_PEAK_SCHEDULE,
 }
@@ -94,64 +94,64 @@ describe('rate-card lookup', () => {
     {
       label: 'the higher output price',
       models: [
-        { model: 'a', hitMicros: 9, missMicros: 9, outMicros: 1, peakMultiplierX1000: 1000 },
-        { model: 'b', hitMicros: 1, missMicros: 1, outMicros: 2, peakMultiplierX1000: 1000 },
+        { model: 'a', hitMicros: 9, missMicros: 9, outMicros: 1, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+        { model: 'b', hitMicros: 1, missMicros: 1, outMicros: 2, peakMultiplierX1000: 1000, ratioX1000: 1000 },
       ],
       winner: 'b',
     },
     {
       label: 'the higher uncached-input price when output ties',
       models: [
-        { model: 'a', hitMicros: 9, missMicros: 1, outMicros: 5, peakMultiplierX1000: 1000 },
-        { model: 'b', hitMicros: 1, missMicros: 2, outMicros: 5, peakMultiplierX1000: 1000 },
+        { model: 'a', hitMicros: 9, missMicros: 1, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+        { model: 'b', hitMicros: 1, missMicros: 2, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 1000 },
       ],
       winner: 'b',
     },
     {
       label: 'the higher cached-input price when both input and output tie',
       models: [
-        { model: 'a', hitMicros: 1, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000 },
-        { model: 'b', hitMicros: 2, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000 },
+        { model: 'a', hitMicros: 1, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+        { model: 'b', hitMicros: 2, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 1000 },
       ],
       winner: 'b',
     },
     {
       label: 'the later model id when every price ties',
       models: [
-        { model: 'a', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000 },
-        { model: 'b', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000 },
+        { model: 'a', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+        { model: 'b', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 1000 },
       ],
       winner: 'b',
     },
     {
       label: 'the earlier row when it holds the higher output price',
       models: [
-        { model: 'a', hitMicros: 1, missMicros: 1, outMicros: 9, peakMultiplierX1000: 1000 },
-        { model: 'b', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000 },
+        { model: 'a', hitMicros: 1, missMicros: 1, outMicros: 9, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+        { model: 'b', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 1000 },
       ],
       winner: 'a',
     },
     {
       label: 'the earlier row when output ties and it holds the higher uncached-input price',
       models: [
-        { model: 'a', hitMicros: 1, missMicros: 9, outMicros: 5, peakMultiplierX1000: 1000 },
-        { model: 'b', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000 },
+        { model: 'a', hitMicros: 1, missMicros: 9, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+        { model: 'b', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 1000 },
       ],
       winner: 'a',
     },
     {
       label: 'the earlier row when both input prices tie and it holds the higher cached-input price',
       models: [
-        { model: 'a', hitMicros: 9, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000 },
-        { model: 'b', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000 },
+        { model: 'a', hitMicros: 9, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+        { model: 'b', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 1000 },
       ],
       winner: 'a',
     },
     {
       label: 'the earlier model id when every price ties and it sorts later',
       models: [
-        { model: 'z', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000 },
-        { model: 'b', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000 },
+        { model: 'z', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 1000 },
+        { model: 'b', hitMicros: 5, missMicros: 5, outMicros: 5, peakMultiplierX1000: 1000, ratioX1000: 1000 },
       ],
       winner: 'z',
     },
@@ -196,7 +196,7 @@ describe('quoteCharge', () => {
   it('rounds a half-micro component up rather than truncating it away', () => {
     const table: PriceTable = {
       ...TABLE,
-      models: [{ model: 'cheap', hitMicros: 0, missMicros: 500_000, outMicros: 0, peakMultiplierX1000: 1000 }],
+      models: [{ model: 'cheap', hitMicros: 0, missMicros: 500_000, outMicros: 0, peakMultiplierX1000: 1000, ratioX1000: 1000 }],
     }
 
     expect(quoteCharge({ inputTokens: 1, outputTokens: 0 }, table, 'cheap', MONDAY_PEAK).usdMicros).toBe(1)
@@ -229,16 +229,63 @@ describe('quoteCharge', () => {
   it('applies a row that discounts its own peak rate', () => {
     const table: PriceTable = {
       ...TABLE,
-      models: [{ model: 'cheap', hitMicros: 0, missMicros: 1_000_000, outMicros: 0, peakMultiplierX1000: 250 }],
+      models: [{ model: 'cheap', hitMicros: 0, missMicros: 1_000_000, outMicros: 0, peakMultiplierX1000: 250, ratioX1000: 1000 }],
     }
 
     expect(quoteCharge({ inputTokens: 1_000_000, outputTokens: 0 }, table, 'cheap', MONDAY_PEAK).usdMicros).toBe(250_000)
   })
 
+  it('applies the row resale multiplier to the peak-adjusted total', () => {
+    const table: PriceTable = {
+      ...TABLE,
+      models: [{
+        model: 'cheap',
+        hitMicros: 0, missMicros: 1_000_000, outMicros: 0,
+        peakMultiplierX1000: 1000, ratioX1000: 1500,
+      }],
+    }
+
+    // 1M uncached input at 1.00 USD/1M is 1_000_000 micro-USD at the list rate,
+    // and 1.5× that resold; off-peak halves the list rate before the resale.
+    expect(quoteCharge({ inputTokens: 1_000_000, outputTokens: 0 }, table, 'cheap', MONDAY_PEAK).usdMicros)
+      .toBe(1_500_000)
+    expect(quoteCharge({ inputTokens: 1_000_000, outputTokens: 0 }, table, 'cheap', SATURDAY).usdMicros)
+      .toBe(750_000)
+  })
+
+  it('rounds the resale step on its own rather than folding it into the peak multiplier', () => {
+    const table: PriceTable = {
+      ...TABLE,
+      models: [{
+        model: 'cheap',
+        hitMicros: 0, missMicros: 1_000_000, outMicros: 0,
+        peakMultiplierX1000: 1000, ratioX1000: 1500,
+      }],
+    }
+
+    // One token costs exactly 1 micro-USD at the list rate. Off-peak halves it
+    // to 0.5, rounded up to 1, and the resale takes that 1 to 1.5, rounded up
+    // to 2. One folded 0.75 multiplier would have charged 1.
+    expect(quoteCharge({ inputTokens: 1, outputTokens: 0 }, table, 'cheap', SATURDAY).usdMicros).toBe(2)
+  })
+
+  it('leaves the priced total untouched when the row resells at cost', () => {
+    const atCost = quoteCharge({ inputTokens: 1_000_000, outputTokens: 2_000_000 }, TABLE, 'cheap', MONDAY_PEAK)
+
+    expect(atCost.row.ratioX1000).toBe(1000)
+    expect(atCost.usdMicros).toBe(2000 + 6000)
+  })
+
   it('prices the built-in official card at the published list rate', () => {
     // deepseek-v4-pro: 1M uncached input at 1.32 USD/1M, peak.
     expect(quoteCharge({ inputTokens: 1_000_000, outputTokens: 0 }, DEFAULT_PRICE_TABLE, 'deepseek-v4-pro', MONDAY_PEAK))
-      .toMatchObject({ usdMicros: 1_320_000, priceVersion: 1, peak: true, unknownModel: false })
+      .toMatchObject({
+        usdMicros: 1_320_000,
+        priceVersion: 1,
+        peak: true,
+        unknownModel: false,
+        row: { ratioX1000: 1000 },
+      })
   })
 })
 
