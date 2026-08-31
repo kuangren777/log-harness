@@ -15,11 +15,12 @@ export const name = 'client-ui-sci-conversation-invariant'
 export const inject = ['invariants']
 
 /**
- * No runtime invariant: every slot contribution and the one stylesheet are
- * effect-owned with disposal proven by this package's plugin spec, the cards
- * hold only their own expansion state, and every number they show is derived
- * at render from the session snapshot — this package owns no cross-plugin
- * mutable state, caches nothing, and emits no cordis events.
+ * No runtime invariant: every slot contribution, the stylesheet, and the model
+ * menu's price-hint source are effect-owned with disposal proven by this
+ * package's plugin spec, the cards hold only their own expansion state, and
+ * every number they show is derived at render from the session snapshot or
+ * read fresh from the gate — this package holds no mutable state of its own,
+ * caches nothing, and emits no cordis events.
  */
 const install: InvariantInstaller = () => {}
 

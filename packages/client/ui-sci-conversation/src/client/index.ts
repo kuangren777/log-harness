@@ -21,6 +21,12 @@
  * The turn-tail entry registers at `priority: -10`, below ui-deliverables'
  * default 0, so it is tried first; a chain elects one winner, which is what
  * makes the chips replace that row rather than double it.
+ *
+ * The sixth contribution is not a seat: the composer's model menu belongs to
+ * ui-model-selection, which takes a hint source for its rows, and this plugin
+ * contributes the one that reads the gate's prices. It stands inside its own
+ * `ctx.inject` fork rather than in this plugin's requirements, so a
+ * composition without that plugin loses the price lines and nothing else.
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the SlotMap merges of the three seats registered into.
@@ -29,6 +35,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 // Type-only: pulls the ctx.sciFiles Context merge carrying locate.
 import type {} from '@deepseek-ai/dsh-client-ui-sci-files/client'
+// Type-only: pulls the ctx.modelDirectories Context merge of the model seat.
+import type {} from '@deepseek-ai/dsh-client-ui-model-selection/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { ArtifactsLocate, ArtifactsPanel } from './contract.ts'
 import { ArtifactChips } from './ArtifactChips.tsx'
@@ -36,6 +44,7 @@ import { sciArtifactsDefinition } from './artifacts-node.ts'
 import { selectArtifacts } from './artifacts-select.ts'
 import { OpenArtifactsAction } from './OpenArtifactsAction.tsx'
 import { SciToolCard } from './SciToolCard.tsx'
+import { fetchModelHints } from './model-pricing.ts'
 import { en, NS, zh, type SciConversationKey } from './locales.ts'
 import skin from './sci-conversation.css?inline'
 
@@ -78,12 +87,15 @@ function installSkin(ctx: ClientContext): void {
 
 /**
  * Client plugin body: register the dictionaries, the Turn accumulator, the
- * three slot contributions, and the skin.
+ * three slot contributions, the skin, and the model menu's price hints.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
   const locate: ArtifactsLocate = { locate: (path) => { ctx.sciFiles.locate(path) } }
   const panel: ArtifactsPanel = { showDetailsMode: (id) => { ctx.layout.showDetailsMode(id) } }
+  // Read at hint time, not at registration: a locale change reaches the next
+  // menu the user opens.
+  const t = ctx.locale.bind(NS)
 
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-sci-conversation: dictionaries')
   installSkin(ctx)
@@ -111,4 +123,11 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => panel,
   }, OpenArtifactsAction))
+
+  ctx.inject(['modelDirectories'], (scope: ClientContext) => {
+    scope.effect(
+      () => scope.modelDirectories.registerHints(() => fetchModelHints(t)),
+      'ui-sci-conversation: model price hints',
+    )
+  })
 }

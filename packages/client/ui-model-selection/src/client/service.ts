@@ -17,6 +17,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ConnectionHandle, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionRuntime } from '@deepseek-ai/dsh-client-runtime/client'
 import { ModelDirectory } from './directory.ts'
+import type { ModelHintSource } from './slots.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -28,13 +29,15 @@ declare module '@deepseek-ai/cordis' {
 interface LiveState {
   /** Per-session directories; entries are deleted by their scope disposer. */
   readonly directories: Map<SessionId, ModelDirectory>
+  /** The one registered row-hint source, or undefined while no plugin contributes one. */
+  hints: ModelHintSource | undefined
 }
 
 /** The `ctx.modelDirectories` session model-selection service. */
 export class ModelDirectoryResolver extends Service {
   static inject = ['connection', 'sessions', 'remote']
 
-  private readonly live: LiveState = { directories: new Map() }
+  private readonly live: LiveState = { directories: new Map(), hints: undefined }
 
   /** Localized composer-block copy; this plugin owns the string it raises. */
   private readonly blockReason: () => string
@@ -106,5 +109,31 @@ export class ModelDirectoryResolver extends Service {
       live.directories.delete(sessionId)
     }, 'ui-model-selection: session directory')
     return directory
+  }
+
+  /**
+   * Contribute the model rows' advisory hint lines. The seat reads the source
+   * at mount, so a source registered while a menu is already mounted reaches
+   * that menu on its next mount rather than immediately.
+   * @param source - reads the hints for every row it knows.
+   * @returns the disposer that unregisters this source.
+   */
+  registerHints(source: ModelHintSource): () => void {
+    const { live } = this
+    // One occupant, like the seat itself: two sources would leave which one
+    // annotates a row to registration order.
+    if (live.hints !== undefined) throw new Error('ui-model-selection: a model hint source is already registered')
+    live.hints = source
+    return () => {
+      if (live.hints === source) live.hints = undefined
+    }
+  }
+
+  /**
+   * The contributed hint source.
+   * @returns the registered source, or undefined while none is.
+   */
+  hints(): ModelHintSource | undefined {
+    return this.live.hints
   }
 }

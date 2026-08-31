@@ -12,7 +12,9 @@ Host 报告的 `ModelSelection` 是唯一的选择事实，其中包含提供方
 
 每一份常驻目录都会直接在转发的 owner 事件 `llm/adapters-updated` 与 `settings/document-updated` 上重拉。因此提供方拓扑、提供方目录与默认选择都能收敛，Host 与 client runtime 无需再派生一个单独的模型变更别名。
 
-`/client` 导出面为插件本体（`apply`/`inject`）、`ModelDirectoryResolver`、`ModelDirectory` 及其状态形状、slot 注入面类型。
+模型行可以承载另一个插件贡献的说明文字。`ctx.modelDirectories.registerHints(source)` 同一时刻只接受一个来源——已有来源时再注册会抛错——并返回它的 disposer。slot 在挂载时读取当时登记的那个来源，并且只问一次：菜单在那次回答落地之前打开就不带说明，下一次挂载才带上。每条 hint 指名一个提供方与一个模型，携带已经本地化好的文字：本包把这些行放到恰好匹配该提供方／模型对的那一行上，既挂在共用的 hover/focus 提示气泡里，也放进该行经 `aria-describedby` 指向的描述中，从不解析也不重排这些文字。目录里没有的模型，其 hint 不标注任何行；来源 reject 时，每一行都与「根本没有来源」的组合完全一致。
+
+`/client` 导出面为插件本体（`apply`/`inject`）、`ModelDirectoryResolver`、`ModelDirectory` 及其状态形状、slot 注入面类型，以及贡献方编写来源时所依据的 hint 类型。
 
 ## 模型体验
 
@@ -26,4 +28,5 @@ Host 报告的 `ModelSelection` 是唯一的选择事实，其中包含提供方
 
 - **无创建期或已寻址 subagent 选择**——两个入口都要求既有普通会话的 agent；没有可纳入会话创建的草稿阶段模型选择，subagent 继续执行也有意不公开独立的模型选择约定。
 - **目录名仅供呈现**——选择与持久化使用提供方／模型／推理强度 id；目录查询或确切模型元数据查询失败的提供方以不可选失败行列出，重新加载前保持原样。
+- **hint 来源每次挂载只读一次，且只展示它给的文字**——slot 不轮询它，因此来源的答案变了要等下一次挂载才会到达已经打开的菜单；提示气泡逐字渲染这些行，读者需要知道的推导口径必须写在贡献方产出的文字里。
 - **不能任意输入推理强度**——composer 仅提供确切模型由适配器公布的推理强度；适配器没有推理元数据时不显示 Effort 行。

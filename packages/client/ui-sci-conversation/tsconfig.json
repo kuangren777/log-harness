@@ -27,6 +27,9 @@
       "path": "../ui-layout"
     },
     {
+      "path": "../ui-model-selection"
+    },
+    {
       "path": "../ui-primitives"
     },
     {

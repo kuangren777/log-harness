@@ -295,6 +295,28 @@ describe('ui-model-selection dual entry', () => {
     expect(b.blockOf('s1')).toBeUndefined()
   })
 
+  it('carries a contributed hint source to the seat, and only while one stands', async () => {
+    const b = await bench()
+    b.mint('s1')
+    expect(b.seat().inject!(sid('s1')).loadHints).toBeUndefined()
+
+    const source = () => Promise.resolve([
+      { provider: 'deepseek-official', model: 'deepseek-v4-flash', lines: ['$0.4400 / 1M'] },
+    ])
+    const stop = b.ctx.modelDirectories.registerHints(source)
+    expect(b.seat().inject!(sid('s1')).loadHints).toBe(source)
+    // One occupant: a second contributor is a composition error, not a race.
+    expect(() => b.ctx.modelDirectories.registerHints(source)).toThrow(/already registered/)
+    stop()
+    expect(b.seat().inject!(sid('s1')).loadHints).toBeUndefined()
+    // The disposer belongs to its own registration; running it twice, or after
+    // a successor took the slot, leaves the successor alone.
+    const next = () => Promise.resolve([])
+    b.ctx.modelDirectories.registerHints(next)
+    stop()
+    expect(b.seat().inject!(sid('s1')).loadHints).toBe(next)
+  })
+
   it('an unknown session fails loud at the seat inject', async () => {
     const b = await bench()
     expect(() => b.seat().inject!(sid('ghost'))).toThrow(/resolved no scope/)

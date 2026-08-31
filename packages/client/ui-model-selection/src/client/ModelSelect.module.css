@@ -268,3 +268,14 @@
   flex: 0 0 auto;
   color: var(--dsw-alias-label-tertiary);
 }
+
+/* A hinted row's description text: the bubble is hover/focus-only, so the same
+   lines stay in the accessibility tree for a reader that never hovers. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
